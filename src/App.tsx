@@ -14,14 +14,18 @@ import { OrganizationDetailScreen } from "./areas/ops/organizations/Organization
 import { BranchesGroupsScreen } from "./areas/ops/branches-groups/BranchesGroupsScreen";
 import { StudentsListScreen } from "./areas/ops/students/StudentsListScreen";
 import { StudentDetailScreen } from "./areas/ops/students/StudentDetailScreen";
+import { ImportCenterScreen } from "./areas/ops/import-center/ImportCenterScreen";
+import { StudyCodesScreen } from "./areas/admin/StudyCodesScreen";
 
-// המסכים האלה כבר נבנו בפועל (שלבים 2-4) - לא עוברים דרך מפת ה-placeholder הכללית.
+// המסכים האלה כבר נבנו בפועל (שלבים 2-5) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
   "/admin/users",
   "/admin/audit-log",
+  "/admin/study-codes",
   "/ops/organizations",
   "/ops/branches-groups",
   "/ops/students",
+  "/ops/import-center",
 ]);
 
 export default function App() {
@@ -41,6 +45,8 @@ export default function App() {
             <Route path="/ops/branches-groups" element={<BranchesGroupsScreen />} />
             <Route path="/ops/students" element={<StudentsListScreen />} />
             <Route path="/ops/students/:id" element={<StudentDetailScreen />} />
+            <Route path="/ops/import-center" element={<ImportCenterScreen />} />
+            <Route path="/admin/study-codes" element={<StudyCodesScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}
