@@ -34,12 +34,12 @@ export function DataTable<T>({
   if (rows.length === 0) return <EmptyState title={emptyTitle} description={emptyDescription} />;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+    <div className="card overflow-x-auto">
       <table className="w-full text-right text-sm">
-        <thead className="sticky top-0 bg-slate-50 text-slate-600">
+        <thead className="sticky top-0 border-b border-slate-200 bg-slate-50 text-slate-600">
           <tr>
             {columns.map((col) => (
-              <th key={col.key} className="px-4 py-2.5 font-medium">
+              <th key={col.key} className="px-4 py-3 font-medium">
                 {col.header}
               </th>
             ))}
@@ -50,10 +50,10 @@ export function DataTable<T>({
             <tr
               key={rowKey(row)}
               onClick={() => onRowClick?.(row)}
-              className={onRowClick ? "cursor-pointer hover:bg-slate-50" : ""}
+              className={onRowClick ? "cursor-pointer transition hover:bg-slate-50" : ""}
             >
               {columns.map((col) => (
-                <td key={col.key} className={`px-4 py-2.5 ${col.className ?? ""}`}>
+                <td key={col.key} className={`px-4 py-3 ${col.className ?? ""}`}>
                   {col.render(row)}
                 </td>
               ))}

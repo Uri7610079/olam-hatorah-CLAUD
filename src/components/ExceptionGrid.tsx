@@ -12,7 +12,7 @@ export function ExceptionGrid({ items }: { items: ExceptionCounter[] }) {
         <button
           key={item.key}
           onClick={() => navigate(item.href)}
-          className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-right shadow-sm transition hover:border-slate-300 hover:shadow"
+          className="card flex items-center justify-between px-4 py-3.5 text-right transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <div>
             <p className="text-sm text-slate-600">{item.label}</p>

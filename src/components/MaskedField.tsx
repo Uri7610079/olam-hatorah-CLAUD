@@ -16,7 +16,7 @@ export function MaskedField({ label, value, onChange, readOnly, id }: MaskedFiel
 
   return (
     <div>
-      <label htmlFor={fieldId} className="mb-1 block text-sm font-medium text-slate-700">
+      <label htmlFor={fieldId} className="field-label">
         {label}
       </label>
       <div className="flex items-center gap-2">
@@ -27,14 +27,9 @@ export function MaskedField({ label, value, onChange, readOnly, id }: MaskedFiel
           value={value}
           readOnly={readOnly}
           onChange={(e) => onChange?.(e.target.value)}
-          className="tabular w-full max-w-xs rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500"
+          className="input-field tabular max-w-xs"
         />
-        <button
-          type="button"
-          onClick={() => setVisible((v) => !v)}
-          aria-pressed={visible}
-          className="text-xs text-blue-600 underline hover:text-blue-800"
-        >
+        <button type="button" onClick={() => setVisible((v) => !v)} aria-pressed={visible} className="link-action text-xs">
           {visible ? "הסתר" : "הצג"}
         </button>
       </div>

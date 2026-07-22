@@ -30,7 +30,7 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
     return (
       <AuthLayout title="נשלח מייל לאיפוס סיסמה">
         <p className="text-sm text-slate-600">אם הכתובת קיימת במערכת, נשלח אליה קישור לאיפוס סיסמה.</p>
-        <button onClick={onBackToLogin} className="mt-4 text-sm text-blue-600 underline hover:text-blue-800">
+        <button onClick={onBackToLogin} className="link-action mt-4 text-sm">
           חזרה למסך כניסה
         </button>
       </AuthLayout>
@@ -39,9 +39,9 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
 
   return (
     <AuthLayout title="שכחתי סיסמה">
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="forgot-email" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="forgot-email" className="field-label">
             אימייל
           </label>
           <input
@@ -51,19 +51,15 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500"
+            className="input-field"
           />
         </div>
         {error && <ErrorState message={error} />}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
+        <button type="submit" disabled={submitting} className="btn-primary w-full">
           {submitting ? "שולחת…" : "שליחת קישור איפוס"}
         </button>
       </form>
-      <button onClick={onBackToLogin} className="mt-4 text-xs text-blue-600 underline hover:text-blue-800">
+      <button onClick={onBackToLogin} className="link-action mt-4 text-xs">
         חזרה למסך כניסה
       </button>
     </AuthLayout>

@@ -16,6 +16,14 @@ const SEVERITY_CLASSES: Record<Severity, string> = {
   neutral: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
 };
 
+const SEVERITY_DOT: Record<Severity, string> = {
+  critical: "bg-red-500",
+  high: "bg-orange-500",
+  medium: "bg-yellow-500",
+  ok: "bg-green-500",
+  neutral: "bg-slate-400",
+};
+
 interface StatusBadgeProps {
   severity: Severity;
   label?: string;
@@ -25,8 +33,9 @@ interface StatusBadgeProps {
 export function StatusBadge({ severity, label }: StatusBadgeProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${SEVERITY_CLASSES[severity]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${SEVERITY_CLASSES[severity]}`}
     >
+      <span className={`h-1.5 w-1.5 rounded-full ${SEVERITY_DOT[severity]}`} aria-hidden="true" />
       {label ?? SEVERITY_LABEL[severity]}
     </span>
   );

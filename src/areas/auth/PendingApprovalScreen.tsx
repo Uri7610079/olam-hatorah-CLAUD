@@ -7,10 +7,7 @@ export function PendingApprovalScreen() {
       <p className="text-sm text-slate-600">
         הבקשה שלך נקלטה במערכת וממתינה לאישור מנהל מערכת. תקבלי גישה מיד לאחר האישור.
       </p>
-      <button
-        onClick={() => supabase.auth.signOut()}
-        className="mt-4 text-sm text-blue-600 underline hover:text-blue-800"
-      >
+      <button onClick={() => supabase.auth.signOut()} className="link-action mt-4 text-sm">
         התנתקות
       </button>
     </AuthLayout>

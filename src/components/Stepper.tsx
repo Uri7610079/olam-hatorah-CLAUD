@@ -20,11 +20,11 @@ export function Stepper({ steps, currentStep }: StepperProps) {
           <li key={step.key} className="flex items-center gap-2">
             <span
               aria-current={state === "current" ? "step" : undefined}
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition ${
                 state === "done"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-brand-600 text-white"
                   : state === "current"
-                    ? "border-2 border-blue-600 text-blue-700"
+                    ? "border-2 border-brand-600 text-brand-700"
                     : "border border-slate-300 text-slate-400"
               }`}
             >

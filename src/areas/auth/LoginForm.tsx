@@ -26,9 +26,9 @@ export function LoginForm({ onSignUp, onForgot }: LoginFormProps) {
 
   return (
     <AuthLayout title="כניסה למערכת">
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="login-email" className="field-label">
             אימייל
           </label>
           <input
@@ -38,11 +38,11 @@ export function LoginForm({ onSignUp, onForgot }: LoginFormProps) {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500"
+            className="input-field"
           />
         </div>
         <div>
-          <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-slate-700">
+          <label htmlFor="login-password" className="field-label">
             סיסמה
           </label>
           <input
@@ -52,23 +52,19 @@ export function LoginForm({ onSignUp, onForgot }: LoginFormProps) {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500"
+            className="input-field"
           />
         </div>
         {error && <ErrorState message={error} />}
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
+        <button type="submit" disabled={submitting} className="btn-primary w-full">
           {submitting ? "מתחברת…" : "כניסה"}
         </button>
       </form>
-      <div className="mt-4 flex justify-between text-xs">
-        <button onClick={onForgot} className="text-blue-600 underline hover:text-blue-800">
+      <div className="mt-5 flex justify-between text-xs">
+        <button onClick={onForgot} className="link-action">
           שכחתי סיסמה
         </button>
-        <button onClick={onSignUp} className="text-blue-600 underline hover:text-blue-800">
+        <button onClick={onSignUp} className="link-action">
           בקשת גישה למערכת
         </button>
       </div>

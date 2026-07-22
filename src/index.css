@@ -19,6 +19,38 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid theme("colors.brand.500");
   outline-offset: 2px;
+}
+
+/* מחלקות עזר משותפות לכל האפליקציה - כפתורים ושדות קלט, כדי שכל מסך חדש (משלב 3 ואילך)
+   יקבל אוטומטית את אותו עיצוב עקבי במקום שכפול מחרוזות Tailwind בכל קומפוננטה. */
+@layer components {
+  .input-field {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-slate-700;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .link-action {
+    @apply text-brand-600 underline decoration-brand-200 underline-offset-2 transition hover:text-brand-800 hover:decoration-brand-400;
+  }
+
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-card;
+  }
 }

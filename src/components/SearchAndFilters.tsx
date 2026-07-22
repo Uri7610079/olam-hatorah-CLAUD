@@ -21,7 +21,7 @@ export function SearchAndFilters({
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder={searchPlaceholder}
         aria-label={searchPlaceholder}
-        className="w-full max-w-sm rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-blue-500"
+        className="input-field max-w-sm"
       />
       {advancedFilters}
     </div>

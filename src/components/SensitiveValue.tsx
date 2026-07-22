@@ -35,7 +35,7 @@ export function SensitiveValue({ masked, canReveal, onReveal }: SensitiveValuePr
             setLoading(false);
           }
         }}
-        className="text-xs text-blue-600 underline hover:text-blue-800 disabled:opacity-50"
+        className="link-action text-xs disabled:opacity-50"
       >
         {loading ? "חושף…" : "חשוף"}
       </button>

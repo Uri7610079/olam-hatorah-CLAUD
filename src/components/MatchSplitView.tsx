@@ -33,7 +33,7 @@ export function MatchSplitView<TSource, TTarget>({
 }: MatchSplitViewProps<TSource, TTarget>) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="card">
         <h3 className="border-b border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">
           {sourceTitle}
         </h3>
@@ -46,8 +46,8 @@ export function MatchSplitView<TSource, TTarget>({
                 <button
                   onClick={() => onSelectSource?.(item)}
                   aria-pressed={selected}
-                  className={`w-full px-4 py-2.5 text-right text-sm ${
-                    selected ? "bg-blue-50" : "hover:bg-slate-50"
+                  className={`w-full px-4 py-2.5 text-right text-sm transition ${
+                    selected ? "bg-brand-50" : "hover:bg-slate-50"
                   }`}
                 >
                   {renderSource(item)}
@@ -57,7 +57,7 @@ export function MatchSplitView<TSource, TTarget>({
           })}
         </ul>
       </div>
-      <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="card">
         <h3 className="border-b border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">
           {targetTitle}
         </h3>
@@ -70,8 +70,8 @@ export function MatchSplitView<TSource, TTarget>({
                 <button
                   onClick={() => onToggleTarget?.(item)}
                   aria-pressed={selected}
-                  className={`w-full px-4 py-2.5 text-right text-sm ${
-                    selected ? "bg-blue-50" : "hover:bg-slate-50"
+                  className={`w-full px-4 py-2.5 text-right text-sm transition ${
+                    selected ? "bg-brand-50" : "hover:bg-slate-50"
                   }`}
                 >
                   {renderTarget(item)}

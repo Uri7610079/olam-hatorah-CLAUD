@@ -121,7 +121,7 @@ export function AdminUsers() {
       render: (r) => (
         <div className="flex gap-3">
           {r.status !== "approved" && (
-            <button onClick={() => openAction(r, "approved")} className="text-xs text-blue-600 underline hover:text-blue-800">
+            <button onClick={() => openAction(r, "approved")} className="link-action text-xs">
               {r.status === "pending" ? "אישור" : "הפעלה מחדש"}
             </button>
           )}
@@ -157,11 +157,11 @@ export function AdminUsers() {
           pendingAction?.status === "approved" ? (
             <div className="space-y-3 text-right">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">תפקיד</label>
+                <label className="field-label text-xs">תפקיד</label>
                 <select
                   value={roleChoice}
                   onChange={(e) => setRoleChoice(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                  className="input-field"
                 >
                   <option value="">— בחרי תפקיד —</option>
                   {(rolesQuery.data ?? []).map((role) => (
@@ -172,11 +172,11 @@ export function AdminUsers() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">אזור ברירת מחדל</label>
+                <label className="field-label text-xs">אזור ברירת מחדל</label>
                 <select
                   value={areaChoice}
                   onChange={(e) => setAreaChoice(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                  className="input-field"
                 >
                   <option value="">— ללא —</option>
                   <option value="ops">תפעול שוטף</option>

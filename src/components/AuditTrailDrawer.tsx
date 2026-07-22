@@ -24,16 +24,16 @@ export function AuditTrailDrawer({ open, onClose, title = "יומן פעילות
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <button aria-label="סגור" className="flex-1 bg-black/30" onClick={onClose} />
+      <button aria-label="סגור" className="flex-1 bg-slate-900/40" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="h-full w-full max-w-sm overflow-y-auto bg-white p-4 shadow-xl"
+        className="h-full w-full max-w-sm overflow-y-auto bg-white p-5 shadow-xl"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} aria-label="סגור" className="rounded-md p-1 text-slate-500 hover:bg-slate-100">
+          <button onClick={onClose} aria-label="סגור" className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100">
             ✕
           </button>
         </div>

@@ -12,7 +12,7 @@ export function AdminHome() {
           <Link
             key={s.path}
             to={s.path}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm hover:border-slate-300 hover:shadow"
+            className="card px-4 py-3 transition hover:-translate-y-0.5 hover:shadow-md"
           >
             <p className="text-sm font-medium text-slate-900">{s.navLabel}</p>
             <p className="mt-1 text-xs text-slate-400">{s.builtInStage}</p>
