@@ -1,48 +1,19 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-
-// זהו סימולטור תפקידים זמני לשלב 1 בלבד — יוחלף לגמרי ב-Auth/RLS אמיתיים בשלב 2.
-// אין להשתמש בקובץ הזה כמנגנון הרשאה אמיתי; הוא קיים כדי לבדוק ניווט וברירות מחדל.
-export type MockRole =
-  | "system_admin"
-  | "operations_manager"
-  | "finance_controller"
-  | "office_staff"
-  | "accountant_readonly"
-  | "viewer";
+import { useAuth } from "@/lib/auth";
+import { useMyPermissions } from "@/lib/permissions";
 
 export type Area = "ops" | "finance" | "admin";
 
-export const ROLE_LABELS: Record<MockRole, string> = {
-  system_admin: "מנהל מערכת",
-  operations_manager: "מנהל תפעול (משה)",
-  finance_controller: "כספים ובקרה (אורי)",
-  office_staff: "עובד משרד",
-  accountant_readonly: "מנהלת חשבונות",
-  viewer: "צופה",
-};
-
-export const DEFAULT_AREA_FOR_ROLE: Record<MockRole, Area> = {
-  system_admin: "admin",
-  operations_manager: "ops",
-  finance_controller: "finance",
-  office_staff: "ops",
-  accountant_readonly: "finance",
-  viewer: "ops",
-};
-
-export const AREAS_FOR_ROLE: Record<MockRole, Area[]> = {
-  system_admin: ["ops", "finance", "admin"],
-  operations_manager: ["ops"],
-  finance_controller: ["finance"],
-  office_staff: ["ops"],
-  accountant_readonly: ["finance"],
-  viewer: ["ops", "finance"],
+const AREA_PERMISSION: Record<Area, { resource: string; action: string }> = {
+  ops: { resource: "area_ops", action: "access" },
+  finance: { resource: "area_finance", action: "access" },
+  admin: { resource: "area_admin", action: "access" },
 };
 
 interface AreaContextValue {
-  role: MockRole;
-  setRole: (role: MockRole) => void;
+  fullName: string | null;
+  roleLabel: string | null;
   currentArea: Area;
   setCurrentArea: (area: Area) => void;
   availableAreas: Area[];
@@ -57,28 +28,40 @@ function areaFromPathname(pathname: string): Area | null {
   return null;
 }
 
+// AreaProvider רץ רק בתוך AuthGate כש-profile מאושר (ר' App.tsx), אז useAuth/useMyPermissions
+// כאן תמיד משקפים משתמש approved אמיתי — לא סימולציה. availableAreas נגזר מהרשאות
+// area_ops/area_finance/area_admin האמיתיות (my_permissions), לא מרשימה קבועה לפי תפקיד.
 export function AreaProvider({ children }: { children: ReactNode }) {
-  const [role, setRoleState] = useState<MockRole>("system_admin");
+  const { profile } = useAuth();
+  const { data: permissions } = useMyPermissions(true);
   const location = useLocation();
   const navigate = useNavigate();
 
-  const availableAreas = useMemo(() => AREAS_FOR_ROLE[role], [role]);
+  const availableAreas = useMemo<Area[]>(() => {
+    if (!permissions) return [];
+    return (["ops", "finance", "admin"] as Area[]).filter((area) => {
+      const { resource, action } = AREA_PERMISSION[area];
+      return permissions.some((p) => p.resource === resource && p.action === action);
+    });
+  }, [permissions]);
 
-  // האזור הנוכחי נגזר תמיד מהנתיב בפועל (URL), לא ממצב נפרד —
-  // כך ניווט ישיר, רענון או "אחורה" בדפדפן תמיד מציגים sidebar תואם.
-  const currentArea = areaFromPathname(location.pathname) ?? DEFAULT_AREA_FOR_ROLE[role];
+  const preferredArea =
+    profile?.default_area && availableAreas.includes(profile.default_area) ? profile.default_area : availableAreas[0];
 
-  const setRole = (nextRole: MockRole) => {
-    setRoleState(nextRole);
-    navigate(`/${DEFAULT_AREA_FOR_ROLE[nextRole]}`);
-  };
+  const currentArea = areaFromPathname(location.pathname) ?? preferredArea ?? "ops";
 
-  const setCurrentArea = (area: Area) => {
-    navigate(`/${area}`);
-  };
+  const setCurrentArea = (area: Area) => navigate(`/${area}`);
 
   return (
-    <AreaContext.Provider value={{ role, setRole, currentArea, setCurrentArea, availableAreas }}>
+    <AreaContext.Provider
+      value={{
+        fullName: profile?.full_name ?? null,
+        roleLabel: profile?.role_label ?? null,
+        currentArea,
+        setCurrentArea,
+        availableAreas,
+      }}
+    >
       {children}
     </AreaContext.Provider>
   );

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useArea, ROLE_LABELS, type MockRole } from "./AreaContext";
+import { useArea } from "./AreaContext";
 import { screensForArea } from "./screens";
 import { DemoBanner } from "@/components/DemoBanner";
+import { supabase } from "@/lib/supabase";
 
 const AREA_LABEL = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול" } as const;
 const AREA_ACCENT = {
@@ -12,7 +13,7 @@ const AREA_ACCENT = {
 } as const;
 
 export function Layout() {
-  const { role, setRole, currentArea, availableAreas } = useArea();
+  const { fullName, roleLabel, currentArea, availableAreas } = useArea();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const screens = screensForArea(currentArea);
@@ -65,19 +66,18 @@ export function Layout() {
           </div>
         )}
 
-        {/* סימולטור תפקידים לצורכי פיתוח בלבד — יוסר כשיהיה Auth אמיתי בשלב 2 */}
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as MockRole)}
-          aria-label="סימולציית תפקיד (זמני, לפיתוח בלבד)"
-          className="rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-xs text-slate-600"
-        >
-          {Object.entries(ROLE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <span className="hidden sm:inline">
+            {fullName ?? "משתמש"}
+            {roleLabel && <span className="text-slate-400"> · {roleLabel}</span>}
+          </span>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="rounded-md border border-slate-300 px-2 py-1 hover:bg-slate-50"
+          >
+            התנתקות
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-1">
