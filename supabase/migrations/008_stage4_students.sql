@@ -14,13 +14,15 @@ create table students (
   -- כרגע טקסט חופשי בלבד, בלי לקבע רשימת ערכים שלא אושרה.
   student_type text,
   study_code text,
-  -- מכונת מצבים: draft -> ready_for_talmud -> active, או inactive (יציאה) מכל שלב.
-  -- המעבר ל-ready_for_talmud/active/inactive נאכף רק דרך advance_student_status()/exit_student()
-  -- (בהמשך הקובץ) כדי לאכוף את כלל "טלפון תקין + שיוך פעיל + חשבון מאומת". חשוב: RLS
-  -- לבדה לא יכולה להגביל עמודה בודדת (students_update ב-009 מתירה עדכון כל שדה, כדי
-  -- לאפשר עריכת פרטים רגילה) - האכיפה בפועל שאף אחד לא ישנה status ישירות היא הטריגר
-  -- enforce_student_status_transition (בהמשך הקובץ), לא ה-RLS.
-  status text not null default 'draft' check (status in ('draft', 'ready_for_talmud', 'active', 'inactive')),
+  -- מכונת מצבים מלאה לפי אפיון V3 §10: draft -> ready_for_talmud -> sent_to_talmud ->
+  -- active/active_with_error, או inactive (יציאה) מכל שלב. sent_to_talmud/active/
+  -- active_with_error נקבעים בשלב 6 (יצוא/יבוא זכאות/שגויים); כאן רק מוגדר טווח הערכים.
+  -- המעבר נאכף רק דרך פונקציות ייעודיות (advance_student_status()/exit_student() כאן,
+  -- ופונקציות שלב 6) כדי לאכוף כללים עסקיים. חשוב: RLS לבדה לא יכולה להגביל עמודה
+  -- בודדת (students_update ב-009 מתירה עדכון כל שדה, כדי לאפשר עריכת פרטים רגילה) -
+  -- האכיפה בפועל שאף אחד לא ישנה status ישירות היא הטריגר enforce_student_status_transition
+  -- (בהמשך הקובץ), לא ה-RLS.
+  status text not null default 'draft' check (status in ('draft', 'ready_for_talmud', 'sent_to_talmud', 'active', 'active_with_error', 'inactive')),
   exit_date date,
   exit_reason text,
   is_demo boolean not null default false,
@@ -232,7 +234,9 @@ begin
     raise exception 'permission denied';
   end if;
 
-  if p_target_status not in ('ready_for_talmud', 'active') then
+  -- 'active'/'active_with_error' אינם יעד ידני - הם נקבעים אך ורק דרך תהליך התלמוד
+  -- (יצוא/יבוא זכאות/יבוא שגויים) בשלב 6, לא בלחיצת כפתור על ידי המשתמש.
+  if p_target_status <> 'ready_for_talmud' then
     raise exception 'invalid target status: %', p_target_status;
   end if;
 

@@ -1,5 +1,5 @@
 export type StudentIdType = "israeli_id" | "passport" | "other";
-export type StudentStatus = "draft" | "ready_for_talmud" | "active" | "inactive";
+export type StudentStatus = "draft" | "ready_for_talmud" | "sent_to_talmud" | "active" | "active_with_error" | "inactive";
 
 export interface Student {
   id: string;
@@ -27,7 +27,9 @@ export const ID_TYPE_LABEL: Record<StudentIdType, string> = {
 export const STATUS_LABEL: Record<StudentStatus, string> = {
   draft: "טיוטה",
   ready_for_talmud: "מוכן לתלמוד",
+  sent_to_talmud: "נשלח לתלמוד",
   active: "פעיל",
+  active_with_error: "פעיל עם שגיאה",
   inactive: "לא פעיל",
 };
 

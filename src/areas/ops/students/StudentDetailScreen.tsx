@@ -16,6 +16,7 @@ import { STATUS_LABEL, type Student } from "./types";
 import { StudentDetailsTab } from "./StudentDetailsTab";
 import { StudentAssignmentTab } from "./StudentAssignmentTab";
 import { StudentBankTab } from "./StudentBankTab";
+import { StudentTalmudTab } from "./StudentTalmudTab";
 
 type TabKey = "details" | "assignment" | "talmud" | "bank" | "audits" | "documents";
 
@@ -34,10 +35,18 @@ const STEPS: StepDef[] = [
   { key: "assignment", label: "שיוך פעיל" },
   { key: "bank", label: "חשבון מאומת" },
   { key: "ready_for_talmud", label: "מוכן לתלמוד" },
+  { key: "sent_to_talmud", label: "נשלח לתלמוד" },
   { key: "active", label: "פעיל" },
 ];
 
-const STATUS_SEVERITY = { draft: "neutral", ready_for_talmud: "medium", active: "ok", inactive: "neutral" } as const;
+const STATUS_SEVERITY = {
+  draft: "neutral",
+  ready_for_talmud: "medium",
+  sent_to_talmud: "medium",
+  active: "ok",
+  active_with_error: "high",
+  inactive: "neutral",
+} as const;
 
 async function fetchStudent(id: string): Promise<Student> {
   const { data, error } = await supabase
@@ -100,17 +109,18 @@ export function StudentDetailScreen() {
   if (hasAssignment) currentStep = "assignment";
   if (hasBank) currentStep = "bank";
   if (student.status === "ready_for_talmud") currentStep = "ready_for_talmud";
-  if (student.status === "active") currentStep = "active";
+  if (student.status === "sent_to_talmud") currentStep = "sent_to_talmud";
+  if (student.status === "active" || student.status === "active_with_error") currentStep = "active";
 
   const refreshStudent = () => {
     queryClient.invalidateQueries({ queryKey: ["student", id] });
     queryClient.invalidateQueries({ queryKey: ["students"] });
   };
 
-  const advance = async (target: "ready_for_talmud" | "active") => {
+  const advance = async () => {
     setAdvancing(true);
     setActionError(null);
-    const { error } = await supabase.rpc("advance_student_status", { p_student_id: id, p_target_status: target });
+    const { error } = await supabase.rpc("advance_student_status", { p_student_id: id, p_target_status: "ready_for_talmud" });
     setAdvancing(false);
     if (error) {
       setActionError(error.message);
@@ -145,17 +155,19 @@ export function StudentDetailScreen() {
         <div className="mb-6 flex flex-wrap items-center gap-3">
           {student.status === "draft" && (
             <button
-              onClick={() => advance("ready_for_talmud")}
+              onClick={advance}
               disabled={!hasDetails || !hasAssignment || !hasBank || advancing}
               className="btn-primary text-sm"
             >
               {advancing ? "מעדכנת…" : "קידום למוכן לתלמוד"}
             </button>
           )}
-          {student.status === "ready_for_talmud" && (
-            <button onClick={() => advance("active")} disabled={advancing} className="btn-primary text-sm">
-              {advancing ? "מעדכנת…" : "הפעלת תלמיד"}
-            </button>
+          {(student.status === "ready_for_talmud" || student.status === "sent_to_talmud") && (
+            <p className="text-xs text-slate-500">
+              {student.status === "ready_for_talmud"
+                ? 'ההמשך (יצוא לתלמוד) נעשה ממסך "יצוא לתלמוד" - לא כפעולה כאן.'
+                : "התלמיד נשלח לתלמוד. הסטטוס יתעדכן אוטומטית ל\"פעיל\"/\"פעיל עם שגיאה\" ביבוא דוח הזכאות/שגויים הבא."}
+            </p>
           )}
           <button onClick={() => setShowExit(true)} className="text-xs text-red-600 underline hover:text-red-800">
             יציאת תלמיד
@@ -168,7 +180,7 @@ export function StudentDetailScreen() {
 
       {activeTab === "details" && <StudentDetailsTab student={student} />}
       {activeTab === "assignment" && <StudentAssignmentTab studentId={student.id} />}
-      {activeTab === "talmud" && <EmptyState title="נתוני תלמוד" description="ייבנה בשלב 6, בהתאם לתוכנית השלבים." icon={ClipboardList} />}
+      {activeTab === "talmud" && <StudentTalmudTab studentId={student.id} />}
       {activeTab === "bank" && <StudentBankTab studentId={student.id} />}
       {activeTab === "audits" && <EmptyState title="ביקורות" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={ClipboardList} />}
       {activeTab === "documents" && <EmptyState title="מסמכים" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={FileText} />}

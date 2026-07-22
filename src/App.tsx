@@ -16,8 +16,11 @@ import { StudentsListScreen } from "./areas/ops/students/StudentsListScreen";
 import { StudentDetailScreen } from "./areas/ops/students/StudentDetailScreen";
 import { ImportCenterScreen } from "./areas/ops/import-center/ImportCenterScreen";
 import { StudyCodesScreen } from "./areas/admin/StudyCodesScreen";
+import { TalmudExportScreen } from "./areas/ops/talmud/TalmudExportScreen";
+import { EligibilityScreen } from "./areas/ops/talmud/EligibilityScreen";
+import { ErrorsCenterScreen } from "./areas/ops/talmud/ErrorsCenterScreen";
 
-// המסכים האלה כבר נבנו בפועל (שלבים 2-5) - לא עוברים דרך מפת ה-placeholder הכללית.
+// המסכים האלה כבר נבנו בפועל (שלבים 2-6) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
   "/admin/users",
   "/admin/audit-log",
@@ -26,6 +29,9 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/ops/branches-groups",
   "/ops/students",
   "/ops/import-center",
+  "/ops/talmud/export",
+  "/ops/talmud/eligibility",
+  "/ops/talmud/errors",
 ]);
 
 export default function App() {
@@ -47,6 +53,9 @@ export default function App() {
             <Route path="/ops/students/:id" element={<StudentDetailScreen />} />
             <Route path="/ops/import-center" element={<ImportCenterScreen />} />
             <Route path="/admin/study-codes" element={<StudyCodesScreen />} />
+            <Route path="/ops/talmud/export" element={<TalmudExportScreen />} />
+            <Route path="/ops/talmud/eligibility" element={<EligibilityScreen />} />
+            <Route path="/ops/talmud/errors" element={<ErrorsCenterScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}

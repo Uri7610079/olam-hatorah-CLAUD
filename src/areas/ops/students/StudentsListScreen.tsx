@@ -25,7 +25,9 @@ async function fetchStudents(): Promise<Student[]> {
 const STATUS_SEVERITY: Record<Student["status"], Severity> = {
   draft: "neutral",
   ready_for_talmud: "medium",
+  sent_to_talmud: "medium",
   active: "ok",
+  active_with_error: "high",
   inactive: "neutral",
 };
 
