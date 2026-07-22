@@ -1,3 +1,5 @@
+import { CircleAlert, TriangleAlert, Clock, CircleCheck, Circle, type LucideIcon } from "lucide-react";
+
 export type Severity = "critical" | "high" | "medium" | "ok" | "neutral";
 
 const SEVERITY_LABEL: Record<Severity, string> = {
@@ -16,12 +18,14 @@ const SEVERITY_CLASSES: Record<Severity, string> = {
   neutral: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
 };
 
-const SEVERITY_DOT: Record<Severity, string> = {
-  critical: "bg-red-500",
-  high: "bg-orange-500",
-  medium: "bg-yellow-500",
-  ok: "bg-green-500",
-  neutral: "bg-slate-400",
+// אייקון שונה לכל רמת חומרה - כדי שהמשמעות תיקרא גם דרך צורה, לא רק דרך צבע
+// (חשוב במיוחד לצבעוני-עיוורון, ומעבר לדרישת האפיון לטקסט+צבע).
+const SEVERITY_ICON: Record<Severity, LucideIcon> = {
+  critical: CircleAlert,
+  high: TriangleAlert,
+  medium: Clock,
+  ok: CircleCheck,
+  neutral: Circle,
 };
 
 interface StatusBadgeProps {
@@ -31,11 +35,12 @@ interface StatusBadgeProps {
 
 // חובה: סטטוס תמיד מוצג בטקסט + צבע, לא בצבע בלבד (דרישת נגישות מפורשת באפיון).
 export function StatusBadge({ severity, label }: StatusBadgeProps) {
+  const Icon = SEVERITY_ICON[severity];
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${SEVERITY_CLASSES[severity]}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${SEVERITY_DOT[severity]}`} aria-hidden="true" />
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       {label ?? SEVERITY_LABEL[severity]}
     </span>
   );
