@@ -135,6 +135,9 @@ begin
     end;
   end loop;
 
+  -- import_batches_enforce_commit (013) חוסמת מעבר ל-committed בלי הדגל הזה - אותו
+  -- טריגר שאמור להגן על commit_import_batch() הגנרי מגן גם על ה-commit הדומיין-ספציפי הזה.
+  perform set_config('app.allow_batch_commit', 'true', true);
   update import_batches set status = 'committed', committed_at = now() where id = p_batch_id;
 
   perform insert_audit_event(

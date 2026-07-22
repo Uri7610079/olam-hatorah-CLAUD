@@ -148,6 +148,9 @@ begin
     end;
   end loop;
 
+  -- import_batches_enforce_commit (013) חוסמת מעבר ל-committed בלי הדגל הזה - ר' אותה
+  -- הערה ב-018 (commit_eligibility_batch).
+  perform set_config('app.allow_batch_commit', 'true', true);
   update import_batches set status = 'committed', committed_at = now() where id = p_batch_id;
 
   perform insert_audit_event(
