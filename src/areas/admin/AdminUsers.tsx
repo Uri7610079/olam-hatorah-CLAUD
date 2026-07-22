@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { UserCog } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
@@ -144,6 +145,7 @@ export function AdminUsers() {
         rowKey={(r) => r.id}
         loading={profilesQuery.isLoading}
         emptyTitle="אין משתמשים עדיין"
+        emptyIcon={UserCog}
       />
 
       <ConfirmDialog

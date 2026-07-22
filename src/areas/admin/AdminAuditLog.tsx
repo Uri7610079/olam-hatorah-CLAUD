@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { History } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
@@ -68,6 +69,7 @@ export function AdminAuditLog() {
         rowKey={(r) => r.id}
         loading={query.isLoading}
         emptyTitle="אין רשומות ביומן"
+        emptyIcon={History}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+import { Construction } from "lucide-react";
 import { PageHeader } from "./PageHeader";
 import { EmptyState } from "./EmptyState";
 
@@ -16,6 +17,7 @@ export function PlaceholderScreen({ title, description, builtInStage }: Placehol
       <EmptyState
         title="המסך הזה עדיין לא נבנה"
         description={`ייבנה ב${builtInStage}, בהתאם לתוכנית השלבים.`}
+        icon={Construction}
       />
     </div>
   );

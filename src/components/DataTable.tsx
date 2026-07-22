@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 
@@ -16,6 +17,7 @@ interface DataTableProps<T> {
   loading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyIcon?: LucideIcon;
   onRowClick?: (row: T) => void;
 }
 
@@ -28,10 +30,11 @@ export function DataTable<T>({
   loading,
   emptyTitle = "אין נתונים להצגה",
   emptyDescription,
+  emptyIcon,
   onRowClick,
 }: DataTableProps<T>) {
   if (loading) return <LoadingState rows={5} />;
-  if (rows.length === 0) return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  if (rows.length === 0) return <EmptyState title={emptyTitle} description={emptyDescription} icon={emptyIcon} />;
 
   return (
     <div className="card overflow-x-auto">
