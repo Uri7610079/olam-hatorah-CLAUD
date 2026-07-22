@@ -9,9 +9,12 @@ import { FinanceDashboard } from "./areas/finance/FinanceDashboard";
 import { AdminHome } from "./areas/admin/AdminHome";
 import { AdminUsers } from "./areas/admin/AdminUsers";
 import { AdminAuditLog } from "./areas/admin/AdminAuditLog";
+import { OrganizationsListScreen } from "./areas/ops/organizations/OrganizationsListScreen";
+import { OrganizationDetailScreen } from "./areas/ops/organizations/OrganizationDetailScreen";
+import { BranchesGroupsScreen } from "./areas/ops/branches-groups/BranchesGroupsScreen";
 
-// שני מסכי ה-admin האלה כבר נבנו בפועל בשלב 2 - לא עוברים דרך מפת ה-placeholder הכללית.
-const SCREENS_WITH_REAL_PAGES = new Set(["/admin/users", "/admin/audit-log"]);
+// המסכים האלה כבר נבנו בפועל (שלבים 2-3) - לא עוברים דרך מפת ה-placeholder הכללית.
+const SCREENS_WITH_REAL_PAGES = new Set(["/admin/users", "/admin/audit-log", "/ops/organizations", "/ops/branches-groups"]);
 
 export default function App() {
   return (
@@ -25,6 +28,9 @@ export default function App() {
             <Route path="/admin" element={<AdminHome />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/audit-log" element={<AdminAuditLog />} />
+            <Route path="/ops/organizations" element={<OrganizationsListScreen />} />
+            <Route path="/ops/organizations/:id" element={<OrganizationDetailScreen />} />
+            <Route path="/ops/branches-groups" element={<BranchesGroupsScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}
