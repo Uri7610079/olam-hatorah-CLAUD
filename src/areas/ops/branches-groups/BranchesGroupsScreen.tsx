@@ -148,18 +148,38 @@ export function BranchesGroupsScreen() {
     if (!selectedBranchId) return;
     setGroupSubmitting(true);
     setGroupError(null);
-    const { error } = await supabase.from("groups").insert({
-      branch_id: selectedBranchId,
-      name: groupForm.name,
-      group_leader_id: groupForm.group_leader_id || null,
-      opened_at: groupForm.opened_at || null,
-      default_distribution_method: groupForm.default_distribution_method || null,
-    });
-    setGroupSubmitting(false);
+    // group_leader_id לא נשלח כאן: קבוצה נוצרת תמיד בלי ראש קבוצה, ואם נבחר אחד בטופס
+    // הוא משויך מיד אחרי דרך reassign_group_leader() - כך שיש רק מסלול אחד שקובע
+    // group_leader_id (גם ליצירה ראשונה וגם להחלפה מאוחרת), עם היסטוריה שנשמרת.
+    const { data, error } = await supabase
+      .from("groups")
+      .insert({
+        branch_id: selectedBranchId,
+        name: groupForm.name,
+        opened_at: groupForm.opened_at || null,
+        default_distribution_method: groupForm.default_distribution_method || null,
+      })
+      .select("id")
+      .single();
     if (error) {
+      setGroupSubmitting(false);
       setGroupError(error.message);
       return;
     }
+    if (groupForm.group_leader_id && data) {
+      const { error: leaderError } = await supabase.rpc("reassign_group_leader", {
+        p_group_id: data.id,
+        p_group_leader_id: groupForm.group_leader_id,
+        p_start_date: groupForm.opened_at || new Date().toISOString().slice(0, 10),
+      });
+      if (leaderError) {
+        setGroupSubmitting(false);
+        setGroupError(`הקבוצה נוצרה, אך שיוך ראש הקבוצה נכשל: ${leaderError.message}`);
+        queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
+        return;
+      }
+    }
+    setGroupSubmitting(false);
     setGroupForm(EMPTY_GROUP_FORM);
     setShowAddGroup(false);
     queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
@@ -168,6 +188,30 @@ export function BranchesGroupsScreen() {
   const closeGroup = async (id: string) => {
     const { error } = await supabase.from("groups").update({ status: "closed" }).eq("id", id);
     if (!error) queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
+  };
+
+  const [changingLeaderGroupId, setChangingLeaderGroupId] = useState<string | null>(null);
+  const [leaderChoice, setLeaderChoice] = useState("");
+  const [leaderChangeSubmitting, setLeaderChangeSubmitting] = useState(false);
+
+  const startChangeLeader = (group: GroupRow) => {
+    setChangingLeaderGroupId(group.id);
+    setLeaderChoice(group.group_leader_id ?? "");
+  };
+
+  const confirmChangeLeader = async () => {
+    if (!changingLeaderGroupId || !leaderChoice) return;
+    setLeaderChangeSubmitting(true);
+    const { error } = await supabase.rpc("reassign_group_leader", {
+      p_group_id: changingLeaderGroupId,
+      p_group_leader_id: leaderChoice,
+      p_start_date: new Date().toISOString().slice(0, 10),
+    });
+    setLeaderChangeSubmitting(false);
+    if (!error) {
+      setChangingLeaderGroupId(null);
+      queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
+    }
   };
 
   const submitNewLeader = async (e: FormEvent) => {
@@ -219,7 +263,42 @@ export function BranchesGroupsScreen() {
 
   const groupColumns: DataTableColumn<GroupRow>[] = [
     { key: "name", header: "שם קבוצה", render: (r) => r.name },
-    { key: "leader", header: "ראש קבוצה", render: (r) => r.group_leader_name ?? "—" },
+    {
+      key: "leader",
+      header: "ראש קבוצה",
+      render: (r) =>
+        changingLeaderGroupId === r.id ? (
+          <div className="flex items-center gap-2">
+            <select value={leaderChoice} onChange={(e) => setLeaderChoice(e.target.value)} className="input-field text-xs">
+              <option value="">— בחרי —</option>
+              {(leadersQuery.data ?? []).map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.full_name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={confirmChangeLeader}
+              disabled={!leaderChoice || leaderChangeSubmitting}
+              className="link-action text-xs"
+            >
+              {leaderChangeSubmitting ? "שומרת…" : "אישור"}
+            </button>
+            <button onClick={() => setChangingLeaderGroupId(null)} className="text-xs text-slate-500 underline">
+              ביטול
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span>{r.group_leader_name ?? "—"}</span>
+            {canManageGroups && (
+              <button onClick={() => startChangeLeader(r)} className="link-action text-xs">
+                שינוי
+              </button>
+            )}
+          </div>
+        ),
+    },
     {
       key: "method",
       header: "שיטת חלוקה",
