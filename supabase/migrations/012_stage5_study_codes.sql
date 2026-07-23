@@ -36,10 +36,10 @@ insert into study_codes (code, description) values
 
 alter table study_codes enable row level security;
 
--- קריאה לכל מאושר עם גישת תפעול (נבחר בטופס קליטת תלמיד). עריכה רק למנהל מערכת -
--- זו רשימת הגדרות מערכת, לא נתון תפעולי יומיומי.
+-- קריאה לכל מאושר עם גישת תפעול או כספים (נבחר בטופס קליטת תלמיד, וגם בבחירת "קוד
+-- לימוד" ככלל עמלה בשלב 8) - רשימת הגדרות מערכת לא רגישה. עריכה רק למנהל מערכת.
 create policy study_codes_select on study_codes for select to authenticated
-  using (has_permission('area_ops', 'access'));
+  using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
 
 insert into permissions (resource, action, label_he) values
   ('study_codes', 'manage', 'עריכת קודי לימוד וערכי מערכת');

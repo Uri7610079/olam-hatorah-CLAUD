@@ -9,8 +9,11 @@ alter table branches enable row level security;
 alter table group_leaders enable row level security;
 alter table groups enable row level security;
 
+-- area_finance נכלל גם כאן (לא רק area_ops) - מסכי כספים (שלבים 7-8 ואילך) צריכים
+-- לקרוא שם/מבנה עמותה-סניף-קבוצה כדי לתפקד. זה נתון לא רגיש (שם/קוד) - ההגנה על
+-- פרטים רגישים (מספר חשבון בנק) קיימת בנפרד דרך ה-view הממסך + reveal RPC למטה.
 create policy organizations_select on organizations for select to authenticated
-  using (has_permission('area_ops', 'access'));
+  using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
 
 create policy organizations_insert on organizations for insert to authenticated
   with check (has_permission('organizations', 'manage'));
@@ -42,7 +45,7 @@ create policy organization_officeholders_update on organization_officeholders fo
   with check (has_permission('organizations', 'manage'));
 
 create policy branches_select on branches for select to authenticated
-  using (has_permission('area_ops', 'access'));
+  using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
 
 create policy branches_insert on branches for insert to authenticated
   with check (has_permission('branches', 'manage'));
@@ -62,7 +65,7 @@ create policy group_leaders_update on group_leaders for update to authenticated
   with check (has_permission('groups', 'manage'));
 
 create policy groups_select on groups for select to authenticated
-  using (has_permission('area_ops', 'access'));
+  using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
 
 create policy groups_insert on groups for insert to authenticated
   with check (has_permission('groups', 'manage'));

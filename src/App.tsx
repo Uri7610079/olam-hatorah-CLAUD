@@ -21,6 +21,9 @@ import { EligibilityScreen } from "./areas/ops/talmud/EligibilityScreen";
 import { ErrorsCenterScreen } from "./areas/ops/talmud/ErrorsCenterScreen";
 import { RetroScreen } from "./areas/ops/talmud/RetroScreen";
 import { QuotasScreen } from "./areas/ops/quotas/QuotasScreen";
+import { FinancialPeriodsScreen } from "./areas/finance/FinancialPeriodsScreen";
+import { CommissionRulesScreen } from "./areas/finance/CommissionRulesScreen";
+import { GroupBalancesScreen } from "./areas/finance/GroupBalancesScreen";
 
 // המסכים האלה כבר נבנו בפועל (שלבים 2-7) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
@@ -36,6 +39,9 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/ops/talmud/errors",
   "/ops/talmud/retro",
   "/ops/quotas",
+  "/finance/months",
+  "/finance/commission-rules",
+  "/finance/group-balances",
 ]);
 
 export default function App() {
@@ -62,6 +68,9 @@ export default function App() {
             <Route path="/ops/talmud/errors" element={<ErrorsCenterScreen />} />
             <Route path="/ops/talmud/retro" element={<RetroScreen />} />
             <Route path="/ops/quotas" element={<QuotasScreen />} />
+            <Route path="/finance/months" element={<FinancialPeriodsScreen />} />
+            <Route path="/finance/commission-rules" element={<CommissionRulesScreen />} />
+            <Route path="/finance/group-balances" element={<GroupBalancesScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}
