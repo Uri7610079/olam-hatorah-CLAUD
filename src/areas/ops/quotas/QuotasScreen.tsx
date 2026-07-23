@@ -159,10 +159,13 @@ export function QuotasScreen() {
       key: "utilization",
       header: "ניצול",
       render: (r) => {
-        if (!r.approvedQuota) return <span className="text-slate-400">—</span>;
-        const pct = Math.round((r.eligibleCount / r.approvedQuota) * 100);
+        // מכסה שלא הוגדרה בכלל (null) שונה ממכסה שאושרה כ-0 (מסלול לגיטימי - סניף שעדיין
+        // לא אושר לקלוט אף תלמיד) - בדיקת truthy הייתה מתייחסת לשתיהן אותו דבר.
+        if (r.approvedQuota == null) return <span className="text-slate-400">—</span>;
         const over = r.eligibleCount > r.approvedQuota;
-        return <StatusBadge severity={over ? "high" : pct >= 90 ? "medium" : "ok"} label={`${pct}%${over ? " (חריגה)" : ""}`} />;
+        const pct = r.approvedQuota === 0 ? (r.eligibleCount > 0 ? Infinity : 0) : Math.round((r.eligibleCount / r.approvedQuota) * 100);
+        const label = pct === Infinity ? `חריגה (מכסה 0)` : `${pct}%${over ? " (חריגה)" : ""}`;
+        return <StatusBadge severity={over ? "high" : pct >= 90 ? "medium" : "ok"} label={label} />;
       },
     },
   ];
