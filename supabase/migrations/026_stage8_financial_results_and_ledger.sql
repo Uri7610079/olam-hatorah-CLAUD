@@ -64,8 +64,14 @@ create table group_ledger_entries (
 );
 
 -- מניעת יצירה כפולה מאותו מקור - הגנת-עומק בשכבת ה-DB, בנוסף לבדיקה בקוד ה-RPC עצמו
--- (commit_commission_calculation מדלג על מקור שלא השתנה מאז החישוב הקודם).
-create unique index group_ledger_entries_source_unique on group_ledger_entries (source_table, source_id) where source_table is not null and source_id is not null;
+-- (commit_commission_calculation מדלג על מקור שלא השתנה מאז החישוב הקודם). מוגבל
+-- במפורש ל-eligibility_financial_results בלבד: זה המקור היחיד שבו "מקור -> תנועה" הוא
+-- 1:1 אמיתי (כל שורת תוצאה נוצרת פעם אחת בלבד, superseded לא נדרס). מקורות אחרים -
+-- למשל תרומות משלב 9 - יכולים לגיטימית לייצר כמה תנועות באותו source_id לאורך חיי
+-- הרשומה (פרסום ראשוני, ביטול עקב שינוי שיוך, פרסום מחדש) ומגינים על עצמם בדרך אחרת
+-- (מכונת מצבים דרך RPC ייעודי), לא דרך unique index גורף (ר' 029 לתיקון החי).
+create unique index group_ledger_entries_source_unique on group_ledger_entries (source_table, source_id)
+  where source_table = 'eligibility_financial_results' and source_id is not null;
 create index group_ledger_entries_group_idx on group_ledger_entries (group_id, created_at);
 create index group_ledger_entries_org_month_idx on group_ledger_entries (organization_id, period_month);
 

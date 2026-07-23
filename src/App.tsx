@@ -24,6 +24,8 @@ import { QuotasScreen } from "./areas/ops/quotas/QuotasScreen";
 import { FinancialPeriodsScreen } from "./areas/finance/FinancialPeriodsScreen";
 import { CommissionRulesScreen } from "./areas/finance/CommissionRulesScreen";
 import { GroupBalancesScreen } from "./areas/finance/GroupBalancesScreen";
+import { DonationsScreen } from "./areas/finance/DonationsScreen";
+import { DistributionsScreen } from "./areas/finance/DistributionsScreen";
 
 // המסכים האלה כבר נבנו בפועל (שלבים 2-7) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
@@ -42,6 +44,8 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/finance/months",
   "/finance/commission-rules",
   "/finance/group-balances",
+  "/finance/donations",
+  "/finance/distributions",
 ]);
 
 export default function App() {
@@ -71,6 +75,8 @@ export default function App() {
             <Route path="/finance/months" element={<FinancialPeriodsScreen />} />
             <Route path="/finance/commission-rules" element={<CommissionRulesScreen />} />
             <Route path="/finance/group-balances" element={<GroupBalancesScreen />} />
+            <Route path="/finance/donations" element={<DonationsScreen />} />
+            <Route path="/finance/distributions" element={<DistributionsScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}
