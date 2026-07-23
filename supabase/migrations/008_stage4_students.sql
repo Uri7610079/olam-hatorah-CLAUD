@@ -345,11 +345,23 @@ grant execute on function add_student_bank_account(uuid, text, text, text, text,
 -- הוא האכיפה האמיתית: שינוי status חסום אלא אם המשתנה app.allow_student_status_change
 -- הוגדר ל-true באותה טרנזקציה - וזה קורה אך ורק בתוך advance_student_status()/exit_student()
 -- לפני ה-UPDATE שלהן (is_local=true, כך שהערך מתאפס אוטומטית בסוף הטרנזקציה).
+--
+-- חייב לבדוק גם INSERT, לא רק UPDATE: students_insert (009) בודקת רק הרשאה, לא ערך
+-- status - בלי הבדיקה כאן, INSERT ישיר יכול היה ליצור תלמיד שכבר "active" מרגע הלידה,
+-- עוקף לגמרי את advance_student_status() (טלפון תקין, שיוך פעיל, חשבון מאומת) ואת כל
+-- מחזור התלמוד/עמלה/מס"ב שתלוי בסטטוס הזה. נתפס בביקורת רוחבית לקראת שלב 11, לא ביצירה.
 create or replace function enforce_student_status_transition()
 returns trigger
 language plpgsql
 as $$
 begin
+  if tg_op = 'INSERT' then
+    if new.status <> 'draft' then
+      raise exception 'תלמיד חדש תמיד נוצר בסטטוס טיוטה';
+    end if;
+    return new;
+  end if;
+
   if new.status is distinct from old.status
      and coalesce(current_setting('app.allow_student_status_change', true), '') <> 'true' then
     raise exception 'שינוי סטטוס תלמיד מותר רק דרך advance_student_status() או exit_student()';
@@ -359,7 +371,7 @@ end;
 $$;
 
 create trigger students_enforce_status_transition
-  before update on students
+  before insert or update on students
   for each row execute function enforce_student_status_transition();
 
 -- audit אוטומטי, כמו בשלב 3. student_bank_accounts משתמש בגרסה הממסכת (audit_bank_account_change).

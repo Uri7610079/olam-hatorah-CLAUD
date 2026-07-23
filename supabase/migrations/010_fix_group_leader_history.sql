@@ -52,11 +52,24 @@ where group_leader_id is not null;
 -- לא יכולה להגביל עדכון לעמודה בודדת, אז groups_update (006) עדיין מתירה עדכון כל שדה
 -- (נחוץ לשינוי name/status/default_distribution_method). הטריגר הזה חוסם ספציפית שינוי
 -- ישיר של group_leader_id מחוץ ל-reassign_group_leader().
+-- חייב לבדוק גם INSERT: groups_insert (006) בודקת רק הרשאה, בלי הבדיקה כאן קבוצה
+-- הייתה יכולה להיווצר עם group_leader_id כבר קבוע ישירות ב-INSERT, בלי שורת
+-- group_leader_assignments תואמת - פער היסטוריה (לא סיכון כספי, אבל אותה מחלקת באג
+-- כמו students/import_batches). הלקוח הקיים (BranchesGroupsScreen) כבר לעולם לא שולח
+-- group_leader_id ב-INSERT (יוצר קבוצה בלי ראש, ואז קורא ל-reassign_group_leader()
+-- בנפרד) - האכיפה כאן רק סוגרת את הפער מול קריאת API עתידית/ישירה.
 create or replace function enforce_group_leader_transition()
 returns trigger
 language plpgsql
 as $$
 begin
+  if tg_op = 'INSERT' then
+    if new.group_leader_id is not null then
+      raise exception 'קבוצה נוצרת תמיד בלי ראש קבוצה - שיוך ראשון נעשה דרך reassign_group_leader() לאחר היצירה';
+    end if;
+    return new;
+  end if;
+
   if new.group_leader_id is distinct from old.group_leader_id
      and coalesce(current_setting('app.allow_group_leader_change', true), '') <> 'true' then
     raise exception 'שינוי ראש קבוצה מותר רק דרך reassign_group_leader()';
@@ -66,7 +79,7 @@ end;
 $$;
 
 create trigger groups_enforce_leader_transition
-  before update on groups
+  before insert or update on groups
   for each row execute function enforce_group_leader_transition();
 
 -- reassign_group_leader(): סוגר שיוך פעיל קודם (אם יש) ופותח שיוך חדש, אטומית - גם

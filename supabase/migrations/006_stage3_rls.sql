@@ -34,8 +34,10 @@ create policy organization_bank_accounts_update on organization_bank_accounts fo
   using (has_permission('organizations', 'manage'))
   with check (has_permission('organizations', 'manage'));
 
+-- area_finance נכלל גם כאן: בעלי תפקידים/מורשי חתימה רלוונטיים לאישור תשלומים בצד
+-- הכספים, לא רק לניהול תפעולי (אותה הרחבה כמו organizations/branches/groups לעיל).
 create policy organization_officeholders_select on organization_officeholders for select to authenticated
-  using (has_permission('area_ops', 'access'));
+  using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
 
 create policy organization_officeholders_insert on organization_officeholders for insert to authenticated
   with check (has_permission('organizations', 'manage'));

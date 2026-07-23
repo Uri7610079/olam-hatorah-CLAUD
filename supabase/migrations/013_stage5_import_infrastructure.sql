@@ -89,11 +89,22 @@ where r.key = 'system_admin';
 -- אז import_batches_update (014) מתירה עדכון כל שדה (row_count וכו' תוך כדי ניתוח בצד
 -- לקוח), אבל מעבר ל-status='committed' חייב לעבור דרך commit_import_batch() כדי לוודא
 -- שאין שורות needs_decision/invalid שלא טופלו לפני הסגירה.
+-- חייב לבדוק גם INSERT: import_batches_insert (014) בודקת רק הרשאה, לא ערך status -
+-- בלי הבדיקה כאן, INSERT ישיר יכול היה ליצור אצווה שכבר "committed" מרגע הלידה, עוקף
+-- את הבדיקה ב-commit_import_batch() (אין שורות needs_decision פתוחות). נתפס בביקורת
+-- רוחבית לקראת שלב 11 - אותה מחלקת באג בדיוק כמו students (008) לעיל.
 create or replace function enforce_import_batch_commit()
 returns trigger
 language plpgsql
 as $$
 begin
+  if tg_op = 'INSERT' then
+    if new.status <> 'uploaded' then
+      raise exception 'אצוות יבוא חדשה תמיד נוצרת בסטטוס "הועלה"';
+    end if;
+    return new;
+  end if;
+
   if new.status = 'committed' and old.status is distinct from 'committed'
      and coalesce(current_setting('app.allow_batch_commit', true), '') <> 'true' then
     raise exception 'סגירת אצווה מותרת רק דרך commit_import_batch()';
@@ -103,7 +114,7 @@ end;
 $$;
 
 create trigger import_batches_enforce_commit
-  before update on import_batches
+  before insert or update on import_batches
   for each row execute function enforce_import_batch_commit();
 
 -- commit_import_batch(): בודקת שאין שורות needs_decision פתוחות (טרם הוכרעו), מסמנת את

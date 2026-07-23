@@ -15,11 +15,19 @@ drop policy if exists student_bank_accounts_insert on student_bank_accounts;
 drop policy if exists student_bank_accounts_update on student_bank_accounts;
 
 -- 2. טריגר guard: חוסם שינוי ישיר של students.status מחוץ ל-advance_student_status()/exit_student().
+-- מעודכן (ביקורת רוחבית לקראת שלב 11): בודק גם INSERT, לא רק UPDATE - ר' הערה מלאה ב-008.
 create or replace function enforce_student_status_transition()
 returns trigger
 language plpgsql
 as $$
 begin
+  if tg_op = 'INSERT' then
+    if new.status <> 'draft' then
+      raise exception 'תלמיד חדש תמיד נוצר בסטטוס טיוטה';
+    end if;
+    return new;
+  end if;
+
   if new.status is distinct from old.status
      and coalesce(current_setting('app.allow_student_status_change', true), '') <> 'true' then
     raise exception 'שינוי סטטוס תלמיד מותר רק דרך advance_student_status() או exit_student()';
@@ -30,7 +38,7 @@ $$;
 
 drop trigger if exists students_enforce_status_transition on students;
 create trigger students_enforce_status_transition
-  before update on students
+  before insert or update on students
   for each row execute function enforce_student_status_transition();
 
 -- 3. עדכון advance_student_status()/exit_student() כך שיפעילו את הדגל שהטריגר בודק
