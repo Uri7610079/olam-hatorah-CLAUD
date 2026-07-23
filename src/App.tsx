@@ -28,6 +28,9 @@ import { DonationsScreen } from "./areas/finance/DonationsScreen";
 import { DistributionsScreen } from "./areas/finance/DistributionsScreen";
 import { MasavScreen } from "./areas/finance/MasavScreen";
 import { ReturnsScreen } from "./areas/finance/ReturnsScreen";
+import { BankTransactionsScreen } from "./areas/finance/BankTransactionsScreen";
+import { TransactionTypesScreen } from "./areas/admin/TransactionTypesScreen";
+import { RecognitionRulesScreen } from "./areas/admin/RecognitionRulesScreen";
 
 // המסכים האלה כבר נבנו בפועל (שלבים 2-7) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
@@ -50,6 +53,9 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/finance/distributions",
   "/finance/masav",
   "/finance/returns",
+  "/finance/bank-transactions",
+  "/admin/transaction-types",
+  "/admin/recognition-rules",
 ]);
 
 export default function App() {
@@ -83,6 +89,9 @@ export default function App() {
             <Route path="/finance/distributions" element={<DistributionsScreen />} />
             <Route path="/finance/masav" element={<MasavScreen />} />
             <Route path="/finance/returns" element={<ReturnsScreen />} />
+            <Route path="/finance/bank-transactions" element={<BankTransactionsScreen />} />
+            <Route path="/admin/transaction-types" element={<TransactionTypesScreen />} />
+            <Route path="/admin/recognition-rules" element={<RecognitionRulesScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}
