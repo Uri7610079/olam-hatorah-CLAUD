@@ -9,6 +9,7 @@ import { StatusBadge, type Severity } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { UserPermissionsDrawer } from "./UserPermissionsDrawer";
 
 type ProfileStatus = "pending" | "approved" | "disabled";
 type Area = "ops" | "finance" | "admin";
@@ -19,6 +20,7 @@ interface AdminProfileRow {
   email: string | null;
   status: ProfileStatus;
   default_area: Area | null;
+  role_id: string | null;
   role: { key: string; label_he: string } | null;
 }
 
@@ -30,7 +32,7 @@ interface RoleOption {
 async function fetchProfiles(): Promise<AdminProfileRow[]> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, email, status, default_area, role:roles(key, label_he)")
+    .select("id, full_name, email, status, default_area, role_id, role:roles(key, label_he)")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((row: any) => ({
@@ -58,6 +60,7 @@ export function AdminUsers() {
   const [pendingAction, setPendingAction] = useState<{ userId: string; status: "approved" | "disabled" } | null>(
     null,
   );
+  const [permissionsUser, setPermissionsUser] = useState<AdminProfileRow | null>(null);
   const [roleChoice, setRoleChoice] = useState("");
   const [areaChoice, setAreaChoice] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -131,6 +134,9 @@ export function AdminUsers() {
               {r.status === "pending" ? "דחייה" : "השבתה"}
             </button>
           )}
+          <button onClick={() => setPermissionsUser(r)} className="link-action text-xs">
+            ניהול הרשאות
+          </button>
         </div>
       ),
     },
@@ -195,6 +201,15 @@ export function AdminUsers() {
             </div>
           )
         }
+      />
+
+      <UserPermissionsDrawer
+        open={permissionsUser !== null}
+        onClose={() => setPermissionsUser(null)}
+        userId={permissionsUser?.id ?? ""}
+        userLabel={permissionsUser?.full_name ?? permissionsUser?.email ?? ""}
+        roleId={permissionsUser?.role_id ?? null}
+        roleLabel={permissionsUser?.role?.label_he ?? null}
       />
     </div>
   );
