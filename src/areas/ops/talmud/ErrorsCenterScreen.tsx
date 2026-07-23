@@ -65,6 +65,51 @@ async function fetchErrors(orgId: string, statusFilter: string): Promise<TalmudE
   return (data ?? []).map((r: any) => ({ ...r, student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student }));
 }
 
+type BatchStatus = "uploaded" | "analyzed" | "previewed" | "committed" | "rejected";
+const OPEN_STATUSES: BatchStatus[] = ["uploaded", "analyzed", "previewed"];
+const BATCH_STATUS_LABEL: Record<BatchStatus, string> = {
+  uploaded: "הועלה",
+  analyzed: "נותח",
+  previewed: "נסקר",
+  committed: "נקלט",
+  rejected: "בוטל",
+};
+
+interface ErrorsBatchSummary {
+  id: string;
+  file_name: string;
+  status: BatchStatus;
+  period_month: string | null;
+  valid_count: number;
+  needs_decision_count: number;
+  invalid_count: number;
+  created_at: string;
+}
+
+async function fetchErrorsBatches(orgId: string): Promise<ErrorsBatchSummary[]> {
+  const profile = await supabase.from("import_profiles").select("id").eq("key", "talmud_errors").single();
+  if (!profile.data) return [];
+  const { data, error } = await supabase
+    .from("import_batches")
+    .select("id, file_name, status, period_month, valid_count, needs_decision_count, invalid_count, created_at")
+    .eq("profile_id", profile.data.id)
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchBatchById(id: string): Promise<ErrorsBatchSummary> {
+  const { data, error } = await supabase
+    .from("import_batches")
+    .select("id, file_name, status, period_month, valid_count, needs_decision_count, invalid_count, created_at")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export function ErrorsCenterScreen() {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: importPermLoading } = useHasPermission("talmud", "import");
@@ -89,6 +134,8 @@ export function ErrorsCenterScreen() {
   const [commitResult, setCommitResult] = useState<{ matched: number; unmatched: number } | null>(null);
 
   const errorsQuery = useQuery({ queryKey: ["talmud-errors", orgId, statusFilter], queryFn: () => fetchErrors(orgId, statusFilter), enabled: !!orgId });
+  const batchesQuery = useQuery({ queryKey: ["errors-batches", orgId], queryFn: () => fetchErrorsBatches(orgId), enabled: !!orgId });
+  const reviewBatchQuery = useQuery({ queryKey: ["errors-batch", reviewBatchId], queryFn: () => fetchBatchById(reviewBatchId!), enabled: !!reviewBatchId });
   const reviewRowsQuery = useQuery({ queryKey: ["errors-batch-rows", reviewBatchId], queryFn: () => fetchImportBatchRows(reviewBatchId!), enabled: !!reviewBatchId });
 
   const resetForm = () => {
@@ -97,6 +144,11 @@ export function ErrorsCenterScreen() {
     setLegacyWarning(false);
     setDuplicateId(null);
     setError(null);
+  };
+
+  const closeReview = () => {
+    setReviewBatchId(null);
+    queryClient.invalidateQueries({ queryKey: ["errors-batches", orgId] });
   };
 
   const handleFileChange = async (selected: File | null) => {
@@ -126,6 +178,7 @@ export function ErrorsCenterScreen() {
     try {
       const { batchId } = await createImportBatch({ file, profileKey: "talmud_errors", organizationId: orgId, periodMonth: month }, parsedRows);
       resetForm();
+      queryClient.invalidateQueries({ queryKey: ["errors-batches", orgId] });
       setReviewBatchId(batchId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה לא צפויה");
@@ -143,18 +196,21 @@ export function ErrorsCenterScreen() {
   };
 
   const commit = async () => {
-    if (!reviewBatchId) return;
+    if (!reviewBatchId || !reviewBatchQuery.data?.period_month) return;
     setCommitting(true);
     setError(null);
-    const { data, error: commitError } = await supabase.rpc("commit_errors_batch", { p_batch_id: reviewBatchId, p_month: month }).single();
+    const { data, error: commitError } = await supabase
+      .rpc("commit_errors_batch", { p_batch_id: reviewBatchId, p_month: reviewBatchQuery.data.period_month })
+      .single();
     setCommitting(false);
     if (commitError) {
       setError(commitError.message);
       return;
     }
     setCommitResult({ matched: (data as any).matched_count, unmatched: (data as any).unmatched_count });
-    setReviewBatchId(null);
-    setShowImport(false);
+    queryClient.invalidateQueries({ queryKey: ["errors-batch", reviewBatchId] });
+    queryClient.invalidateQueries({ queryKey: ["errors-batch-rows", reviewBatchId] });
+    queryClient.invalidateQueries({ queryKey: ["errors-batches", orgId] });
     queryClient.invalidateQueries({ queryKey: ["talmud-errors", orgId, statusFilter] });
     queryClient.invalidateQueries({ queryKey: ["students"] });
   };
@@ -174,6 +230,7 @@ export function ErrorsCenterScreen() {
   const storedValid = storedRows.filter((r) => r.status === "valid" || r.status === "committed");
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
+  const reviewIsOpen = reviewBatchQuery.data ? OPEN_STATUSES.includes(reviewBatchQuery.data.status) : false;
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -229,7 +286,7 @@ export function ErrorsCenterScreen() {
           </select>
         </div>
         <div>
-          <label className="field-label">חודש (ליבוא)</label>
+          <label className="field-label">חודש (לקובץ חדש)</label>
           <input type="date" value={month} onChange={(e) => setMonth(e.target.value)} className="input-field" />
         </div>
         <div>
@@ -250,7 +307,14 @@ export function ErrorsCenterScreen() {
           <p className="text-xs text-slate-500">עמודות צפויות: מזהה תלמיד, קוד שגיאה, תיאור שגיאה (לא חובה).</p>
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
           {analyzing && <LoadingState rows={2} />}
-          {duplicateId && <ErrorState message="הקובץ הזה כבר יובא בעבר." />}
+          {duplicateId && (
+            <div className="space-y-2">
+              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
+                פתיחת האצווה הקיימת
+              </button>
+            </div>
+          )}
           {legacyWarning && (
             <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -277,27 +341,43 @@ export function ErrorsCenterScreen() {
 
       {reviewBatchId && (
         <div className="card mb-6 max-w-3xl space-y-4 p-5">
-          {reviewRowsQuery.isLoading ? (
+          {reviewBatchQuery.isLoading || reviewRowsQuery.isLoading ? (
             <LoadingState rows={4} />
-          ) : (
+          ) : reviewBatchQuery.data ? (
             <>
-              <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הדוח.</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{reviewBatchQuery.data.file_name}</p>
+                  <p className="text-xs text-slate-500">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                </div>
+                <StatusBadge
+                  severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
+                  label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
+                />
+              </div>
+
+              {reviewIsOpen && <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הדוח.</p>}
+
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
                   const data = tab === "valid" ? storedValid : tab === "needsDecision" ? storedNeeds : storedInvalid;
-                  return <DataTable columns={storedCols(tab !== "valid")} rows={data} rowKey={(r) => String(r.row_number)} emptyTitle="אין שורות" />;
+                  return <DataTable columns={storedCols(reviewIsOpen && tab !== "valid")} rows={data} rowKey={(r) => String(r.row_number)} emptyTitle="אין שורות" />;
                 }}
               </ImportPreviewTabs>
               {error && <ErrorState message={error} />}
               <div className="flex gap-3">
-                <button onClick={commit} disabled={committing} className="btn-primary">
-                  {committing ? "קולטת…" : "קליטת דוח השגויים"}
-                </button>
-                <button onClick={() => setReviewBatchId(null)} className="text-xs text-slate-500 underline">
-                  ביטול
+                {reviewIsOpen && (
+                  <button onClick={commit} disabled={committing} className="btn-primary">
+                    {committing ? "קולטת…" : "קליטת דוח השגויים"}
+                  </button>
+                )}
+                <button onClick={closeReview} className="text-xs text-slate-500 underline">
+                  חזרה לרשימה
                 </button>
               </div>
             </>
+          ) : (
+            <ErrorState message="האצווה לא נמצאה." />
           )}
         </div>
       )}
@@ -309,35 +389,64 @@ export function ErrorsCenterScreen() {
       )}
 
       {orgId && (
-        <DataTable
-          columns={[
-            { key: "recurring", header: "", render: (r: TalmudError) => (r.is_recurring ? <StatusBadge severity="high" label="חוזרת" /> : null) },
-            { key: "id", header: "מזהה", className: "tabular", render: (r: TalmudError) => r.student?.external_id ?? r.external_student_ref ?? "—" },
-            { key: "name", header: "שם", render: (r: TalmudError) => r.student?.full_name ?? "(לא הותאם)" },
-            { key: "code", header: "קוד", className: "tabular", render: (r: TalmudError) => r.error_code },
-            { key: "desc", header: "תיאור", render: (r: TalmudError) => r.error_description ?? "—" },
-            {
-              key: "status",
-              header: "סטטוס",
-              render: (r: TalmudError) =>
-                canManage ? (
-                  <select value={r.status} onChange={(e) => changeStatus(r.id, e.target.value as ErrorStatus)} className="input-field text-xs">
-                    {(Object.keys(STATUS_LABEL) as ErrorStatus[]).map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  STATUS_LABEL[r.status]
+        <>
+          <DataTable
+            columns={[
+              { key: "recurring", header: "", render: (r: TalmudError) => (r.is_recurring ? <StatusBadge severity="high" label="חוזרת" /> : null) },
+              { key: "id", header: "מזהה", className: "tabular", render: (r: TalmudError) => r.student?.external_id ?? r.external_student_ref ?? "—" },
+              { key: "name", header: "שם", render: (r: TalmudError) => r.student?.full_name ?? "(לא הותאם)" },
+              { key: "code", header: "קוד", className: "tabular", render: (r: TalmudError) => r.error_code },
+              { key: "desc", header: "תיאור", render: (r: TalmudError) => r.error_description ?? "—" },
+              {
+                key: "status",
+                header: "סטטוס",
+                render: (r: TalmudError) =>
+                  canManage ? (
+                    <select value={r.status} onChange={(e) => changeStatus(r.id, e.target.value as ErrorStatus)} className="input-field text-xs">
+                      {(Object.keys(STATUS_LABEL) as ErrorStatus[]).map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    STATUS_LABEL[r.status]
+                  ),
+              },
+            ]}
+            rows={errorsQuery.data ?? []}
+            rowKey={(r: TalmudError) => r.id}
+            loading={errorsQuery.isLoading}
+            emptyTitle="אין שגיאות"
+          />
+
+          <h2 className="mb-2 mt-6 text-sm font-semibold text-slate-700">היסטוריית יבוא שגויים</h2>
+          <DataTable
+            columns={[
+              { key: "file", header: "קובץ", render: (b: ErrorsBatchSummary) => b.file_name },
+              { key: "month", header: "חודש", className: "tabular", render: (b: ErrorsBatchSummary) => b.period_month ?? "—" },
+              {
+                key: "counts",
+                header: "תקין / דורש החלטה / שגוי",
+                className: "tabular",
+                render: (b: ErrorsBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+              },
+              {
+                key: "status",
+                header: "סטטוס",
+                render: (b: ErrorsBatchSummary) => (
+                  <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
                 ),
-            },
-          ]}
-          rows={errorsQuery.data ?? []}
-          rowKey={(r: TalmudError) => r.id}
-          loading={errorsQuery.isLoading}
-          emptyTitle="אין שגיאות"
-        />
+              },
+              { key: "date", header: "תאריך", className: "tabular", render: (b: ErrorsBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+            ]}
+            rows={batchesQuery.data ?? []}
+            rowKey={(b: ErrorsBatchSummary) => b.id}
+            loading={batchesQuery.isLoading}
+            emptyTitle="אין עדיין יבואים"
+            onRowClick={(b: ErrorsBatchSummary) => setReviewBatchId(b.id)}
+          />
+        </>
       )}
     </div>
   );

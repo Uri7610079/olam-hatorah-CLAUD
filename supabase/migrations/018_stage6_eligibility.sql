@@ -135,6 +135,15 @@ begin
     end;
   end loop;
 
+  -- מסנכרן את ספירות הבקרה על import_batches מול מה שקרה בפועל בלולאה למעלה - אחרת
+  -- ה"תקין/דורש החלטה/שגוי" שמוצג בהיסטוריה נשאר קפוא על המצב מרגע היצירה, לפני שהתגלו
+  -- אי-התאמות (אותה בעיה בדיוק שתוקנה ב-ImportCenterScreen.tsx בצד הלקוח, כאן בצד השרת).
+  update import_batches set
+    valid_count = (select count(*) from import_rows where batch_id = p_batch_id and status in ('valid', 'committed')),
+    needs_decision_count = (select count(*) from import_rows where batch_id = p_batch_id and status = 'needs_decision'),
+    invalid_count = (select count(*) from import_rows where batch_id = p_batch_id and status = 'invalid')
+  where id = p_batch_id;
+
   -- import_batches_enforce_commit (013) חוסמת מעבר ל-committed בלי הדגל הזה - אותו
   -- טריגר שאמור להגן על commit_import_batch() הגנרי מגן גם על ה-commit הדומיין-ספציפי הזה.
   perform set_config('app.allow_batch_commit', 'true', true);

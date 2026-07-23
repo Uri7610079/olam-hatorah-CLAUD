@@ -148,6 +148,13 @@ begin
     end;
   end loop;
 
+  -- מסנכרן את ספירות הבקרה - ר' אותה הערה ב-018 (commit_eligibility_batch).
+  update import_batches set
+    valid_count = (select count(*) from import_rows where batch_id = p_batch_id and status in ('valid', 'committed')),
+    needs_decision_count = (select count(*) from import_rows where batch_id = p_batch_id and status = 'needs_decision'),
+    invalid_count = (select count(*) from import_rows where batch_id = p_batch_id and status = 'invalid')
+  where id = p_batch_id;
+
   -- import_batches_enforce_commit (013) חוסמת מעבר ל-committed בלי הדגל הזה - ר' אותה
   -- הערה ב-018 (commit_eligibility_batch).
   perform set_config('app.allow_batch_commit', 'true', true);

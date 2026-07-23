@@ -15,6 +15,7 @@ import {
 } from "@/lib/importBatches";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { StatusBadge } from "@/components/StatusBadge";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
@@ -77,6 +78,51 @@ async function fetchMissingFromReport(orgId: string, month: string): Promise<Mis
     .filter((s: any) => !eligibleSet.has(s.id));
 }
 
+type BatchStatus = "uploaded" | "analyzed" | "previewed" | "committed" | "rejected";
+const OPEN_STATUSES: BatchStatus[] = ["uploaded", "analyzed", "previewed"];
+const BATCH_STATUS_LABEL: Record<BatchStatus, string> = {
+  uploaded: "הועלה",
+  analyzed: "נותח",
+  previewed: "נסקר",
+  committed: "נקלט",
+  rejected: "בוטל",
+};
+
+interface EligibilityBatchSummary {
+  id: string;
+  file_name: string;
+  status: BatchStatus;
+  period_month: string | null;
+  valid_count: number;
+  needs_decision_count: number;
+  invalid_count: number;
+  created_at: string;
+}
+
+async function fetchEligibilityBatches(orgId: string): Promise<EligibilityBatchSummary[]> {
+  const profile = await supabase.from("import_profiles").select("id").eq("key", "talmud_eligibility").single();
+  if (!profile.data) return [];
+  const { data, error } = await supabase
+    .from("import_batches")
+    .select("id, file_name, status, period_month, valid_count, needs_decision_count, invalid_count, created_at")
+    .eq("profile_id", profile.data.id)
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchBatchById(id: string): Promise<EligibilityBatchSummary> {
+  const { data, error } = await supabase
+    .from("import_batches")
+    .select("id, file_name, status, period_month, valid_count, needs_decision_count, invalid_count, created_at")
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export function EligibilityScreen() {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permissionLoading } = useHasPermission("talmud", "import");
@@ -97,6 +143,8 @@ export function EligibilityScreen() {
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ matched: number; unmatched: number } | null>(null);
 
+  const batchesQuery = useQuery({ queryKey: ["eligibility-batches", orgId], queryFn: () => fetchEligibilityBatches(orgId), enabled: !!orgId });
+  const reviewBatchQuery = useQuery({ queryKey: ["eligibility-batch", reviewBatchId], queryFn: () => fetchBatchById(reviewBatchId!), enabled: !!reviewBatchId });
   const reviewRowsQuery = useQuery({
     queryKey: ["eligibility-batch-rows", reviewBatchId],
     queryFn: () => fetchImportBatchRows(reviewBatchId!),
@@ -120,6 +168,11 @@ export function EligibilityScreen() {
     setLegacyWarning(false);
     setDuplicateId(null);
     setError(null);
+  };
+
+  const closeReview = () => {
+    setReviewBatchId(null);
+    queryClient.invalidateQueries({ queryKey: ["eligibility-batches", orgId] });
   };
 
   const handleFileChange = async (selected: File | null) => {
@@ -149,6 +202,7 @@ export function EligibilityScreen() {
     try {
       const { batchId } = await createImportBatch({ file, profileKey: "talmud_eligibility", organizationId: orgId, periodMonth: month }, parsedRows);
       resetForm();
+      queryClient.invalidateQueries({ queryKey: ["eligibility-batches", orgId] });
       setReviewBatchId(batchId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה לא צפויה");
@@ -166,17 +220,21 @@ export function EligibilityScreen() {
   };
 
   const commit = async () => {
-    if (!reviewBatchId) return;
+    if (!reviewBatchId || !reviewBatchQuery.data?.period_month) return;
     setCommitting(true);
     setError(null);
-    const { data, error: commitError } = await supabase.rpc("commit_eligibility_batch", { p_batch_id: reviewBatchId, p_month: month }).single();
+    const { data, error: commitError } = await supabase
+      .rpc("commit_eligibility_batch", { p_batch_id: reviewBatchId, p_month: reviewBatchQuery.data.period_month })
+      .single();
     setCommitting(false);
     if (commitError) {
       setError(commitError.message);
       return;
     }
     setCommitResult({ matched: (data as any).matched_count, unmatched: (data as any).unmatched_count });
-    setReviewBatchId(null);
+    queryClient.invalidateQueries({ queryKey: ["eligibility-batch", reviewBatchId] });
+    queryClient.invalidateQueries({ queryKey: ["eligibility-batch-rows", reviewBatchId] });
+    queryClient.invalidateQueries({ queryKey: ["eligibility-batches", orgId] });
     queryClient.invalidateQueries({ queryKey: ["month-eligibility", orgId, month] });
     queryClient.invalidateQueries({ queryKey: ["missing-from-report", orgId, month] });
     queryClient.invalidateQueries({ queryKey: ["students"] });
@@ -193,6 +251,7 @@ export function EligibilityScreen() {
   const storedValid = storedRows.filter((r) => r.status === "valid" || r.status === "committed");
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
+  const reviewIsOpen = reviewBatchQuery.data ? OPEN_STATUSES.includes(reviewBatchQuery.data.status) : false;
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -241,7 +300,7 @@ export function EligibilityScreen() {
           </select>
         </div>
         <div>
-          <label className="field-label">חודש</label>
+          <label className="field-label">חודש (לקובץ חדש)</label>
           <input type="date" value={month} onChange={(e) => setMonth(e.target.value)} className="input-field" />
         </div>
       </div>
@@ -252,7 +311,14 @@ export function EligibilityScreen() {
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
 
           {analyzing && <LoadingState rows={2} />}
-          {duplicateId && <ErrorState message="הקובץ הזה כבר יובא בעבר." />}
+          {duplicateId && (
+            <div className="space-y-2">
+              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
+                פתיחת האצווה הקיימת
+              </button>
+            </div>
+          )}
           {legacyWarning && (
             <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -280,27 +346,43 @@ export function EligibilityScreen() {
 
       {reviewBatchId && (
         <div className="card mb-6 max-w-3xl space-y-4 p-5">
-          {reviewRowsQuery.isLoading ? (
+          {reviewBatchQuery.isLoading || reviewRowsQuery.isLoading ? (
             <LoadingState rows={4} />
-          ) : (
+          ) : reviewBatchQuery.data ? (
             <>
-              <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הדוח (שורות "שגוי" יישארו מחוץ לזכאות).</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{reviewBatchQuery.data.file_name}</p>
+                  <p className="text-xs text-slate-500">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                </div>
+                <StatusBadge
+                  severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
+                  label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
+                />
+              </div>
+
+              {reviewIsOpen && <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הדוח (שורות "שגוי" יישארו מחוץ לזכאות).</p>}
+
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
                   const data = tab === "valid" ? storedValid : tab === "needsDecision" ? storedNeeds : storedInvalid;
-                  return <DataTable columns={storedCols(tab !== "valid")} rows={data} rowKey={(r) => String(r.row_number)} emptyTitle="אין שורות" />;
+                  return <DataTable columns={storedCols(reviewIsOpen && tab !== "valid")} rows={data} rowKey={(r) => String(r.row_number)} emptyTitle="אין שורות" />;
                 }}
               </ImportPreviewTabs>
+
               {error && <ErrorState message={error} />}
-              <div className="flex gap-3">
+
+              {reviewIsOpen && (
                 <button onClick={commit} disabled={committing} className="btn-primary">
                   {committing ? "קולטת…" : "קליטת דוח הזכאות"}
                 </button>
-                <button onClick={() => setReviewBatchId(null)} className="text-xs text-slate-500 underline">
-                  ביטול
-                </button>
-              </div>
+              )}
+              <button onClick={closeReview} className="text-xs text-slate-500 underline">
+                חזרה לרשימה / יבוא נוסף
+              </button>
             </>
+          ) : (
+            <ErrorState message="האצווה לא נמצאה." />
           )}
         </div>
       )}
@@ -337,6 +419,33 @@ export function EligibilityScreen() {
             rowKey={(r: MissingStudent) => r.id}
             loading={missingQuery.isLoading}
             emptyTitle="אין חריגות - כל התלמידים הפעילים הופיעו בדוח"
+          />
+
+          <h2 className="mb-2 mt-6 text-sm font-semibold text-slate-700">היסטוריית יבוא זכאות</h2>
+          <DataTable
+            columns={[
+              { key: "file", header: "קובץ", render: (b: EligibilityBatchSummary) => b.file_name },
+              { key: "month", header: "חודש", className: "tabular", render: (b: EligibilityBatchSummary) => b.period_month ?? "—" },
+              {
+                key: "counts",
+                header: "תקין / דורש החלטה / שגוי",
+                className: "tabular",
+                render: (b: EligibilityBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+              },
+              {
+                key: "status",
+                header: "סטטוס",
+                render: (b: EligibilityBatchSummary) => (
+                  <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
+                ),
+              },
+              { key: "date", header: "תאריך", className: "tabular", render: (b: EligibilityBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+            ]}
+            rows={batchesQuery.data ?? []}
+            rowKey={(b: EligibilityBatchSummary) => b.id}
+            loading={batchesQuery.isLoading}
+            emptyTitle="אין עדיין יבואים"
+            onRowClick={(b: EligibilityBatchSummary) => setReviewBatchId(b.id)}
           />
         </>
       )}
