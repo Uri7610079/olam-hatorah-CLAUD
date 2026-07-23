@@ -19,8 +19,10 @@ import { StudyCodesScreen } from "./areas/admin/StudyCodesScreen";
 import { TalmudExportScreen } from "./areas/ops/talmud/TalmudExportScreen";
 import { EligibilityScreen } from "./areas/ops/talmud/EligibilityScreen";
 import { ErrorsCenterScreen } from "./areas/ops/talmud/ErrorsCenterScreen";
+import { RetroScreen } from "./areas/ops/talmud/RetroScreen";
+import { QuotasScreen } from "./areas/ops/quotas/QuotasScreen";
 
-// המסכים האלה כבר נבנו בפועל (שלבים 2-6) - לא עוברים דרך מפת ה-placeholder הכללית.
+// המסכים האלה כבר נבנו בפועל (שלבים 2-7) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
   "/admin/users",
   "/admin/audit-log",
@@ -32,6 +34,8 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/ops/talmud/export",
   "/ops/talmud/eligibility",
   "/ops/talmud/errors",
+  "/ops/talmud/retro",
+  "/ops/quotas",
 ]);
 
 export default function App() {
@@ -56,6 +60,8 @@ export default function App() {
             <Route path="/ops/talmud/export" element={<TalmudExportScreen />} />
             <Route path="/ops/talmud/eligibility" element={<EligibilityScreen />} />
             <Route path="/ops/talmud/errors" element={<ErrorsCenterScreen />} />
+            <Route path="/ops/talmud/retro" element={<RetroScreen />} />
+            <Route path="/ops/quotas" element={<QuotasScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}
