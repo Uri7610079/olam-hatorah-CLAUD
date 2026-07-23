@@ -67,10 +67,14 @@ async function fetchValidLines(batchId: string): Promise<ValidLine[]> {
 }
 
 async function fetchReturns(orgId: string): Promise<ReturnRow[]> {
+  // payment_returns has two FKs into masav_lines (the original line and the optional
+  // retry line) - PostgREST can't infer which one for a plain "masav_lines(...)" embed,
+  // so the FK constraint name must be given explicitly (caught live: this returned a
+  // PGRST201 "more than one relationship found" error until fixed).
   const { data, error } = await supabase
     .from("payment_returns")
     .select(
-      "id, return_date, amount, reason, status, notes, masav_line:masav_lines(student:students(external_id, full_name), batch:masav_batches(organization_id))",
+      "id, return_date, amount, reason, status, notes, masav_line:masav_lines!payment_returns_masav_line_id_fkey(student:students(external_id, full_name), batch:masav_batches(organization_id))",
     )
     .order("created_at", { ascending: false });
   if (error) throw error;
