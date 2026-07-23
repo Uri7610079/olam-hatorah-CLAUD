@@ -153,3 +153,19 @@ policy/RPC בפועל - שיירים מתכנון מוקדם שהוחלף בהר
 ש-RLS `for insert` בדרך כלל בודקת רק הרשאה, לא ערך שדה. **מכאן ואילך: כל guard trigger
 חדש על טבלה עם מכונת מצבים חייב לכלול `tg_op = 'INSERT'` מפורש מהכתיבה הראשונה**, לא
 להתגלות בביקורת מאוחרת.
+
+## 037: suggest_transaction_types() (036, שלב 11) נכשלה בבדיקה חיה הראשונה שלה
+
+`UPDATE bank_transactions bt SET ... FROM LATERAL match_recognition_rule(bt.col, ...) r`
+נכשלה בפועל עם `invalid reference to FROM-clause entry for table "bt"`. הסיבה:
+PostgreSQL לא מאפשר ל-LATERAL בתוך FROM של UPDATE להתייחס לטבלת היעד של ה-UPDATE עצמה
+(bt) - רק לפריטי FROM אחרים. לא נתפס בביקורת עצמית כי זו לא טעות תחבירית (הפונקציה
+עברה typecheck/הרצת migration בלי שגיאה - השגיאה מופיעה רק כשה-RPC בפועל נקרא). נתפס
+מיד בבדיקה חיה הראשונה של הכפתור "הרצת הצעות סיווג". תוקן ע"י self-join דרך alias שני
+(bt2, פריט FROM לגיטימי) + WHERE שמקשר bt ל-bt2 לפי id. תוקן ב-036 על הדיסק;
+`037_patch_live_suggest_transaction_types.sql` הוא ה-patch לפרויקט הקיים.
+
+**מסקנה לעתיד**: `UPDATE target ... FROM LATERAL func(target.col)` הוא דפוס שנראה
+תקין אך לא קיים ב-PostgreSQL - הביטוי הנכון תמיד דורש alias שני של אותה טבלה
+(self-join) כדי ש-LATERAL תוכל להתייחס אליו. שווה לבדוק מראש בפעם הבאה שנעשה שימוש
+בדפוס "UPDATE עם LATERAL correlated לטבלת היעד" (למשל בשלב 12, בהתאמות בנק).

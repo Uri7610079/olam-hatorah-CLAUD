@@ -393,15 +393,21 @@ begin
     raise exception 'permission denied';
   end if;
 
+  -- הערה טכנית: UPDATE...FROM LATERAL לא יכול להתייחס לטבלת היעד של ה-UPDATE עצמה
+  -- (bt) בתוך ביטוי ה-LATERAL - "invalid reference to FROM-clause entry" (נתפס בבדיקה
+  -- חיה). הפתרון: self-join דרך alias שני (bt2) שהוא כן פריט FROM לגיטימי, ו-WHERE
+  -- מקשר בין bt ל-bt2 לפי id.
   update bank_transactions bt
   set suggested_type_id = r.suggested_type_id,
       suggested_confidence = r.confidence_level,
       suggested_reason = 'התאמה לכלל זיהוי (עדיפות ' || r.priority || ')',
       suggested_rule_id = r.id,
       classification_status = 'suggested'
-  from lateral match_recognition_rule(bt.organization_bank_account_id, bt.direction, bt.amount, bt.description, bt.reference, bt.execution_date) r
-  where bt.organization_bank_account_id = p_organization_bank_account_id
-    and bt.classification_status = 'unclassified'
+  from bank_transactions bt2
+  cross join lateral match_recognition_rule(bt2.organization_bank_account_id, bt2.direction, bt2.amount, bt2.description, bt2.reference, bt2.execution_date) r
+  where bt.id = bt2.id
+    and bt2.organization_bank_account_id = p_organization_bank_account_id
+    and bt2.classification_status = 'unclassified'
     and r.id is not null;
 
   get diagnostics v_count = row_count;
