@@ -1,0 +1,25 @@
+name: Mirror to client repository
+
+# מטרה: לשמור עותק אוטומטי אצל הלקוח (Uri7610079/olam-hatorah-CLAUD) שמתעדכן בכל push
+# ל-main בפרויקט הזה, כדי ש-Vercel של הלקוח (המחובר ל-repository שלו) יתעדכן אוטומטית.
+# force push בכוונה: זהו עותק חד-כיווני בלבד - אין לערוך את repository הלקוח ידנית,
+# רק לקבל ממנו pull/deploy. force מבטיח שהעותק תמיד זהה למקור, גם אם משהו השתנה שם בטעות.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to client repository
+        run: |
+          git remote add client https://x-access-token:${CLIENT_REPO_TOKEN}@github.com/Uri7610079/olam-hatorah-CLAUD.git
+          git push client HEAD:main --force
+        env:
+          CLIENT_REPO_TOKEN: ${{ secrets.CLIENT_REPO_TOKEN }}
