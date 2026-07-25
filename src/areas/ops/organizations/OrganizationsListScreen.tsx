@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Building2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useEscapeToClose } from "@/lib/useEscapeToClose";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -29,6 +30,8 @@ export function OrganizationsListScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  useEscapeToClose(showCreate, () => setShowCreate(false));
 
   const filtered = (query.data ?? []).filter((o) => {
     if (!search) return true;
@@ -102,8 +105,8 @@ export function OrganizationsListScreen() {
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="card w-full max-w-md p-6">
-            <h2 className="mb-4 text-base font-semibold text-slate-900">עמותה חדשה</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="new-org-title" className="card w-full max-w-md p-6">
+            <h2 id="new-org-title" className="mb-4 text-base font-semibold text-slate-900">עמותה חדשה</h2>
             <OrganizationForm
               initialValues={EMPTY_ORGANIZATION_FORM}
               onSubmit={handleCreate}

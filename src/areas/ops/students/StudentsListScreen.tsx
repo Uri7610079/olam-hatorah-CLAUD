@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useSavedFilters } from "@/lib/savedFilters";
+import { useEscapeToClose } from "@/lib/useEscapeToClose";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -11,15 +13,36 @@ import { StatusBadge, type Severity } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { ID_TYPE_LABEL, STATUS_LABEL, type Student, type StudentIdType } from "./types";
 
-async function fetchStudents(): Promise<Student[]> {
-  const { data, error } = await supabase
+const PAGE_SIZE = 25;
+const SCREEN_KEY = "students-list";
+
+interface FetchResult {
+  rows: Student[];
+  totalCount: number;
+}
+
+// חיפוש וסינון בצד שרת + pagination אמיתי - "אלפי תלמידים, pagination וחיפוש צד שרת"
+// באפיון (§9, נפח). זו הטבלה הכי גדולת-נפח במערכת, ולכן הראשונה שמקבלת את היכולת הזו
+// (שאר הטבלאות הקטנות יותר ממשיכות עם הדפוס הישן - סינון בצד לקוח על כל הנתונים).
+async function fetchStudents(search: string, statusFilter: string, page: number): Promise<FetchResult> {
+  let query = supabase
     .from("students")
     .select(
       "id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address, student_type, study_code, status, exit_date, exit_reason, created_at",
+      { count: "exact" },
     )
-    .order("full_name");
+    .order("full_name")
+    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+
+  if (search.trim()) {
+    const term = search.trim();
+    query = query.or(`full_name.ilike.%${term}%,external_id.ilike.%${term}%`);
+  }
+  if (statusFilter) query = query.eq("status", statusFilter);
+
+  const { data, error, count } = await query;
   if (error) throw error;
-  return data ?? [];
+  return { rows: data ?? [], totalCount: count ?? 0 };
 }
 
 const STATUS_SEVERITY: Record<Student["status"], Severity> = {
@@ -37,19 +60,34 @@ export function StudentsListScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { hasPermission: canManage } = useHasPermission("students", "manage");
-  const query = useQuery({ queryKey: ["students"], queryFn: fetchStudents });
 
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const filtered = (query.data ?? []).filter((s) => {
-    if (!search) return true;
-    const needle = search.trim();
-    return s.full_name.includes(needle) || s.external_id.includes(needle);
-  });
+  useEscapeToClose(showCreate, () => setShowCreate(false));
+  const [savingFilterName, setSavingFilterName] = useState("");
+
+  const query = useQuery({ queryKey: ["students", search, statusFilter, page], queryFn: () => fetchStudents(search, statusFilter, page) });
+  const savedFilters = useSavedFilters(SCREEN_KEY);
+
+  const applySavedFilter = (id: string) => {
+    const f = savedFilters.filters.find((sf) => sf.id === id);
+    if (!f) return;
+    setSearch(String(f.filters.search ?? ""));
+    setStatusFilter(String(f.filters.statusFilter ?? ""));
+    setPage(0);
+  };
+
+  const saveCurrentFilter = async () => {
+    if (!savingFilterName.trim()) return;
+    await savedFilters.save(savingFilterName.trim(), { search, statusFilter });
+    setSavingFilterName("");
+  };
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -91,6 +129,9 @@ export function StudentsListScreen() {
     },
     { key: "phone", header: "טלפון", render: (s) => s.phone_raw ?? "—" },
     { key: "status", header: "סטטוס", render: (s) => <StatusBadge severity={STATUS_SEVERITY[s.status]} label={STATUS_LABEL[s.status]} /> },
+    { key: "student_type", header: "סוג תלמיד", hiddenByDefault: true, render: (s) => s.student_type ?? "—" },
+    { key: "study_code", header: "קוד לימוד", hiddenByDefault: true, render: (s) => s.study_code ?? "—" },
+    { key: "address", header: "כתובת", hiddenByDefault: true, render: (s) => s.address ?? "—" },
   ];
 
   return (
@@ -106,20 +147,69 @@ export function StudentsListScreen() {
           )
         }
       />
-      <SearchAndFilters searchValue={search} onSearchChange={setSearch} searchPlaceholder="חיפוש לפי שם או מספר מזהה…" />
+      <SearchAndFilters
+        searchValue={search}
+        onSearchChange={(v) => {
+          setSearch(v);
+          setPage(0);
+        }}
+        searchPlaceholder="חיפוש לפי שם או מספר מזהה…"
+        advancedFilters={
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+              className="input-field"
+            >
+              <option value="">כל הסטטוסים</option>
+              {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            {savedFilters.filters.length > 0 && (
+              <select onChange={(e) => e.target.value && applySavedFilter(e.target.value)} className="input-field" defaultValue="">
+                <option value="">— מסננים שמורים —</option>
+                {savedFilters.filters.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <input
+              value={savingFilterName}
+              onChange={(e) => setSavingFilterName(e.target.value)}
+              placeholder="שם למסנן חדש"
+              className="input-field w-32"
+            />
+            <button onClick={saveCurrentFilter} disabled={!savingFilterName.trim()} className="btn-secondary text-xs">
+              שמירת מסנן
+            </button>
+          </div>
+        }
+      />
+
+      {query.isError && <ErrorState message="שגיאה בטעינת רשימת התלמידים." />}
       <DataTable
         columns={columns}
-        rows={filtered}
+        rows={query.data?.rows ?? []}
         rowKey={(s) => s.id}
         loading={query.isLoading}
         emptyTitle="אין תלמידים עדיין"
         emptyIcon={Users}
+        columnPicker
+        pagination={{ page, pageSize: PAGE_SIZE, totalCount: query.data?.totalCount ?? 0, onPageChange: setPage }}
       />
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
-          <div className="card w-full max-w-md p-6">
-            <h2 className="mb-1 text-base font-semibold text-slate-900">תלמיד חדש</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="new-student-title" className="card w-full max-w-md p-6">
+            <h2 id="new-student-title" className="mb-1 text-base font-semibold text-slate-900">תלמיד חדש</h2>
             <p className="mb-4 text-xs text-slate-500">נוצר כטיוטה. שיוך, חשבון בנק והפעלה מתבצעים בכרטיס התלמיד.</p>
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

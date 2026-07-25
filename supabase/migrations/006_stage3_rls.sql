@@ -22,10 +22,15 @@ create policy organizations_update on organizations for update to authenticated
   using (has_permission('organizations', 'manage'))
   with check (has_permission('organizations', 'manage'));
 
--- קיום השורה נראה למי שיש לו גישת תפעול או כספים (כדי לדעת שיש חשבון ולעבוד מולו) -
--- המיסוך של מספר החשבון עצמו נאכף ב-view (organization_bank_accounts_view), לא כאן.
+-- גישה ישירה לטבלה עצמה (ולכן למספר החשבון הגולמי, לא רק לגרסה הממוסכת) דורשת
+-- bank_accounts.view_sensitive - בדיוק כמו reveal_bank_account_number() למטה. מי שיש לו
+-- רק גישת תפעול/כספים (בלי view_sensitive) חייב לעבור דרך organization_bank_accounts_view
+-- (למטה, שרצה כ-owner ולא כ-invoker בדיוק בשביל זה) כדי לראות שורה בכלל, ממוסכת.
+-- נתפס בביקורת אבטחה בשלב 16: לפני התיקון הזה, כל מי שיש לו area_ops/area_finance יכול
+-- היה לקרוא ישירות מהטבלה ולקבל את המספר האמיתי, עוקף לגמרי את המיסוך - view_sensitive
+-- הגן רק על reveal_bank_account_number(), לא על SELECT ישיר.
 create policy organization_bank_accounts_select on organization_bank_accounts for select to authenticated
-  using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
+  using (has_permission('bank_accounts', 'view_sensitive'));
 
 create policy organization_bank_accounts_insert on organization_bank_accounts for insert to authenticated
   with check (has_permission('organizations', 'manage'));

@@ -27,8 +27,12 @@ create policy students_update on students for update to authenticated
 create policy student_assignments_select on student_assignments for select to authenticated
   using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
 
+-- גישה ישירה לטבלה עצמה דורשת bank_accounts.view_sensitive - בדיוק כמו
+-- organization_bank_accounts (006, תוקן בשלב 16 בעקבות ביקורת אבטחה: לפני התיקון כל מי
+-- שיש לו area_ops/area_finance יכול היה לקרוא את מספר החשבון הגולמי ישירות, עוקף את
+-- המיסוך שקיים רק ב-student_bank_accounts_view). מי שאין לו view_sensitive עובר דרך ה-view.
 create policy student_bank_accounts_select on student_bank_accounts for select to authenticated
-  using (has_permission('area_ops', 'access') or has_permission('area_finance', 'access'));
+  using (has_permission('bank_accounts', 'view_sensitive'));
 
 -- Storage: רק בעלי students.manage יכולים לקרוא/להעלות מסמכי אסמכתה. אין UPDATE/DELETE
 -- policy - מסמך שהועלה לא נמחק ולא מוחלף (soft/append-only, כמו שאר המערכת).

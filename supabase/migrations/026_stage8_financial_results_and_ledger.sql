@@ -23,6 +23,8 @@ create table eligibility_financial_results (
   calculation_detail jsonb,
   financial_period_id uuid references financial_periods(id),
   status text not null default 'active' check (status in ('active', 'superseded')),
+  is_demo boolean not null default false,
+  demo_batch_id uuid,
   created_at timestamptz not null default now()
 );
 
@@ -76,12 +78,18 @@ create index group_ledger_entries_group_idx on group_ledger_entries (group_id, c
 create index group_ledger_entries_org_month_idx on group_ledger_entries (organization_id, period_month);
 
 -- append-only: אותו דפוס כמו audit_events (שלב 2) ו-payment_calculation_versions (שלב 7).
--- תיקון = שורה נגדית חדשה, לעולם לא עריכה/מחיקה של שורה קיימת.
+-- תיקון = שורה נגדית חדשה, לעולם לא עריכה/מחיקה של שורה קיימת. חריגה יחידה ומכוונת:
+-- DELETE (לא UPDATE - תיקון תמיד נשאר שורה נגדית, גם בדמו) מותר כש-app.allow_demo_ledger_delete
+-- מוגדר - נועד אך ורק ל-delete_demo_batch() (שלב 15), שמוחקת רק שורות עם demo_batch_id
+-- תואם; מעולם לא נוגעת בשורת ספר תנועות אמיתית.
 create or replace function block_ledger_mutation()
 returns trigger
 language plpgsql
 as $$
 begin
+  if tg_op = 'DELETE' and coalesce(current_setting('app.allow_demo_ledger_delete', true), '') = 'true' then
+    return old;
+  end if;
   raise exception 'group_ledger_entries is append-only: % not allowed', tg_op;
 end;
 $$;

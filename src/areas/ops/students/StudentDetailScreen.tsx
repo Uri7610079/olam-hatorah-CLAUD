@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
@@ -17,6 +17,7 @@ import { StudentDetailsTab } from "./StudentDetailsTab";
 import { StudentAssignmentTab } from "./StudentAssignmentTab";
 import { StudentBankTab } from "./StudentBankTab";
 import { StudentTalmudTab } from "./StudentTalmudTab";
+import { StudentAuditsTab } from "./StudentAuditsTab";
 
 type TabKey = "details" | "assignment" | "talmud" | "bank" | "audits" | "documents";
 
@@ -182,7 +183,7 @@ export function StudentDetailScreen() {
       {activeTab === "assignment" && <StudentAssignmentTab studentId={student.id} />}
       {activeTab === "talmud" && <StudentTalmudTab studentId={student.id} />}
       {activeTab === "bank" && <StudentBankTab studentId={student.id} />}
-      {activeTab === "audits" && <EmptyState title="ביקורות" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={ClipboardList} />}
+      {activeTab === "audits" && <StudentAuditsTab studentId={student.id} />}
       {activeTab === "documents" && <EmptyState title="מסמכים" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={FileText} />}
 
       <ConfirmDialog

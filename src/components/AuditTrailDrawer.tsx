@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEscapeToClose } from "@/lib/useEscapeToClose";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
 
@@ -21,6 +22,7 @@ interface AuditTrailDrawerProps {
 // מגירה גולשת המציגה יומן פעילות (audit_log) לרשומה נתונה. תתחבר לשאילתת audit_events
 // אמיתית משלב 2 ואילך — כאן היא רק שלד תצוגה גנרי, ללא שליפת נתונים.
 export function AuditTrailDrawer({ open, onClose, title = "יומן פעילות", entries, loading }: AuditTrailDrawerProps) {
+  useEscapeToClose(open, onClose);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex justify-end">

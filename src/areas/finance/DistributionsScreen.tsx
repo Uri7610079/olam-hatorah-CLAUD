@@ -111,17 +111,21 @@ async function fetchGroupStudents(groupId: string): Promise<GroupStudent[]> {
     .eq("is_active", true);
   if (error) throw error;
   const students = (data ?? []).map((r: any) => r.students);
-  const results: GroupStudent[] = [];
-  for (const s of students) {
-    const { count } = await supabase
-      .from("student_bank_accounts")
-      .select("id", { count: "exact", head: true })
-      .eq("student_id", s.id)
-      .eq("is_active", true)
-      .eq("verification_status", "verified");
-    results.push({ id: s.id, external_id: s.external_id, full_name: s.full_name, status: s.status, verified: (count ?? 0) > 0 });
-  }
-  return results;
+  const studentIds = students.map((s) => s.id);
+  if (studentIds.length === 0) return [];
+
+  // שאילתה אחת מרוכזת במקום שאילתה נפרדת לכל תלמיד בקבוצה (N+1 שנתפס בביקורת ביצועים
+  // שלב 16 - קבוצה של מאות תלמידים הייתה יוצרת מאות בקשות רשת נפרדות בכל טעינת מסך).
+  const { data: verifiedAccounts, error: accountsError } = await supabase
+    .from("student_bank_accounts")
+    .select("student_id")
+    .in("student_id", studentIds)
+    .eq("is_active", true)
+    .eq("verification_status", "verified");
+  if (accountsError) throw accountsError;
+  const verifiedIds = new Set((verifiedAccounts ?? []).map((r) => r.student_id));
+
+  return students.map((s) => ({ id: s.id, external_id: s.external_id, full_name: s.full_name, status: s.status, verified: verifiedIds.has(s.id) }));
 }
 
 const EMPTY_NEW_BATCH = { periodMonth: new Date().toISOString().slice(0, 7) + "-01", sourceType: "net_scholarships" as SourceType, method: "equal" as Method, notes: "" };

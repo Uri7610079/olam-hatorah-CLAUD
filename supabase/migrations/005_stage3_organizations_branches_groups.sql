@@ -142,10 +142,13 @@ as $$
 $$;
 
 -- view שמחזירה תמיד מספר חשבון ממוסך, ללא תלות בהרשאה - "ממוסך כברירת מחדל" באמת.
--- security_invoker=true חשוב: ה-view חייבת לרוץ בהרשאות הקורא (ולכן לכבד RLS על הטבלה
--- הבסיסית), לא בהרשאות היוצר של ה-view - אחרת שורות שאסור לראות ידלפו דרך ה-view.
+-- רצה כ-owner (לא security_invoker) בכוונה: ה-select policy על הטבלה הבסיסית מחייבת
+-- עכשיו bank_accounts.view_sensitive (ר' 006, תוקן בשלב 16) - אילו ה-view עדיין רצתה
+-- כ-invoker, מי שאין לו view_sensitive לא היה רואה אף שורה דרכה בכלל, גם לא ממוסכת.
+-- לכן ה-view משכפלת כאן במפורש את כלל הראייה המקורי (area_ops/area_finance) בתוך
+-- ה-WHERE שלה עצמה, במקום להסתמך על RLS של הטבלה - זו הסיבה שמותר לה לרוץ כ-owner בלי
+-- לדלוף שורות: אין הבדל בין הרשאת השורה שה-RLS הייתה אוכפת לבין מה שכתוב כאן במפורש.
 create view organization_bank_accounts_view
-with (security_invoker = true)
 as
 select
   id,
@@ -163,7 +166,8 @@ select
   demo_batch_id,
   created_at,
   updated_at
-from organization_bank_accounts;
+from organization_bank_accounts
+where has_permission('area_ops', 'access') or has_permission('area_finance', 'access');
 
 grant select on organization_bank_accounts_view to authenticated;
 

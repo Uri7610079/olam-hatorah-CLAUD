@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEscapeToClose } from "@/lib/useEscapeToClose";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  useEscapeToClose(open, onCancel);
   if (!open) return null;
   return (
     <div

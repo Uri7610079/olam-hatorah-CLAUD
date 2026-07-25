@@ -42,33 +42,33 @@ async function fetchBranches(orgId: string): Promise<BranchRow[]> {
 
 // רשומים/זכאים נגזרים בזמן שאילתה - לא נשמרים כשדה סטטי (ר' הערת migration 023).
 // "רשומים" = כרגע (אין מעקב היסטורי "נכון לתאריך X" עדיין); "זכאים" = זכאות פעילה לחודש שנבחר.
-async function fetchQuotaData(orgId: string, month: string, branches: BranchRow[]): Promise<QuotaRow[]> {
-  const { data: approved } = await supabase.from("monthly_quotas").select("branch_id, approved_quota").eq("organization_id", orgId).eq("month", month);
-  const approvedMap = new Map((approved ?? []).map((a) => [a.branch_id, a.approved_quota]));
+function countByBranch(rows: { branch_id: string }[] | null): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const r of rows ?? []) counts.set(r.branch_id, (counts.get(r.branch_id) ?? 0) + 1);
+  return counts;
+}
 
-  const rows: QuotaRow[] = [];
-  for (const branch of branches) {
-    const { count: registeredCount } = await supabase
-      .from("student_assignments")
-      .select("id", { count: "exact", head: true })
-      .eq("branch_id", branch.id)
-      .eq("is_active", true);
-    const { count: eligibleCount } = await supabase
-      .from("monthly_eligibility")
-      .select("id", { count: "exact", head: true })
-      .eq("branch_id", branch.id)
-      .eq("month", month)
-      .eq("status", "active");
-    rows.push({
-      branchId: branch.id,
-      branchName: branch.internal_name,
-      branchCode: branch.talmud_branch_code,
-      approvedQuota: approvedMap.get(branch.id) ?? null,
-      registeredCount: registeredCount ?? 0,
-      eligibleCount: eligibleCount ?? 0,
-    });
-  }
-  return rows;
+async function fetchQuotaData(orgId: string, month: string, branches: BranchRow[]): Promise<QuotaRow[]> {
+  const branchIds = branches.map((b) => b.id);
+  // שאילתה אחת מרוכזת לכל הסניפים במקום שתי שאילתות ספירה לכל סניף בנפרד (N+1 שנתפס
+  // בביקורת ביצועים שלב 16) - סופרים בצד לקוח לפי branch_id במקום count() נפרד לכל סניף.
+  const [{ data: approved }, { data: registered }, { data: eligible }] = await Promise.all([
+    supabase.from("monthly_quotas").select("branch_id, approved_quota").eq("organization_id", orgId).eq("month", month),
+    branchIds.length ? supabase.from("student_assignments").select("branch_id").in("branch_id", branchIds).eq("is_active", true) : Promise.resolve({ data: [] as { branch_id: string }[] }),
+    branchIds.length ? supabase.from("monthly_eligibility").select("branch_id").in("branch_id", branchIds).eq("month", month).eq("status", "active") : Promise.resolve({ data: [] as { branch_id: string }[] }),
+  ]);
+  const approvedMap = new Map((approved ?? []).map((a) => [a.branch_id, a.approved_quota]));
+  const registeredMap = countByBranch(registered);
+  const eligibleMap = countByBranch(eligible);
+
+  return branches.map((branch) => ({
+    branchId: branch.id,
+    branchName: branch.internal_name,
+    branchCode: branch.talmud_branch_code,
+    approvedQuota: approvedMap.get(branch.id) ?? null,
+    registeredCount: registeredMap.get(branch.id) ?? 0,
+    eligibleCount: eligibleMap.get(branch.id) ?? 0,
+  }));
 }
 
 export function QuotasScreen() {

@@ -92,9 +92,11 @@ create index student_assignments_group_idx on student_assignments (group_id);
 create index student_bank_accounts_student_idx on student_bank_accounts (student_id);
 
 -- מיסוך מספר חשבון תלמיד - אותה תבנית מדויקת כמו organization_bank_accounts בשלב 3
--- (view עם security_invoker + endpoint reveal מבוקר ומתועד). לא מומצא כלל חדש.
+-- (view + endpoint reveal מבוקר ומתועד). רצה כ-owner (לא security_invoker) בכוונה, בדיוק
+-- מאותה סיבה: ה-select policy על הטבלה הבסיסית (009, תוקן בשלב 16) מחייבת
+-- bank_accounts.view_sensitive, אז ה-view משכפלת כאן במפורש את כלל הראייה המקורי
+-- (area_ops/area_finance) כדי שמי שאין לו view_sensitive עדיין יראה שורות ממוסכות דרכה.
 create view student_bank_accounts_view
-with (security_invoker = true)
 as
 select
   id,
@@ -115,7 +117,8 @@ select
   demo_batch_id,
   created_at,
   updated_at
-from student_bank_accounts;
+from student_bank_accounts
+where has_permission('area_ops', 'access') or has_permission('area_finance', 'access');
 
 grant select on student_bank_accounts_view to authenticated;
 
