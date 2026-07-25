@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, Wallet, Settings, Search, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Wallet, Settings, type LucideIcon } from "lucide-react";
 import { useArea, type Area } from "./AreaContext";
 import { screensForArea } from "./screens";
 import { DemoBanner } from "@/components/DemoBanner";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { supabase } from "@/lib/supabase";
 
 const AREA_LABEL = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול" } as const;
@@ -43,15 +44,7 @@ export function Layout() {
           <span className="hidden font-bold text-slate-900 sm:inline">עולם התורה</span>
         </button>
 
-        <div className="relative mx-2 hidden w-80 sm:block">
-          <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-          <input
-            type="search"
-            placeholder="חיפוש גלובלי: תלמיד, קבוצה, סניף, אסמכתה…"
-            aria-label="חיפוש גלובלי"
-            className="input-field pr-9"
-          />
-        </div>
+        <GlobalSearch />
 
         <div className="flex-1" />
 
@@ -137,7 +130,7 @@ export function Layout() {
           </nav>
         </aside>
 
-        <main className="flex-1 p-4 sm:p-6">
+        <main className="min-w-0 flex-1 p-4 sm:p-6">
           <Outlet />
         </main>
       </div>
