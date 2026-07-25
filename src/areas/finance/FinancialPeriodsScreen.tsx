@@ -23,6 +23,13 @@ interface FinancialPeriod {
   status: PeriodStatus;
   opened_at: string;
   closed_at: string | null;
+  status_reason: string | null;
+}
+
+interface ChecklistItem {
+  item_key: string;
+  label_he: string;
+  open_count: number;
 }
 
 interface PreviewRow {
@@ -52,9 +59,15 @@ async function fetchOrgs(): Promise<OrgOption[]> {
 async function fetchPeriods(orgId: string): Promise<FinancialPeriod[]> {
   const { data, error } = await supabase
     .from("financial_periods")
-    .select("id, month, status, opened_at, closed_at")
+    .select("id, month, status, opened_at, closed_at, status_reason")
     .eq("organization_id", orgId)
     .order("month", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchChecklist(orgId: string, month: string): Promise<ChecklistItem[]> {
+  const { data, error } = await supabase.rpc("get_month_close_checklist", { p_organization_id: orgId, p_month: month });
   if (error) throw error;
   return data ?? [];
 }
@@ -77,8 +90,20 @@ export function FinancialPeriodsScreen() {
   const [confirmCommit, setConfirmCommit] = useState(false);
   const [commitResult, setCommitResult] = useState<{ processed: number; commission: number; net: number } | null>(null);
 
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [showReopenForm, setShowReopenForm] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopening, setReopening] = useState(false);
+
   const periodsQuery = useQuery({ queryKey: ["financial-periods", orgId], queryFn: () => fetchPeriods(orgId), enabled: !!orgId });
   const currentPeriod = periodsQuery.data?.find((p) => p.month === month) ?? null;
+  const checklistQuery = useQuery({
+    queryKey: ["month-close-checklist", orgId, month],
+    queryFn: () => fetchChecklist(orgId, month),
+    enabled: !!orgId && showChecklist,
+  });
+  const checklistReady = !!checklistQuery.data && checklistQuery.data.every((i) => i.open_count === 0);
 
   const invalidatePeriods = () => queryClient.invalidateQueries({ queryKey: ["financial-periods", orgId] });
 
@@ -94,7 +119,7 @@ export function FinancialPeriodsScreen() {
     invalidatePeriods();
   };
 
-  const setPeriodStatus = async (status: PeriodStatus) => {
+  const setPeriodStatus = async (status: "open" | "in_review") => {
     if (!currentPeriod) return;
     setChangingStatus(true);
     setError(null);
@@ -104,6 +129,35 @@ export function FinancialPeriodsScreen() {
       setError(err.message);
       return;
     }
+    invalidatePeriods();
+  };
+
+  const closeMonth = async () => {
+    if (!currentPeriod) return;
+    setClosing(true);
+    setError(null);
+    const { error: err } = await supabase.rpc("close_financial_month", { p_organization_id: orgId, p_month: month, p_period_id: currentPeriod.id });
+    setClosing(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setShowChecklist(false);
+    invalidatePeriods();
+  };
+
+  const reopenMonth = async () => {
+    if (!currentPeriod || !reopenReason.trim()) return;
+    setReopening(true);
+    setError(null);
+    const { error: err } = await supabase.rpc("reopen_financial_month", { p_period_id: currentPeriod.id, p_reason: reopenReason });
+    setReopening(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setShowReopenForm(false);
+    setReopenReason("");
     invalidatePeriods();
   };
 
@@ -205,6 +259,7 @@ export function FinancialPeriodsScreen() {
                 ) : (
                   <p className="mt-1 text-xs text-slate-500">חודש זה טרם נפתח לעמותה זו.</p>
                 )}
+                {currentPeriod?.status_reason && <p className="mt-1 text-xs text-slate-500">סיבה: {currentPeriod.status_reason}</p>}
               </div>
               {canManagePeriods && (
                 <div className="flex gap-2">
@@ -223,19 +278,52 @@ export function FinancialPeriodsScreen() {
                       <button onClick={() => setPeriodStatus("open")} disabled={changingStatus} className="btn-secondary text-xs">
                         חזרה לפתוח
                       </button>
-                      <button onClick={() => setPeriodStatus("closed")} disabled={changingStatus} className="btn-primary text-xs">
-                        סגירה
+                      <button onClick={() => setShowChecklist((v) => !v)} className="btn-primary text-xs">
+                        {showChecklist ? "סגירת רשימת הבדיקה" : "בדיקת מוכנות לסגירה"}
                       </button>
                     </>
                   )}
                   {currentPeriod?.status === "closed" && (
-                    <button onClick={() => setPeriodStatus("open")} disabled={changingStatus} className="btn-secondary text-xs">
+                    <button onClick={() => setShowReopenForm((v) => !v)} className="btn-secondary text-xs">
                       פתיחה מחדש
                     </button>
                   )}
                 </div>
               )}
             </div>
+
+            {showChecklist && currentPeriod?.status === "in_review" && (
+              <div className="mt-4 space-y-2 border-t border-slate-200 pt-4">
+                <p className="text-xs text-slate-500">כל התנאים חייבים להיות ריקים (0) כדי לסגור את החודש - הבדיקה מורצת שוב בשרת בעת הסגירה עצמה.</p>
+                {checklistQuery.isLoading ? (
+                  <LoadingState rows={3} />
+                ) : (
+                  <ul className="space-y-1">
+                    {(checklistQuery.data ?? []).map((item) => (
+                      <li key={item.item_key} className="flex items-center justify-between text-sm">
+                        <span className="text-slate-700">{item.label_he}</span>
+                        <StatusBadge severity={item.open_count === 0 ? "ok" : "medium"} label={String(item.open_count)} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <button onClick={closeMonth} disabled={closing || !checklistReady} className="btn-primary text-xs" title={!checklistReady ? "יש תנאים פתוחים ברשימה למעלה" : undefined}>
+                  {closing ? "סוגרת…" : "סגירת חודש"}
+                </button>
+              </div>
+            )}
+
+            {showReopenForm && currentPeriod?.status === "closed" && (
+              <div className="mt-4 space-y-2 border-t border-slate-200 pt-4">
+                <label className="field-label">סיבת פתיחה מחדש (חובה)</label>
+                <div className="flex gap-2">
+                  <input value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} className="input-field" />
+                  <button onClick={reopenMonth} disabled={!reopenReason.trim() || reopening} className="btn-primary text-xs shrink-0">
+                    {reopening ? "פותחת…" : "אישור"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {canCalculate && (

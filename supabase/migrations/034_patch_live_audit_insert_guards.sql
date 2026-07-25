@@ -41,8 +41,10 @@ language plpgsql
 as $$
 begin
   if tg_op = 'INSERT' then
-    if new.status <> 'uploaded' then
-      raise exception 'אצוות יבוא חדשה תמיד נוצרת בסטטוס "הועלה"';
+    -- 'previewed' מותר גם הוא - ר' אותה הערה ב-013 (תוקן רטרואקטיבית ב-046 אחרי שנמצא
+    -- בבדיקה חיה של שלב 13, ולא כאן במקור - זו הגרסה המתוקנת כדי שהתקנה טרייה תהיה עקבית).
+    if new.status not in ('uploaded', 'previewed') then
+      raise exception 'אצוות יבוא חדשה תמיד נוצרת בסטטוס "הועלה" או "נסקר" (לאחר ניתוח בצד לקוח)';
     end if;
     return new;
   end if;

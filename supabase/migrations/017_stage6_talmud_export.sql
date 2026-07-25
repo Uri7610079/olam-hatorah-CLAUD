@@ -97,6 +97,12 @@ begin
     raise exception 'permission denied';
   end if;
 
+  -- נתוני דמו לעולם לא יוצאים לאינטגרציה אמיתית (תלמוד) - נתפס בביקורת שלב 17: עד עכשיו
+  -- ההגנה היחידה הייתה מוסכמתית (משתמש לא בוחר בעמותת ה-DEMO), לא חסימה בשרת.
+  if exists (select 1 from organizations where id = p_organization_id and is_demo = true) then
+    raise exception 'לא ניתן לייצא נתוני דמו לתלמוד - עמותת דמו אינה מיועדת לאינטגרציות אמיתיות';
+  end if;
+
   if array_length(p_student_ids, 1) is null or array_length(p_student_ids, 1) = 0 then
     raise exception 'לא נבחרו תלמידים ליצוא';
   end if;

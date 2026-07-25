@@ -21,6 +21,11 @@ import { EligibilityScreen } from "./areas/ops/talmud/EligibilityScreen";
 import { ErrorsCenterScreen } from "./areas/ops/talmud/ErrorsCenterScreen";
 import { RetroScreen } from "./areas/ops/talmud/RetroScreen";
 import { QuotasScreen } from "./areas/ops/quotas/QuotasScreen";
+import { AuditsScreen } from "./areas/ops/audits/AuditsScreen";
+import { PhoneListsScreen } from "./areas/ops/phone-lists/PhoneListsScreen";
+import { DocumentsScreen } from "./areas/ops/documents/DocumentsScreen";
+import { ExceptionsCenterScreen } from "./areas/shared/ExceptionsCenterScreen";
+import { ReportsScreen } from "./areas/finance/ReportsScreen";
 import { FinancialPeriodsScreen } from "./areas/finance/FinancialPeriodsScreen";
 import { CommissionRulesScreen } from "./areas/finance/CommissionRulesScreen";
 import { GroupBalancesScreen } from "./areas/finance/GroupBalancesScreen";
@@ -29,8 +34,10 @@ import { DistributionsScreen } from "./areas/finance/DistributionsScreen";
 import { MasavScreen } from "./areas/finance/MasavScreen";
 import { ReturnsScreen } from "./areas/finance/ReturnsScreen";
 import { BankTransactionsScreen } from "./areas/finance/BankTransactionsScreen";
+import { BankMatchingScreen } from "./areas/finance/BankMatchingScreen";
 import { TransactionTypesScreen } from "./areas/admin/TransactionTypesScreen";
 import { RecognitionRulesScreen } from "./areas/admin/RecognitionRulesScreen";
+import { DemoDataScreen } from "./areas/admin/DemoDataScreen";
 
 // המסכים האלה כבר נבנו בפועל (שלבים 2-7) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
@@ -46,6 +53,12 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/ops/talmud/errors",
   "/ops/talmud/retro",
   "/ops/quotas",
+  "/ops/audits",
+  "/ops/phone-lists",
+  "/ops/documents",
+  "/ops/exceptions",
+  "/finance/exceptions",
+  "/finance/reports",
   "/finance/months",
   "/finance/commission-rules",
   "/finance/group-balances",
@@ -54,8 +67,11 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/finance/masav",
   "/finance/returns",
   "/finance/bank-transactions",
+  "/finance/bank-matching",
+  "/finance/documents",
   "/admin/transaction-types",
   "/admin/recognition-rules",
+  "/admin/demo-data",
 ]);
 
 export default function App() {
@@ -82,6 +98,12 @@ export default function App() {
             <Route path="/ops/talmud/errors" element={<ErrorsCenterScreen />} />
             <Route path="/ops/talmud/retro" element={<RetroScreen />} />
             <Route path="/ops/quotas" element={<QuotasScreen />} />
+            <Route path="/ops/audits" element={<AuditsScreen />} />
+            <Route path="/ops/phone-lists" element={<PhoneListsScreen />} />
+            <Route path="/ops/documents" element={<DocumentsScreen />} />
+            <Route path="/ops/exceptions" element={<ExceptionsCenterScreen />} />
+            <Route path="/finance/exceptions" element={<ExceptionsCenterScreen />} />
+            <Route path="/finance/reports" element={<ReportsScreen />} />
             <Route path="/finance/months" element={<FinancialPeriodsScreen />} />
             <Route path="/finance/commission-rules" element={<CommissionRulesScreen />} />
             <Route path="/finance/group-balances" element={<GroupBalancesScreen />} />
@@ -90,8 +112,11 @@ export default function App() {
             <Route path="/finance/masav" element={<MasavScreen />} />
             <Route path="/finance/returns" element={<ReturnsScreen />} />
             <Route path="/finance/bank-transactions" element={<BankTransactionsScreen />} />
+            <Route path="/finance/bank-matching" element={<BankMatchingScreen />} />
+            <Route path="/finance/documents" element={<DocumentsScreen />} />
             <Route path="/admin/transaction-types" element={<TransactionTypesScreen />} />
             <Route path="/admin/recognition-rules" element={<RecognitionRulesScreen />} />
+            <Route path="/admin/demo-data" element={<DemoDataScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}

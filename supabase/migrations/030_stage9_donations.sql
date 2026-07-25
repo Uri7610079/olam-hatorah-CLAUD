@@ -49,8 +49,12 @@ insert into role_permissions (role_id, permission_id)
 select r.id, p.id from roles r join permissions p on p.resource = 'donations' and p.action in ('manage', 'approve')
 where r.key in ('system_admin', 'operations_manager', 'finance_controller');
 
+-- גישה ישירה לטבלה עצמה דורשת bank_accounts.view_sensitive - אותה בדיוק בעיה ואותו
+-- תיקון כמו organization_bank_accounts/student_bank_accounts (שלב 16): מי שאין לו
+-- view_sensitive עדיין רואה הכול (סכום/תאריך/סטטוס/קבוצה) דרך donations_view, שם
+-- donor_reference ממוסך. DonationsScreen כבר קורא רק מה-view לרשימה הראשית - נבדק.
 create policy donations_select on donations for select to authenticated
-  using (has_permission('area_finance', 'access') or has_permission('area_ops', 'access'));
+  using (has_permission('bank_accounts', 'view_sensitive'));
 
 create policy donations_insert on donations for insert to authenticated
   with check (has_permission('donations', 'manage'));
@@ -111,15 +115,20 @@ create trigger donations_audit
   after insert or update on donations
   for each row execute function audit_table_change();
 
+-- רצה כ-owner (לא security_invoker) בכוונה, מאותה סיבה כמו organization_bank_accounts_view
+-- (005)/student_bank_accounts_view (008): ה-select policy על donations דורשת עכשיו
+-- bank_accounts.view_sensitive (תוקן בשלב 16), אז ה-view משכפלת כאן במפורש את כלל
+-- הראייה המקורי (area_ops/area_finance) כדי שמי שאין לו view_sensitive עדיין יראה את
+-- כל השורות (סכום/תאריך/סטטוס/קבוצה) - רק donor_reference ממוסך.
 create view donations_view
-with (security_invoker = true)
 as
 select
   id, organization_id, group_id, donation_date, amount,
   mask_account_number(donor_reference) as donor_reference_masked,
   reference, status, rejection_reason, bank_transaction_id, source_file_path, notes,
   is_demo, demo_batch_id, created_at, updated_at, created_by
-from donations;
+from donations
+where has_permission('area_ops', 'access') or has_permission('area_finance', 'access');
 
 grant select on donations_view to authenticated;
 

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useEscapeToClose } from "@/lib/useEscapeToClose";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -55,6 +56,7 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
   });
   const overridesQuery = useQuery({ queryKey: ["user-overrides", userId], queryFn: () => fetchUserOverrides(userId), enabled: open });
 
+  useEscapeToClose(open, onClose);
   if (!open) return null;
 
   const loading = catalogQuery.isLoading || overridesQuery.isLoading || (!!roleId && roleGrantsQuery.isLoading);

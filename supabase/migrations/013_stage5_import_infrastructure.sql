@@ -99,8 +99,13 @@ language plpgsql
 as $$
 begin
   if tg_op = 'INSERT' then
-    if new.status <> 'uploaded' then
-      raise exception 'אצוות יבוא חדשה תמיד נוצרת בסטטוס "הועלה"';
+    -- 'previewed' מותר גם הוא: lib/importBatches.ts (createImportBatch, בשימוש ע"י
+    -- מרכז שגיאות/זכאות/ביקורות) יוצר את השורה רק אחרי שהקובץ כבר נותח וסווג בצד
+    -- לקוח, ישר במצב "נסקר" - לא "הועלה". החסימה המקורית (רק 'uploaded') חסמה בפועל
+    -- את כל היבואים דרך המנוע הכללי מהרגע ש-034 רץ בפרויקט החי, בלי שנתפס בביקורת
+    -- החוזרת אחריו (ר' README, 046). מה שעדיין חסום: יצירה ישירה כ-"committed".
+    if new.status not in ('uploaded', 'previewed') then
+      raise exception 'אצוות יבוא חדשה תמיד נוצרת בסטטוס "הועלה" או "נסקר" (לאחר ניתוח בצד לקוח)';
     end if;
     return new;
   end if;

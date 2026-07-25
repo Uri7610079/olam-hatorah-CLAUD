@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
+import { LoadingState } from "@/components/LoadingState";
 
 interface OrgOption {
   id: string;
@@ -34,10 +35,47 @@ interface ReturnRow {
   reason: string;
   status: ReturnStatus;
   notes: string | null;
-  masav_line: { student: { external_id: string; full_name: string } };
+  masav_line_id: string;
+  new_bank_account_id: string | null;
+  retry_masav_line_id: string | null;
+  masav_line: { student: { id: string; external_id: string; full_name: string } };
+  retry_line: { batch: { status: string } } | null;
+}
+
+interface BankAccountOption {
+  id: string;
+  account_number_masked: string | null;
+}
+
+interface RetryLineOption {
+  id: string;
+  amount: number;
+  batch: { period_month: string; status: string };
 }
 
 const RETURN_STATUS_LABEL: Record<ReturnStatus, string> = { open: "פתוח", retried: "נשלח שוב", resolved: "טופל" };
+
+async function fetchVerifiedAccounts(studentId: string): Promise<BankAccountOption[]> {
+  const { data, error } = await supabase
+    .from("student_bank_accounts_view")
+    .select("id, account_number_masked")
+    .eq("student_id", studentId)
+    .eq("verification_status", "verified")
+    .eq("is_active", true);
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function fetchRetryLineOptions(studentId: string, excludeLineId: string): Promise<RetryLineOption[]> {
+  const { data, error } = await supabase
+    .from("masav_lines")
+    .select("id, amount, batch:masav_batches(period_month, status)")
+    .eq("student_id", studentId)
+    .eq("status", "valid")
+    .neq("id", excludeLineId);
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({ ...r, batch: Array.isArray(r.batch) ? r.batch[0] : r.batch }));
+}
 
 async function fetchOrgs(): Promise<OrgOption[]> {
   const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
@@ -74,15 +112,20 @@ async function fetchReturns(orgId: string): Promise<ReturnRow[]> {
   const { data, error } = await supabase
     .from("payment_returns")
     .select(
-      "id, return_date, amount, reason, status, notes, masav_line:masav_lines!payment_returns_masav_line_id_fkey(student:students(external_id, full_name), batch:masav_batches(organization_id))",
+      "id, return_date, amount, reason, status, notes, masav_line_id, new_bank_account_id, retry_masav_line_id, masav_line:masav_lines!payment_returns_masav_line_id_fkey(student:students(id, external_id, full_name), batch:masav_batches(organization_id)), retry_line:masav_lines!payment_returns_retry_masav_line_id_fkey(batch:masav_batches(status))",
     )
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? [])
-    .map((r: any) => ({ ...r, masav_line: Array.isArray(r.masav_line) ? r.masav_line[0] : r.masav_line }))
+    .map((r: any) => ({
+      ...r,
+      masav_line: Array.isArray(r.masav_line) ? r.masav_line[0] : r.masav_line,
+      retry_line: Array.isArray(r.retry_line) ? r.retry_line[0] : r.retry_line,
+    }))
     .map((r: any) => ({
       ...r,
       masav_line: { ...r.masav_line, student: Array.isArray(r.masav_line.student) ? r.masav_line.student[0] : r.masav_line.student },
+      retry_line: r.retry_line ? { batch: Array.isArray(r.retry_line.batch) ? r.retry_line.batch[0] : r.retry_line.batch } : null,
       _orgId: Array.isArray(r.masav_line.batch) ? r.masav_line.batch[0]?.organization_id : r.masav_line.batch?.organization_id,
     }))
     .filter((r: any) => r._orgId === orgId);
@@ -103,9 +146,59 @@ export function ReturnsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [selectedReturnId, setSelectedReturnId] = useState<string | null>(null);
+  const [retryAccountId, setRetryAccountId] = useState("");
+  const [retryLineId, setRetryLineId] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [resolving, setResolving] = useState(false);
+
   const batchesQuery = useQuery({ queryKey: ["returns-transmitted-batches", orgId], queryFn: () => fetchTransmittedBatches(orgId), enabled: !!orgId });
   const linesQuery = useQuery({ queryKey: ["returns-valid-lines", batchId], queryFn: () => fetchValidLines(batchId), enabled: !!batchId });
   const returnsQuery = useQuery({ queryKey: ["payment-returns", orgId], queryFn: () => fetchReturns(orgId), enabled: !!orgId });
+  const selectedReturn = returnsQuery.data?.find((r) => r.id === selectedReturnId) ?? null;
+
+  const accountsQuery = useQuery({
+    queryKey: ["returns-verified-accounts", selectedReturn?.masav_line.student.id],
+    queryFn: () => fetchVerifiedAccounts(selectedReturn!.masav_line.student.id),
+    enabled: !!selectedReturn,
+  });
+  const retryLinesQuery = useQuery({
+    queryKey: ["returns-retry-line-options", selectedReturn?.masav_line.student.id, selectedReturn?.id],
+    queryFn: () => fetchRetryLineOptions(selectedReturn!.masav_line.student.id, selectedReturn!.masav_line_id),
+    enabled: !!selectedReturn,
+  });
+
+  const linkRetry = async () => {
+    if (!selectedReturnId || !retryAccountId || !retryLineId) return;
+    setLinking(true);
+    setError(null);
+    const { error: err } = await supabase
+      .from("payment_returns")
+      .update({ new_bank_account_id: retryAccountId, retry_masav_line_id: retryLineId })
+      .eq("id", selectedReturnId);
+    setLinking(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setRetryAccountId("");
+    setRetryLineId("");
+    queryClient.invalidateQueries({ queryKey: ["payment-returns", orgId] });
+  };
+
+  const resolveReturn = async () => {
+    if (!selectedReturnId) return;
+    setResolving(true);
+    setError(null);
+    const { error: err } = await supabase.from("payment_returns").update({ status: "resolved" }).eq("id", selectedReturnId);
+    setResolving(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setSelectedReturnId(null);
+    queryClient.invalidateQueries({ queryKey: ["payment-returns", orgId] });
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -145,7 +238,7 @@ export function ReturnsScreen() {
     <div>
       <PageHeader
         title="החזרות ותשלום חוזר"
-        description='הזנה ידנית בלבד בשלב זה - התאמה אוטומטית מול דוח בנק תגיע רק לאחר מודול הבנק. החזרה אינה מוחקת את שורת המקור; היתרה של הקבוצה מזוכה בתנועת "החזרה" נגדית.'
+        description='רישום החזרה עצמו ידני. קישור תשלום חוזר דורש חשבון בנק חדש שאומת בפועל, וסגירת ההחזרה ("טופל") דורשת שהתשלום החוזר יותאם ויאושר בפועל מול הבנק (מסך התאמות בנק). החזרה אינה מוחקת את שורת המקור; היתרה של הקבוצה מזוכה בתנועת "החזרה" נגדית.'
         primaryAction={
           orgId &&
           canManage && (
@@ -230,7 +323,77 @@ export function ReturnsScreen() {
       )}
 
       {orgId && (
-        <DataTable columns={columns} rows={returnsQuery.data ?? []} rowKey={(r) => r.id} loading={returnsQuery.isLoading} emptyTitle="אין החזרות רשומות" emptyIcon={Undo2} />
+        <DataTable
+          columns={columns}
+          rows={returnsQuery.data ?? []}
+          rowKey={(r) => r.id}
+          loading={returnsQuery.isLoading}
+          emptyTitle="אין החזרות רשומות"
+          emptyIcon={Undo2}
+          onRowClick={canManage ? (r) => setSelectedReturnId(r.id === selectedReturnId ? null : r.id) : undefined}
+        />
+      )}
+
+      {selectedReturn && canManage && (
+        <div className="card mt-4 max-w-2xl space-y-3 p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-700">
+              טיפול בהחזרה · {selectedReturn.masav_line.student.full_name} ({selectedReturn.masav_line.student.external_id})
+            </h2>
+            <StatusBadge severity={selectedReturn.status === "resolved" ? "ok" : "medium"} label={RETURN_STATUS_LABEL[selectedReturn.status]} />
+          </div>
+
+          {selectedReturn.status !== "resolved" && (
+            <>
+              <p className="text-xs text-slate-500">
+                לא ניתן לקשר תשלום חוזר בלי חשבון בנק חדש שאומת בפועל. סגירת ההחזרה (״טופל״) מותרת רק לאחר שהתשלום החוזר הותאם ואושר בפועל מול הבנק (התאמות בנק, שלב 12).
+              </p>
+              {accountsQuery.isLoading || retryLinesQuery.isLoading ? (
+                <LoadingState rows={2} />
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="field-label">חשבון בנק חדש (מאומת בלבד)</label>
+                    <select value={retryAccountId} onChange={(e) => setRetryAccountId(e.target.value)} className="input-field">
+                      <option value="">— בחרי —</option>
+                      {(accountsQuery.data ?? []).map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.account_number_masked}
+                        </option>
+                      ))}
+                    </select>
+                    {(accountsQuery.data ?? []).length === 0 && <p className="mt-1 text-xs text-amber-600">אין לתלמיד זה חשבון בנק מאומת ופעיל.</p>}
+                  </div>
+                  <div>
+                    <label className="field-label">שורת תשלום חוזר (מס״ב)</label>
+                    <select value={retryLineId} onChange={(e) => setRetryLineId(e.target.value)} className="input-field">
+                      <option value="">— בחרי —</option>
+                      {(retryLinesQuery.data ?? []).map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.batch.period_month} · {l.amount.toLocaleString("he-IL")} ({l.batch.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+              {error && <ErrorState message={error} />}
+              <div className="flex flex-wrap gap-2">
+                <button onClick={linkRetry} disabled={!retryAccountId || !retryLineId || linking} className="btn-secondary text-xs">
+                  {linking ? "מקשרת…" : "קישור תשלום חוזר"}
+                </button>
+                <button
+                  onClick={resolveReturn}
+                  disabled={resolving || !selectedReturn.retry_masav_line_id || selectedReturn.retry_line?.batch.status !== "bank_completed"}
+                  className="btn-primary text-xs"
+                  title={selectedReturn.retry_line?.batch.status !== "bank_completed" ? "התשלום החוזר טרם הותאם ואושר בפועל מול הבנק" : undefined}
+                >
+                  {resolving ? "מסמנת…" : "סימון כטופל"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

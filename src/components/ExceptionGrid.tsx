@@ -1,9 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { StatusBadge } from "./StatusBadge";
-import type { ExceptionCounter } from "@/lib/demoData";
+
+export interface ExceptionCounter {
+  key: string;
+  label: string;
+  count: number;
+  severity: "critical" | "high" | "medium" | "ok" | "neutral";
+  href: string;
+}
 
 // רכיב הדשבורד המרכזי: רק מונים שדורשים טיפול, בלי גרפים דקורטיביים — לפי האפיון.
-// כל כרטיס לחיץ ומוביל ישירות לרשימה המסוננת (יחובר בפועל למסננים אמיתיים בשלב 14).
+// כל כרטיס לחיץ ומוביל ישירות לרשימה המסוננת (שאילתות אמת משלב 14, לא נתוני דמו).
 export function ExceptionGrid({ items }: { items: ExceptionCounter[] }) {
   const navigate = useNavigate();
   return (

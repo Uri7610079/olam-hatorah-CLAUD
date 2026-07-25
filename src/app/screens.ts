@@ -127,6 +127,14 @@ export const SCREENS: ScreenDef[] = [
     builtInStage: "שלב 13",
     icon: FileText,
   },
+  {
+    path: "/ops/exceptions",
+    area: "ops",
+    navLabel: "מרכז חריגות",
+    title: "מרכז חריגות",
+    builtInStage: "שלב 14",
+    icon: AlertTriangle,
+  },
 
   // כספים ובקרה
   {
@@ -208,6 +216,22 @@ export const SCREENS: ScreenDef[] = [
     title: "דוחות כספיים",
     builtInStage: "שלב 14",
     icon: ClipboardList,
+  },
+  {
+    path: "/finance/documents",
+    area: "finance",
+    navLabel: "מסמכים ומכתבים",
+    title: "מסמכים ומכתבים",
+    builtInStage: "שלב 13",
+    icon: FileText,
+  },
+  {
+    path: "/finance/exceptions",
+    area: "finance",
+    navLabel: "מרכז חריגות",
+    title: "מרכז חריגות",
+    builtInStage: "שלב 14",
+    icon: AlertTriangle,
   },
 
   // ניהול
