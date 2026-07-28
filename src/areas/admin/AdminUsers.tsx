@@ -12,7 +12,7 @@ import { LoadingState } from "@/components/LoadingState";
 import { UserPermissionsDrawer } from "./UserPermissionsDrawer";
 
 type ProfileStatus = "pending" | "approved" | "disabled";
-type Area = "ops" | "finance" | "admin";
+type Area = "ops" | "finance" | "admin" | "tasks";
 
 interface AdminProfileRow {
   id: string;
@@ -49,7 +49,7 @@ async function fetchRoles(): Promise<RoleOption[]> {
 
 const STATUS_SEVERITY: Record<ProfileStatus, Severity> = { pending: "medium", approved: "ok", disabled: "critical" };
 const STATUS_LABEL: Record<ProfileStatus, string> = { pending: "ממתין לאישור", approved: "מאושר", disabled: "מושבת" };
-const AREA_LABEL: Record<Area, string> = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול" };
+const AREA_LABEL: Record<Area, string> = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול", tasks: "משימות ותזכורות" };
 
 export function AdminUsers() {
   const queryClient = useQueryClient();
@@ -190,6 +190,7 @@ export function AdminUsers() {
                   <option value="ops">תפעול שוטף</option>
                   <option value="finance">כספים ובקרה</option>
                   <option value="admin">ניהול</option>
+                  <option value="tasks">משימות ותזכורות</option>
                 </select>
               </div>
               {actionError && <ErrorState message={actionError} />}

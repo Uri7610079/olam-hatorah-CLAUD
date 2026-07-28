@@ -1,20 +1,21 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, Wallet, Settings, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Wallet, Settings, CheckSquare, type LucideIcon } from "lucide-react";
 import { useArea, type Area } from "./AreaContext";
 import { screensForArea } from "./screens";
 import { DemoBanner } from "@/components/DemoBanner";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { supabase } from "@/lib/supabase";
 
-const AREA_LABEL = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול" } as const;
-const AREA_ICON: Record<Area, LucideIcon> = { ops: ClipboardList, finance: Wallet, admin: Settings };
-const AREA_TEXT = { ops: "text-ops", finance: "text-finance", admin: "text-admin" } as const;
-const AREA_BG_SOFT = { ops: "bg-ops-light", finance: "bg-finance-light", admin: "bg-admin-light" } as const;
+const AREA_LABEL = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול", tasks: "משימות ותזכורות" } as const;
+const AREA_ICON: Record<Area, LucideIcon> = { ops: ClipboardList, finance: Wallet, admin: Settings, tasks: CheckSquare };
+const AREA_TEXT = { ops: "text-ops", finance: "text-finance", admin: "text-admin", tasks: "text-tasks" } as const;
+const AREA_BG_SOFT = { ops: "bg-ops-light", finance: "bg-finance-light", admin: "bg-admin-light", tasks: "bg-tasks-light" } as const;
 const AREA_TAB_ACTIVE = {
   ops: "bg-ops-light text-ops",
   finance: "bg-finance-light text-finance",
   admin: "bg-admin-light text-admin",
+  tasks: "bg-tasks-light text-tasks",
 } as const;
 
 export function Layout() {
@@ -115,6 +116,7 @@ export function Layout() {
               <NavLink
                 key={s.path}
                 to={s.path}
+                title={s.description}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
                     isActive

@@ -3,12 +3,13 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useMyPermissions } from "@/lib/permissions";
 
-export type Area = "ops" | "finance" | "admin";
+export type Area = "ops" | "finance" | "admin" | "tasks";
 
 const AREA_PERMISSION: Record<Area, { resource: string; action: string }> = {
   ops: { resource: "area_ops", action: "access" },
   finance: { resource: "area_finance", action: "access" },
   admin: { resource: "area_admin", action: "access" },
+  tasks: { resource: "area_tasks", action: "access" },
 };
 
 interface AreaContextValue {
@@ -25,6 +26,7 @@ function areaFromPathname(pathname: string): Area | null {
   if (pathname.startsWith("/ops")) return "ops";
   if (pathname.startsWith("/finance")) return "finance";
   if (pathname.startsWith("/admin")) return "admin";
+  if (pathname.startsWith("/tasks")) return "tasks";
   return null;
 }
 
@@ -39,7 +41,7 @@ export function AreaProvider({ children }: { children: ReactNode }) {
 
   const availableAreas = useMemo<Area[]>(() => {
     if (!permissions) return [];
-    return (["ops", "finance", "admin"] as Area[]).filter((area) => {
+    return (["ops", "finance", "admin", "tasks"] as Area[]).filter((area) => {
       const { resource, action } = AREA_PERMISSION[area];
       return permissions.some((p) => p.resource === resource && p.action === action);
     });

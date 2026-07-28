@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
 export type ProfileStatus = "pending" | "approved" | "disabled";
-export type Area = "ops" | "finance" | "admin";
+export type Area = "ops" | "finance" | "admin" | "tasks";
 
 export interface Profile {
   id: string;

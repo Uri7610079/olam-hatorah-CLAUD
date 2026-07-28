@@ -27,6 +27,15 @@ import {
   ScanSearch,
   FlaskConical,
   History,
+  Home,
+  ListChecks,
+  UsersRound,
+  SlidersHorizontal,
+  Repeat,
+  MessageSquare,
+  FileStack,
+  Kanban,
+  CalendarDays,
 } from "lucide-react";
 import type { Area } from "./AreaContext";
 
@@ -40,8 +49,9 @@ export interface ScreenDef {
   icon: LucideIcon;
 }
 
-// מפת המסכים — תואמת לאפיון V3 §6 ולתוכנית השלבים. כולל רק מסכים בתוך ה-Scope
-// (אין כאן פניות תלמידים, משימות, תזכורות דיווח וכו' — הוסרו/נדחו באפיון).
+// מפת המסכים — תואמת לאפיון V3 §6 ולתוכנית השלבים, בתוספת אזור "משימות ותזכורות"
+// (אפיון V2 נפרד, שלב 18 ואילך - ר' TASKS_MODULE_PLAN.md). אין כאן פניות תלמידים -
+// הוסרו/נדחו באפיון המקורי, בניגוד למשימות שהתווספו בהמשך כמודול עצמאי.
 // האייקונים פונקציונליים בלבד (זיהוי מהיר של קטגוריה בניווט) - לא דקורטיביים.
 export const SCREENS: ScreenDef[] = [
   // תפעול שוטף
@@ -282,6 +292,89 @@ export const SCREENS: ScreenDef[] = [
     title: "יומן פעילות",
     builtInStage: "שלב 2",
     icon: History,
+  },
+
+  // משימות ותזכורות
+  {
+    path: "/tasks",
+    area: "tasks",
+    navLabel: "בית",
+    title: "המשימות שלי",
+    description: "המשימות שאני אחראי/צופה בהן, מסודרות לפי דחיפות - להיום, באיחור, קרובות וממתינות.",
+    builtInStage: "שלב 19",
+    icon: Home,
+  },
+  {
+    path: "/tasks/all",
+    area: "tasks",
+    navLabel: "כל המשימות",
+    title: "כל המשימות",
+    description: "כל המשימות שמורשית לראות, עם חיפוש וסינון לפי סטטוס/עדיפות.",
+    builtInStage: "שלב 19",
+    icon: ListChecks,
+  },
+  {
+    path: "/tasks/team",
+    area: "tasks",
+    navLabel: "משימות צוותים",
+    title: "משימות צוותים",
+    description: "משימות לפי צוות שיוך, לא לפי אחראי אישי.",
+    builtInStage: "שלב 19",
+    icon: UsersRound,
+  },
+  {
+    path: "/tasks/whatsapp",
+    area: "tasks",
+    navLabel: "תיבת WhatsApp",
+    title: "תיבת WhatsApp",
+    description: "הודעות שהתקבלו ממספר/קבוצת WhatsApp מאושרת, ממתינות להפוך למשימה או לסימון כלא-רלוונטיות.",
+    builtInStage: "שלב 21",
+    icon: MessageSquare,
+  },
+  {
+    path: "/tasks/recurring",
+    area: "tasks",
+    navLabel: "משימות חוזרות",
+    title: "משימות חוזרות",
+    description: "כללים ליצירת משימה חדשה אוטומטית לפי לוח זמנים קבוע (יומי/שבועי/חודשי/שנתי).",
+    builtInStage: "שלב 20",
+    icon: Repeat,
+  },
+  {
+    path: "/tasks/board",
+    area: "tasks",
+    navLabel: "לוח משימות",
+    title: "לוח משימות",
+    description: "תצוגת Kanban לפי סטטוס - גרירת כרטיס בין עמודות משנה את הסטטוס בפועל.",
+    builtInStage: "שלב 22",
+    icon: Kanban,
+  },
+  {
+    path: "/tasks/calendar",
+    area: "tasks",
+    navLabel: "לוח שנה",
+    title: "לוח שנה",
+    description: "תצוגת חודש לפי תאריך יעד, כולל תאריך עברי וחגים. לחיצה על יום יוצרת משימה עם התאריך הזה.",
+    builtInStage: "שלב 22",
+    icon: CalendarDays,
+  },
+  {
+    path: "/tasks/templates",
+    area: "tasks",
+    navLabel: "תבניות",
+    title: "תבניות משימה",
+    description: "תבניות ליצירה מהירה של משימה עם ערכים קבועים מראש, כולל Checklist.",
+    builtInStage: "שלב 22",
+    icon: FileStack,
+  },
+  {
+    path: "/tasks/settings",
+    area: "tasks",
+    navLabel: "הגדרות",
+    title: "הגדרות - צוותים וקטגוריות",
+    description: "ניהול צוותי שיוך, חברות בצוות, קטגוריות משימה, וחיבור קבוצות/מספרי WhatsApp.",
+    builtInStage: "שלב 19",
+    icon: SlidersHorizontal,
   },
 ];
 

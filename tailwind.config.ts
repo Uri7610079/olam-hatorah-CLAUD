@@ -29,6 +29,10 @@ export default {
           DEFAULT: "#475569",
           light: "#f1f5f9",
         },
+        tasks: {
+          DEFAULT: "#b45309",
+          light: "#fffbeb",
+        },
         status: {
           critical: "#dc2626",
           high: "#ea580c",

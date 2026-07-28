@@ -4,7 +4,7 @@ import { Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface SearchResult {
-  kind: "student" | "group" | "branch" | "organization";
+  kind: "student" | "group" | "branch" | "organization" | "task";
   id: string;
   label: string;
   sublabel?: string;
@@ -16,15 +16,17 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
   group: "קבוצה",
   branch: "סניף",
   organization: "עמותה",
+  task: "משימה",
 };
 
 async function search(term: string): Promise<SearchResult[]> {
   const like = `%${term}%`;
-  const [students, groups, branches, orgs] = await Promise.all([
+  const [students, groups, branches, orgs, tasks] = await Promise.all([
     supabase.from("students").select("id, external_id, full_name").or(`full_name.ilike.${like},external_id.ilike.${like}`).limit(5),
     supabase.from("groups").select("id, name").ilike("name", like).limit(5),
     supabase.from("branches").select("id, internal_name").ilike("internal_name", like).limit(5),
     supabase.from("organizations").select("id, legal_name").ilike("legal_name", like).limit(5),
+    supabase.from("tasks").select("id, title").ilike("title", like).limit(5),
   ]);
 
   const results: SearchResult[] = [];
@@ -32,12 +34,13 @@ async function search(term: string): Promise<SearchResult[]> {
   for (const g of groups.data ?? []) results.push({ kind: "group", id: g.id, label: g.name, href: "/ops/branches-groups" });
   for (const b of branches.data ?? []) results.push({ kind: "branch", id: b.id, label: b.internal_name, href: "/ops/branches-groups" });
   for (const o of orgs.data ?? []) results.push({ kind: "organization", id: o.id, label: o.legal_name, href: `/ops/organizations/${o.id}` });
+  for (const t of tasks.data ?? []) results.push({ kind: "task", id: t.id, label: t.title, href: `/tasks/all?open=${t.id}` });
   return results;
 }
 
-// חיפוש גלובלי אמיתי: תלמיד/קבוצה/סניף/עמותה (RLS כבר מגביל לכל משתמש את מה שהוא
-// רואה ממילא - אין כאן בדיקת הרשאה נוספת). קבוצה/סניף מקשרים למסך סניפים-וקבוצות
-// הכללי (אין עדיין deep-link לקבוצה/סניף ספציפיים), תלמיד/עמותה מקשרים ישירות לכרטיס.
+// חיפוש גלובלי אמיתי: תלמיד/קבוצה/סניף/עמותה/משימה (RLS כבר מגביל לכל משתמש את מה
+// שהוא רואה ממילא - אין כאן בדיקת הרשאה נוספת). קבוצה/סניף מקשרים למסך סניפים-וקבוצות
+// הכללי (אין עדיין deep-link לקבוצה/סניף ספציפיים), תלמיד/עמותה/משימה מקשרים ישירות לכרטיס.
 export function GlobalSearch() {
   const navigate = useNavigate();
   const [term, setTerm] = useState("");

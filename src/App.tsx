@@ -38,6 +38,15 @@ import { BankMatchingScreen } from "./areas/finance/BankMatchingScreen";
 import { TransactionTypesScreen } from "./areas/admin/TransactionTypesScreen";
 import { RecognitionRulesScreen } from "./areas/admin/RecognitionRulesScreen";
 import { DemoDataScreen } from "./areas/admin/DemoDataScreen";
+import { TasksHomeScreen } from "./areas/tasks/TasksHomeScreen";
+import { TasksAllScreen } from "./areas/tasks/TasksAllScreen";
+import { TasksTeamScreen } from "./areas/tasks/TasksTeamScreen";
+import { TasksWhatsAppScreen } from "./areas/tasks/TasksWhatsAppScreen";
+import { TasksRecurringScreen } from "./areas/tasks/TasksRecurringScreen";
+import { TasksBoardScreen } from "./areas/tasks/TasksBoardScreen";
+import { TasksCalendarScreen } from "./areas/tasks/TasksCalendarScreen";
+import { TasksTemplatesScreen } from "./areas/tasks/TasksTemplatesScreen";
+import { TasksSettingsScreen } from "./areas/tasks/TasksSettingsScreen";
 
 // המסכים האלה כבר נבנו בפועל (שלבים 2-7) - לא עוברים דרך מפת ה-placeholder הכללית.
 const SCREENS_WITH_REAL_PAGES = new Set([
@@ -72,6 +81,15 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/admin/transaction-types",
   "/admin/recognition-rules",
   "/admin/demo-data",
+  "/tasks",
+  "/tasks/all",
+  "/tasks/team",
+  "/tasks/whatsapp",
+  "/tasks/recurring",
+  "/tasks/board",
+  "/tasks/calendar",
+  "/tasks/templates",
+  "/tasks/settings",
 ]);
 
 export default function App() {
@@ -117,6 +135,15 @@ export default function App() {
             <Route path="/admin/transaction-types" element={<TransactionTypesScreen />} />
             <Route path="/admin/recognition-rules" element={<RecognitionRulesScreen />} />
             <Route path="/admin/demo-data" element={<DemoDataScreen />} />
+            <Route path="/tasks" element={<TasksHomeScreen />} />
+            <Route path="/tasks/all" element={<TasksAllScreen />} />
+            <Route path="/tasks/team" element={<TasksTeamScreen />} />
+            <Route path="/tasks/whatsapp" element={<TasksWhatsAppScreen />} />
+            <Route path="/tasks/recurring" element={<TasksRecurringScreen />} />
+            <Route path="/tasks/board" element={<TasksBoardScreen />} />
+            <Route path="/tasks/calendar" element={<TasksCalendarScreen />} />
+            <Route path="/tasks/templates" element={<TasksTemplatesScreen />} />
+            <Route path="/tasks/settings" element={<TasksSettingsScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route
                 key={s.path}
