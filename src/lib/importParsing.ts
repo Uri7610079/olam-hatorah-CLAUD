@@ -68,6 +68,58 @@ function rowsFromMatrix(matrix: string[][], headerRowIndex: number): { headers: 
   return { headers, rows };
 }
 
+function buildParsedFile(matrix: string[][], headerRowIndexOverride?: number): ParsedFile {
+  const detected = detectHeaderRow(matrix);
+  const headerRowIndex = headerRowIndexOverride ?? detected.index;
+  const { headers, rows } = rowsFromMatrix(matrix, headerRowIndex);
+  return {
+    headers,
+    rows,
+    headerRowIndex,
+    headerConfidence: headerRowIndexOverride !== undefined ? "high" : detected.confidence,
+    previewRows: matrix.slice(0, 15),
+  };
+}
+
+// דוח "אמיתי" (למשל "שאילתת תלמיד" ממערכת תלמוד) מגיע לפעמים כטבלת HTML גולמית עם
+// סיומת .xls/.xlsx - טריק ותיק של מערכות ASP.NET ישנות (Excel פותח HTML בשקיפות אם
+// מקבל את הסיומת הזו). קובץ .xls/.xlsx *אמיתי* הוא בינארי (OLE/ZIP), לא טקסט - ולכן
+// חתימת BOM של UTF-16 (הקידוד השכיח לקבצים כאלה) או תג HTML גלוי בתחילת הקובץ מזהים
+// את זה בבטחה, בלי סיכוי להתבלבל עם קובץ בינארי אמיתי.
+function decodeAsText(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(buffer);
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(buffer);
+  return new TextDecoder("utf-8").decode(buffer);
+}
+
+function looksLikeHtmlExport(buffer: ArrayBuffer): boolean {
+  const sample = decodeAsText(buffer).slice(0, 2000);
+  return /<html|<table|<style/i.test(sample);
+}
+
+// דוחות כאלה בנויים ממכלול טבלאות HTML מקוננות (תיבת פילטרים, כותרת עמוד וכו') לצורך
+// עיצוב/פריסה בלבד - טבלת הנתונים האמיתית היא כמעט תמיד זו עם הכי הרבה שורות, לא
+// הראשונה שנמצאת במסמך.
+function parseHtmlTableToMatrix(html: string): string[][] {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const tables = Array.from(doc.querySelectorAll("table"));
+  if (tables.length === 0) return [];
+  let best = tables[0];
+  let bestRowCount = best.querySelectorAll("tr").length;
+  for (const t of tables) {
+    const count = t.querySelectorAll("tr").length;
+    if (count > bestRowCount) {
+      best = t;
+      bestRowCount = count;
+    }
+  }
+  const trs = Array.from(best.querySelectorAll(":scope > tr, :scope > tbody > tr"));
+  return trs.map((tr) =>
+    Array.from(tr.querySelectorAll(":scope > td, :scope > th")).map((cell) => (cell.textContent ?? "").replace(/ /g, " ").trim()),
+  );
+}
+
 // תמיכה ב-CSV ו-XLSX בשלב הראשון. XLS ישן (פורמט בינארי טרום-2007) מתקבל דרך אותה
 // ספריית xlsx, אך ללא הבטחת תאימות מלאה - האפיון דורש טיפול ייעודי/המרה, לא תמיכה
 // שקטה שמניחה שהכול עובד. לכן מסמנים אזהרה נפרדת ל-.xls (ר' parseImportFile).
@@ -86,35 +138,26 @@ export function isLegacyXls(file: File): boolean {
 async function parseCsv(file: File, headerRowIndexOverride?: number): Promise<ParsedFile> {
   const text = await file.text();
   const raw = Papa.parse<string[]>(text, { skipEmptyLines: true });
-  const matrix = raw.data;
-  const detected = detectHeaderRow(matrix);
-  const headerRowIndex = headerRowIndexOverride ?? detected.index;
-  const { headers, rows } = rowsFromMatrix(matrix, headerRowIndex);
-  return {
-    headers,
-    rows,
-    headerRowIndex,
-    headerConfidence: headerRowIndexOverride !== undefined ? "high" : detected.confidence,
-    previewRows: matrix.slice(0, 15),
-  };
+  return buildParsedFile(raw.data, headerRowIndexOverride);
 }
 
 async function parseXlsx(file: File, headerRowIndexOverride?: number): Promise<ParsedFile> {
   const buffer = await file.arrayBuffer();
+
+  // ר' הערה למעלה - קובץ ".xls"/".xlsx" שהוא בפועל טבלת HTML (למשל ייצוא ממערכת תלמוד)
+  // חייב לעבור פרסור HTML, לא את הפרסר הבינארי הרגיל (שם היה מייצר טקסט מקולקל בשקט,
+  // בלי שגיאה גלויה - בדיוק מה שקרה בפועל).
+  if (looksLikeHtmlExport(buffer)) {
+    const html = decodeAsText(buffer);
+    const matrix = parseHtmlTableToMatrix(html);
+    return buildParsedFile(matrix, headerRowIndexOverride);
+  }
+
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const firstSheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[firstSheetName];
   const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, range: 0, defval: "", raw: false });
-  const detected = detectHeaderRow(matrix);
-  const headerRowIndex = headerRowIndexOverride ?? detected.index;
-  const { headers, rows } = rowsFromMatrix(matrix, headerRowIndex);
-  return {
-    headers,
-    rows,
-    headerRowIndex,
-    headerConfidence: headerRowIndexOverride !== undefined ? "high" : detected.confidence,
-    previewRows: matrix.slice(0, 15),
-  };
+  return buildParsedFile(matrix, headerRowIndexOverride);
 }
 
 // hash תוכן הקובץ (לא השם) - מונע יבוא כפול גם אם הקובץ הועלה בשם אחר.
