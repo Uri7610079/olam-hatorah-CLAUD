@@ -57,9 +57,11 @@ export function AdminUsers() {
   const profilesQuery = useQuery({ queryKey: ["admin-profiles"], queryFn: fetchProfiles, enabled: hasPermission });
   const rolesQuery = useQuery({ queryKey: ["roles-catalog"], queryFn: fetchRoles, enabled: hasPermission });
 
-  const [pendingAction, setPendingAction] = useState<{ userId: string; status: "approved" | "disabled" } | null>(
-    null,
-  );
+  const [pendingAction, setPendingAction] = useState<{
+    userId: string;
+    status: "approved" | "disabled";
+    kind: "approve" | "disable" | "changeRole";
+  } | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<AdminProfileRow | null>(null);
   const [roleChoice, setRoleChoice] = useState("");
   const [areaChoice, setAreaChoice] = useState("");
@@ -69,7 +71,17 @@ export function AdminUsers() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
 
   const openAction = (row: AdminProfileRow, status: "approved" | "disabled") => {
-    setPendingAction({ userId: row.id, status });
+    setPendingAction({ userId: row.id, status, kind: status === "approved" ? "approve" : "disable" });
+    setRoleChoice(row.role?.key ?? "");
+    setAreaChoice(row.default_area ?? "");
+    setActionError(null);
+  };
+
+  // שינוי תפקיד למשתמש שכבר מאושר: קוראת לאותה admin_set_user_status עם p_status="approved" -
+  // הפונקציה לא בודקת סטטוס קודם, רק מציבה מחדש את אותו approved ומעדכנת role_id/default_area,
+  // כך שהמשתמש לא יורד לרגע מ-approved (ר' migration 003, admin_set_user_status).
+  const openRoleChange = (row: AdminProfileRow) => {
+    setPendingAction({ userId: row.id, status: "approved", kind: "changeRole" });
     setRoleChoice(row.role?.key ?? "");
     setAreaChoice(row.default_area ?? "");
     setActionError(null);
@@ -134,6 +146,11 @@ export function AdminUsers() {
               {r.status === "pending" ? "דחייה" : "השבתה"}
             </button>
           )}
+          {r.status === "approved" && (
+            <button onClick={() => openRoleChange(r)} className="link-action text-xs">
+              שינוי תפקיד
+            </button>
+          )}
           <button onClick={() => setPermissionsUser(r)} className="link-action text-xs">
             ניהול הרשאות
           </button>
@@ -156,9 +173,15 @@ export function AdminUsers() {
 
       <ConfirmDialog
         open={pendingAction !== null}
-        title={pendingAction?.status === "approved" ? "אישור משתמש" : "דחייה / השבתת משתמש"}
+        title={
+          pendingAction?.kind === "approve"
+            ? "אישור משתמש"
+            : pendingAction?.kind === "changeRole"
+              ? "שינוי תפקיד"
+              : "דחייה / השבתת משתמש"
+        }
         danger={pendingAction?.status === "disabled"}
-        confirmLabel={submitting ? "מעדכנת…" : "אישור"}
+        confirmLabel={submitting ? "מעדכנת…" : pendingAction?.kind === "changeRole" ? "שמירה" : "אישור"}
         onCancel={() => setPendingAction(null)}
         onConfirm={runStatusChange}
         description={

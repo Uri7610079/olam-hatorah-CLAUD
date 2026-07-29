@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { exportRowsToExcel, logReportExport } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -339,7 +341,8 @@ async function fetchGroups(orgId: string): Promise<GroupOption[]> {
 
 export function ReportsScreen() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
-  const [orgId, setOrgId] = useState("");
+  const [searchParams] = useSearchParams();
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
   const [groupId, setGroupId] = useState("");
   const [reportKey, setReportKey] = useState(REPORTS[0].key);
@@ -347,6 +350,12 @@ export function ReportsScreen() {
   const [running, setRunning] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const orgParam = searchParams.get("org");
+    if (orgParam) setOrgId(orgParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const groupsQuery = useQuery({ queryKey: ["reports-groups", orgId], queryFn: () => fetchGroups(orgId), enabled: !!orgId });
   const report = REPORTS.find((r) => r.key === reportKey)!;
@@ -417,7 +426,7 @@ export function ReportsScreen() {
         </div>
         <div>
           <label className="field-label">חודש</label>
-          <input type="date" value={month} onChange={(e) => { setMonth(e.target.value); setRows(null); }} className="input-field" />
+          <input type="month" value={month.slice(0, 7)} onChange={(e) => { setMonth(e.target.value + "-01"); setRows(null); }} className="input-field" />
         </div>
         {report.needsGroup && (
           <div>

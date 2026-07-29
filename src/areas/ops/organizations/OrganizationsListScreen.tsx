@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { Building2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Building2, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { useEscapeToClose } from "@/lib/useEscapeToClose";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -22,6 +23,7 @@ async function fetchOrganizations(): Promise<Organization[]> {
 }
 
 export function OrganizationsListScreen() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { hasPermission: canManage } = useHasPermission("organizations", "manage");
   const query = useQuery({ queryKey: ["organizations"], queryFn: fetchOrganizations });
@@ -59,6 +61,20 @@ export function OrganizationsListScreen() {
     queryClient.invalidateQueries({ queryKey: ["organizations"] });
   };
 
+  const handleExport = () => {
+    exportRowsToExcel(
+      filtered.map((o) => ({
+        "שם": o.legal_name,
+        "מספר עמותה": o.org_number ?? "",
+        "טלפון": o.contact_phone ?? "",
+        'דוא"ל': o.contact_email ?? "",
+        "כתובת": o.contact_address ?? "",
+      })),
+      "עמותות",
+      `organizations-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  };
+
   const columns: DataTableColumn<Organization>[] = [
     {
       key: "legal_name",
@@ -86,11 +102,23 @@ export function OrganizationsListScreen() {
         title="עמותות"
         description="ניהול עמותות, חשבונות ובעלי תפקידים."
         primaryAction={
-          canManage && (
-            <button onClick={() => setShowCreate(true)} className="btn-primary">
-              עמותה חדשה
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
+              <Download className="h-4 w-4" aria-hidden="true" />
+              ייצוא לאקסל
             </button>
-          )
+            <div className="flex flex-col items-start">
+              <button onClick={() => navigate("/ops/import-center")} className="btn-secondary">
+                יבוא עמותות/סניפים/קבוצות מאקסל
+              </button>
+              <span className="mt-0.5 text-xs text-slate-500">כולל גם סניפים וקבוצות</span>
+            </div>
+            {canManage && (
+              <button onClick={() => setShowCreate(true)} className="btn-primary">
+                עמותה חדשה
+              </button>
+            )}
+          </div>
         }
       />
       <SearchAndFilters searchValue={search} onSearchChange={setSearch} searchPlaceholder="חיפוש לפי שם או מספר עמותה…" />

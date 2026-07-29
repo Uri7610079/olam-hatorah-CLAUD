@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gauge } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -48,6 +49,30 @@ function countByBranch(rows: { branch_id: string }[] | null): Map<string, number
   return counts;
 }
 
+interface PriorMonthQuotas {
+  month: string;
+  values: Map<string, number>;
+}
+
+// מוצאת את החודש האחרון שבו הוגדרו מכסות לעמותה זו (לא בהכרח החודש הקלנדרי הקודם -
+// ייתכן חודש עם מכסות חסרות), ומחזירה את ערכי המכסה לפי סניף עבור אותו חודש בלבד.
+async function fetchPriorMonthQuotas(orgId: string, beforeMonth: string): Promise<PriorMonthQuotas | null> {
+  const { data, error } = await supabase
+    .from("monthly_quotas")
+    .select("branch_id, approved_quota, month")
+    .eq("organization_id", orgId)
+    .lt("month", beforeMonth)
+    .order("month", { ascending: false });
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+  const priorMonth = data[0].month as string;
+  const values = new Map<string, number>();
+  for (const row of data as { branch_id: string; approved_quota: number; month: string }[]) {
+    if (row.month === priorMonth) values.set(row.branch_id, row.approved_quota);
+  }
+  return { month: priorMonth, values };
+}
+
 async function fetchQuotaData(orgId: string, month: string, branches: BranchRow[]): Promise<QuotaRow[]> {
   const branchIds = branches.map((b) => b.id);
   // שאילתה אחת מרוכזת לכל הסניפים במקום שתי שאילתות ספירה לכל סניף בנפרד (N+1 שנתפס
@@ -76,11 +101,15 @@ export function QuotasScreen() {
   const { hasPermission: canManage } = useHasPermission("quotas", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
-  const [editingBranch, setEditingBranch] = useState<string | null>(null);
-  const [quotaInput, setQuotaInput] = useState("");
-  const [saving, setSaving] = useState(false);
+  // מפתח = branchId, ערך = תוכן שדה הקלט הנוכחי. נוכחות מפתח ב-map = הסניף במצב עריכה.
+  // מאפשר גם עריכה בודדת של סניף אחד וגם מילוי מרוכז ("העתקה מהחודש הקודם") של כמה
+  // סניפים בבת אחת, כשכל שורה עדיין נשמרת בנפרד דרך פעולת השמירה הקיימת - אין שמירה
+  // אוטומטית ואין שינוי בלוגיקת האישור.
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const branchesQuery = useQuery({ queryKey: ["quota-branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
@@ -90,32 +119,77 @@ export function QuotasScreen() {
     enabled: !!orgId && !!month && !!branchesQuery.data,
   });
 
+  // מנקה עריכות פתוחות (כולל כאלה שמולאו ע"י "העתקה מהחודש הקודם") בעת מעבר בין
+  // עמותה/חודש, כדי שלא יישארו ערכים שלא נשמרו "תקועים" משורה של הקשר אחר.
+  useEffect(() => {
+    setEdits({});
+    setError(null);
+  }, [orgId, month]);
+
   const startEdit = (row: QuotaRow) => {
-    setEditingBranch(row.branchId);
-    setQuotaInput(row.approvedQuota != null ? String(row.approvedQuota) : "");
+    setEdits((prev) => ({ ...prev, [row.branchId]: row.approvedQuota != null ? String(row.approvedQuota) : "" }));
     setError(null);
   };
 
-  const saveQuota = async () => {
-    if (!editingBranch) return;
-    const value = Number(quotaInput);
+  const cancelEdit = (branchId: string) => {
+    setEdits((prev) => {
+      const next = { ...prev };
+      delete next[branchId];
+      return next;
+    });
+  };
+
+  const updateEdit = (branchId: string, value: string) => {
+    setEdits((prev) => ({ ...prev, [branchId]: value }));
+  };
+
+  const saveQuota = async (branchId: string) => {
+    const value = Number(edits[branchId]);
     if (!Number.isFinite(value) || value < 0) {
       setError("יש להזין מספר תקין");
       return;
     }
-    setSaving(true);
+    setSaving(branchId);
     setError(null);
     const { error } = await supabase.from("monthly_quotas").upsert(
-      { organization_id: orgId, branch_id: editingBranch, month, approved_quota: value },
+      { organization_id: orgId, branch_id: branchId, month, approved_quota: value },
       { onConflict: "organization_id,branch_id,month" },
     );
-    setSaving(false);
+    setSaving(null);
     if (error) {
       setError(error.message);
       return;
     }
-    setEditingBranch(null);
+    cancelEdit(branchId);
     queryClient.invalidateQueries({ queryKey: ["quotas", orgId, month] });
+  };
+
+  // "העתקת מכסות מהחודש הקודם": ממלאת את שדה הקלט לכל סניף בערך מהחודש הקודם שנמצא
+  // בפועל (לא בהכרח month-1 קלנדרי), אך לא שומרת דבר - המשתמשת חייבת עדיין לבדוק כל
+  // שורה וללחוץ על פעולת השמירה הקיימת פר-סניף (או לבטל/לשנות ידנית לפני השמירה).
+  const copyFromLastMonth = async () => {
+    if (!orgId || !branchesQuery.data) return;
+    setCopying(true);
+    setError(null);
+    try {
+      const prior = await fetchPriorMonthQuotas(orgId, month);
+      if (!prior) {
+        setError("לא נמצאו מכסות מחודש קודם להעתקה");
+        return;
+      }
+      setEdits((prev) => {
+        const next = { ...prev };
+        for (const branch of branchesQuery.data ?? []) {
+          const priorValue = prior.values.get(branch.id);
+          if (priorValue != null) next[branch.id] = String(priorValue);
+        }
+        return next;
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה לא צפויה בהעתקת מכסות");
+    } finally {
+      setCopying(false);
+    }
   };
 
   const columns: DataTableColumn<QuotaRow>[] = [
@@ -126,19 +200,19 @@ export function QuotasScreen() {
       header: "מכסה מאושרת",
       className: "tabular",
       render: (r) =>
-        editingBranch === r.branchId ? (
+        r.branchId in edits ? (
           <div className="flex items-center gap-2">
             <input
               type="number"
-              value={quotaInput}
-              onChange={(e) => setQuotaInput(e.target.value)}
+              value={edits[r.branchId]}
+              onChange={(e) => updateEdit(r.branchId, e.target.value)}
               className="input-field w-24 tabular"
               autoFocus
             />
-            <button onClick={saveQuota} disabled={saving} className="link-action text-xs">
-              {saving ? "שומרת…" : "שמירה"}
+            <button onClick={() => saveQuota(r.branchId)} disabled={saving === r.branchId} className="link-action text-xs">
+              {saving === r.branchId ? "שומרת…" : "שמירה"}
             </button>
-            <button onClick={() => setEditingBranch(null)} className="text-xs text-slate-500 underline">
+            <button onClick={() => cancelEdit(r.branchId)} className="text-xs text-slate-500 underline">
               ביטול
             </button>
           </div>
@@ -194,6 +268,12 @@ export function QuotasScreen() {
           <input type="date" value={month} onChange={(e) => setMonth(e.target.value)} className="input-field" />
         </div>
       </div>
+
+      {orgId && canManage && (
+        <button onClick={copyFromLastMonth} disabled={copying || !branchesQuery.data} className="btn-secondary mb-4 text-sm">
+          {copying ? "מעתיקה…" : "העתקת מכסות מהחודש הקודם"}
+        </button>
+      )}
 
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
 

@@ -3,10 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
+import { StudyCodesImportPanel } from "./StudyCodesImportPanel";
 
 interface StudyCode {
   id: string;
@@ -30,6 +32,7 @@ export function StudyCodesScreen() {
   const query = useQuery({ queryKey: ["study-codes"], queryFn: fetchStudyCodes });
 
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +63,16 @@ export function StudyCodesScreen() {
     refresh();
   };
 
+  const exportCodes = () => {
+    const rows = (query.data ?? []).map((r) => ({
+      קוד: r.code,
+      תיאור: r.description,
+      קטגוריה: r.category ?? "",
+      סטטוס: r.is_active ? "פעיל" : "לא פעיל",
+    }));
+    exportRowsToExcel(rows, "קודי לימוד", `study-codes-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const columns: DataTableColumn<StudyCode>[] = [
     { key: "code", header: "קוד", className: "tabular", render: (r) => r.code },
     { key: "description", header: "תיאור", render: (r) => r.description },
@@ -87,13 +100,25 @@ export function StudyCodesScreen() {
         title="קודי לימוד"
         description="קטלוג קודי הלימוד שהתקבלו מהמשרד. קודים בעלי תיאור זהה (למשל 600/605) נשמרים בנפרד - אין לאחד אותם ללא אישור."
         primaryAction={
-          canManage && (
-            <button onClick={() => setShowAdd((v) => !v)} className="btn-primary">
-              {showAdd ? "סגירה" : "קוד חדש"}
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={exportCodes} className="btn-secondary">
+              ייצוא לאקסל
             </button>
-          )
+            {canManage && (
+              <button onClick={() => setShowImport((v) => !v)} className="btn-secondary">
+                {showImport ? "סגירת יבוא" : "יבוא מאקסל"}
+              </button>
+            )}
+            {canManage && (
+              <button onClick={() => setShowAdd((v) => !v)} className="btn-primary">
+                {showAdd ? "סגירה" : "קוד חדש"}
+              </button>
+            )}
+          </div>
         }
       />
+
+      {showImport && canManage && <StudyCodesImportPanel />}
 
       {showAdd && (
         <form onSubmit={submitCode} className="card mb-4 max-w-lg space-y-3 p-4">

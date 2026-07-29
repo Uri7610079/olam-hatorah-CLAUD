@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useEscapeToClose } from "@/lib/useEscapeToClose";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { ErrorState } from "@/components/ErrorState";
 import { createTask, fetchAssignableUsers, fetchCategories, fetchTeams } from "./api";
 import { guessDueDateFromText, splitFreeTextIntoTasks } from "./dateUtils";
@@ -51,8 +52,10 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
 
   const [rawText, setRawText] = useState("");
   const [drafts, setDrafts] = useState<DraftTask[]>([]);
-  const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
-  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
+  // ברירת מחדל = הבחירה האחרונה (נשמר ב-DB דרך useLastSelected), לא ריק - שינוי הבחירה
+  // כאן מעדכן את ה-hook, כדי שהיצירה המרובה הבאה תזכור אותה.
+  const [selectedOwners, setSelectedOwners] = useLastSelected<string[]>("last-task-owners", []);
+  const [selectedTeams, setSelectedTeams] = useLastSelected<string[]>("last-task-teams", []);
   const [submitting, setSubmitting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
@@ -67,8 +70,8 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
   const reset = () => {
     setRawText("");
     setDrafts([]);
-    setSelectedOwners([]);
-    setSelectedTeams([]);
+    // אחראים/צוותים לא מתאפסים כאן בכוונה - הם נשמרים דרך useLastSelected (הבחירה
+    // האחרונה), כדי שהיצירה המרובה הבאה תתחיל מאותה בחירה במקום מרשימה ריקה.
     setAiNote(null);
     setError(null);
   };
@@ -280,7 +283,7 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
                         type="checkbox"
                         checked={selectedOwners.includes(u.id)}
                         onChange={(e) =>
-                          setSelectedOwners((prev) => (e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)))
+                          setSelectedOwners(e.target.checked ? [...selectedOwners, u.id] : selectedOwners.filter((id) => id !== u.id))
                         }
                       />
                       {u.full_name}
@@ -297,7 +300,7 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
                         type="checkbox"
                         checked={selectedTeams.includes(t.id)}
                         onChange={(e) =>
-                          setSelectedTeams((prev) => (e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)))
+                          setSelectedTeams(e.target.checked ? [...selectedTeams, t.id] : selectedTeams.filter((id) => id !== t.id))
                         }
                       />
                       {t.label_he}

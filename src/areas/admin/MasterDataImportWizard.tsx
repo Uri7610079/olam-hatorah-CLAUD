@@ -6,6 +6,7 @@ import { useHasPermission } from "@/lib/permissions";
 import type { ClassifiedRow } from "@/lib/importParsing";
 import { analyzeFile, checkDuplicateFile, legacyXlsWarning, createImportBatch, fetchImportBatchRows, resolveImportRow, type StoredImportRow } from "@/lib/importBatches";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
@@ -47,6 +48,7 @@ export function MasterDataImportWizard() {
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
 
   const [reviewBatchId, setReviewBatchId] = useState<string | null>(null);
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
@@ -61,6 +63,7 @@ export function MasterDataImportWizard() {
     setLegacyWarning(false);
     setDuplicateId(null);
     setError(null);
+    setHeaderConfirm(null);
   };
 
   const startOver = () => {
@@ -81,13 +84,35 @@ export function MasterDataImportWizard() {
         return;
       }
       setLegacyWarning(legacyXlsWarning(selected));
-      const classified = await analyzeFile(selected);
-      setParsedRows(applyMasterDataGapChecks(classified));
+      const result = await analyzeFile(selected);
+      if (result.headerConfidence === "low") {
+        setHeaderConfirm({ file: selected, previewRows: result.previewRows, detectedIndex: result.headerRowIndex });
+        return;
+      }
+      setParsedRows(applyMasterDataGapChecks(result.rows));
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleHeaderConfirm = async (chosenIndex: number) => {
+    if (!headerConfirm) return;
+    setAnalyzing(true);
+    try {
+      const result = await analyzeFile(headerConfirm.file, chosenIndex);
+      setHeaderConfirm(null);
+      setParsedRows(applyMasterDataGapChecks(result.rows));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleHeaderCancel = () => {
+    resetImportForm();
   };
 
   const submitBatch = async () => {
@@ -201,29 +226,40 @@ export function MasterDataImportWizard() {
 
       {!reviewBatchId && !commitResult && (
         <div className="space-y-3">
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
-          {analyzing && <LoadingState rows={2} />}
-          {duplicateId && (
-            <div className="space-y-2">
-              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
-              <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
-                פתיחת האצווה הקיימת
-              </button>
-            </div>
-          )}
-          {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
-          {parsedRows && !duplicateId && (
+          {headerConfirm ? (
+            <HeaderRowConfirm
+              previewRows={headerConfirm.previewRows}
+              detectedIndex={headerConfirm.detectedIndex}
+              onConfirm={handleHeaderConfirm}
+              onCancel={handleHeaderCancel}
+            />
+          ) : (
             <>
-              <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
-                {(tab) => {
-                  const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
-                  return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
-                }}
-              </ImportPreviewTabs>
-              <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
-                <Upload className="h-4 w-4" aria-hidden="true" />
-                {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
-              </button>
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+              {analyzing && <LoadingState rows={2} />}
+              {duplicateId && (
+                <div className="space-y-2">
+                  <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                  <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
+                    פתיחת האצווה הקיימת
+                  </button>
+                </div>
+              )}
+              {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+              {parsedRows && !duplicateId && (
+                <>
+                  <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
+                    {(tab) => {
+                      const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
+                      return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
+                    }}
+                  </ImportPreviewTabs>
+                  <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>

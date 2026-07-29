@@ -3,11 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useHasPermission } from "@/lib/permissions";
 import { useEscapeToClose } from "@/lib/useEscapeToClose";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs, type TabDef } from "@/components/Tabs";
 import {
+  addReminder,
   addTaskOwner,
   addTaskTeam,
   createTask,
@@ -80,9 +82,14 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
   const [priority, setPriority] = useState<TaskPriority>("normal");
   const [categoryId, setCategoryId] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
-  const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
+  // ברירת מחדל = הבחירה האחרונה של המשתמש (נשמר ב-DB דרך useLastSelected), לא ריק -
+  // עדכון הבחירה בטופס היצירה מעדכן את ה-hook, כדי שהיצירה הבאה תזכור אותה.
+  const [selectedOwners, setSelectedOwners] = useLastSelected<string[]>("last-task-owners", []);
+  const [selectedTeams, setSelectedTeams] = useLastSelected<string[]>("last-task-teams", []);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  // תזכורת אופציונלית נוצרת יחד עם המשימה - נוחות בלבד, שקולה להוספת תזכורת בלשונית
+  // "תזכורות" אחרי השמירה. ריק = ללא תזכורת (ברירת המחדל, לא משנה התנהגות קיימת).
+  const [reminderDaysBefore, setReminderDaysBefore] = useState("");
 
   const categoriesQuery = useQuery({ queryKey: ["task-categories"], queryFn: fetchCategories, enabled: open });
   const teamsQuery = useQuery({ queryKey: ["teams"], queryFn: fetchTeams, enabled: open });
@@ -110,8 +117,9 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
     setPriority("normal");
     setCategoryId("");
     setDueDate("");
-    setSelectedOwners([]);
-    setSelectedTeams([]);
+    setReminderDaysBefore("");
+    // אחראים/צוותים לא מתאפסים כאן בכוונה - הם נשמרים דרך useLastSelected (הבחירה
+    // האחרונה), כדי שהיצירה הבאה תתחיל מאותה בחירה במקום מרשימה ריקה.
     setSelectedTemplateId("");
   };
 
@@ -165,6 +173,24 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
             onSaved();
             return;
           }
+        }
+      }
+      if (dueDate && reminderDaysBefore.trim() !== "") {
+        try {
+          await addReminder({
+            taskId: newTaskId,
+            createdBy: userId,
+            // ללא יעד ספציפי - כמו ברירת המחדל בלשונית "תזכורות" כשלא נבחר משתמש
+            // מסוים (userId: null = "כל האחראים").
+            userId: null,
+            remindAt: null,
+            daysBeforeDue: Number(reminderDaysBefore),
+          });
+        } catch (e: any) {
+          // המשימה עצמה כבר נוצרה בהצלחה - לא סוגרים את החלון כדי שהשגיאה תישאר גלויה.
+          setError(`המשימה נוצרה, אך הוספת התזכורת נכשלה: ${e.message ?? "שגיאה לא ידועה"}`);
+          onSaved();
+          return;
         }
       }
       onSaved();
@@ -310,8 +336,29 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
             </div>
             <div>
               <label className="field-label">תאריך יעד</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="input-field" />
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  if (!e.target.value) setReminderDaysBefore("");
+                }}
+                className="input-field"
+              />
             </div>
+            {dueDate && (
+              <div>
+                <label className="field-label">תזכורת (ימים לפני היעד, לא חובה)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={reminderDaysBefore}
+                  onChange={(e) => setReminderDaysBefore(e.target.value)}
+                  placeholder="— ללא תזכורת —"
+                  className="input-field"
+                />
+              </div>
+            )}
             <div>
               <label className="field-label">אחראים</label>
               <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
@@ -321,7 +368,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                       type="checkbox"
                       checked={selectedOwners.includes(u.id)}
                       onChange={(e) =>
-                        setSelectedOwners((prev) => (e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)))
+                        setSelectedOwners(e.target.checked ? [...selectedOwners, u.id] : selectedOwners.filter((id) => id !== u.id))
                       }
                     />
                     {u.full_name}
@@ -338,7 +385,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                       type="checkbox"
                       checked={selectedTeams.includes(t.id)}
                       onChange={(e) =>
-                        setSelectedTeams((prev) => (e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)))
+                        setSelectedTeams(e.target.checked ? [...selectedTeams, t.id] : selectedTeams.filter((id) => id !== t.id))
                       }
                     />
                     {t.label_he}

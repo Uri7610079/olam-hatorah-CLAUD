@@ -1,23 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitMerge, AlertTriangle, Sparkles } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
-import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
-
-interface OrgOption {
-  id: string;
-  legal_name: string;
-}
-
-interface BankAccountOption {
-  id: string;
-  bank_name: string | null;
-  account_number_masked: string | null;
-}
 
 type MatchType = "masav_batch" | "donation" | "commission" | "return" | "inter_account_transfer" | "other_expense" | "other_income";
 type MatchStatus = "suggested" | "approved" | "rejected";
@@ -95,22 +83,6 @@ const MATCH_STATUS_LABEL: Record<MatchStatus, string> = { suggested: "הצעה",
 const DIRECTION_LABEL: Record<"debit" | "credit", string> = { debit: "חובה", credit: "זכות" };
 const SEVERITY_LABEL: Record<"critical" | "warning", string> = { critical: "קריטי", warning: "אזהרה" };
 
-async function fetchOrgs(): Promise<OrgOption[]> {
-  const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
-  if (error) throw error;
-  return data ?? [];
-}
-
-async function fetchOrgBankAccounts(orgId: string): Promise<BankAccountOption[]> {
-  const { data, error } = await supabase
-    .from("organization_bank_accounts_view")
-    .select("id, bank_name, account_number_masked")
-    .eq("organization_id", orgId)
-    .eq("is_active", true);
-  if (error) throw error;
-  return data ?? [];
-}
-
 async function fetchTransactions(accountId: string): Promise<TransactionRow[]> {
   const { data, error } = await supabase
     .from("bank_transactions")
@@ -186,13 +158,11 @@ async function fetchInterAccountOptions(orgId: string, excludeTransactionId: str
   return data ?? [];
 }
 
-export function BankMatchingScreen() {
+// orgId/accountId מגיעים מהמסך המאחד (BankScreen.tsx).
+export function BankMatchingPanel({ orgId, accountId }: { orgId: string; accountId: string }) {
   const queryClient = useQueryClient();
   const { hasPermission: canMatch } = useHasPermission("bank_matching", "perform");
-  const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
-  const [accountId, setAccountId] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
@@ -206,7 +176,6 @@ export function BankMatchingScreen() {
   const [notes, setNotes] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const bankAccountsQuery = useQuery({ queryKey: ["matching-org-accounts", orgId], queryFn: () => fetchOrgBankAccounts(orgId), enabled: !!orgId });
   const transactionsQuery = useQuery({ queryKey: ["matching-transactions", accountId], queryFn: () => fetchTransactions(accountId), enabled: !!accountId });
   const exceptionsQuery = useQuery({ queryKey: ["reconciliation-exceptions", orgId], queryFn: () => fetchExceptions(orgId), enabled: !!orgId });
 
@@ -220,6 +189,37 @@ export function BankMatchingScreen() {
   });
 
   const selectedTransaction = transactionsQuery.data?.find((t) => t.id === selectedTransactionId) ?? null;
+
+  const remainderFor = (t: TransactionRow) => {
+    const approved = t.matches.filter((m) => m.status === "approved").reduce((s, m) => s + m.matched_amount, 0);
+    const suggested = t.matches.filter((m) => m.status === "suggested").reduce((s, m) => s + m.matched_amount, 0);
+    return t.amount - approved - suggested;
+  };
+
+  // מילוי אוטומטי של סכום ההתאמה - הסכום כבר מוצג פעמיים על המסך (יתרת התנועה, וסכום
+  // היעד שנבחר) כך שאין סיבה להקליד אותו שוב ידנית; עדיין ניתן לעריכה לפני יצירת ההתאמה.
+  useEffect(() => {
+    if (!selectedTransaction) return;
+    setMatchedAmount(String(Math.max(0, remainderFor(selectedTransaction))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTransactionId]);
+
+  useEffect(() => {
+    if (!targetId || !selectedTransaction) return;
+    const targetAmount =
+      matchType === "masav_batch"
+        ? masavBatchOptionsQuery.data?.find((b) => b.id === targetId)?.total_amount
+        : matchType === "donation"
+          ? donationOptionsQuery.data?.find((d) => d.id === targetId)?.amount
+          : matchType === "return"
+            ? returnOptionsQuery.data?.find((r) => r.id === targetId)?.amount
+            : matchType === "inter_account_transfer"
+              ? interAccountOptionsQuery.data?.find((t) => t.id === targetId)?.amount
+              : undefined;
+    if (targetAmount == null) return;
+    setMatchedAmount(String(Math.max(0, Math.min(targetAmount, remainderFor(selectedTransaction)))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetId]);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["matching-transactions", accountId] });
@@ -315,43 +315,9 @@ export function BankMatchingScreen() {
 
   return (
     <div>
-      <PageHeader
-        title="התאמות בנק"
-        description='כל תנועת בנק (או חלק ממנה) מקושרת ליעד עסקי מאושר - אצוות מס״ב, תרומה, החזרה, עמלה, הוצאה/הכנסה אחרת, או הצד השני של העברה בין חשבונות. תנועה יכולה להתאים לכמה יעדים (פיצול), ויעד יכול להיות מכוסה ע"י כמה תנועות.'
-      />
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-2xl mb-4">
-        <div>
-          <label className="field-label">עמותה</label>
-          <select
-            value={orgId}
-            onChange={(e) => {
-              setOrgId(e.target.value);
-              setAccountId("");
-              setSelectedTransactionId(null);
-            }}
-            className="input-field"
-          >
-            <option value="">— בחרי —</option>
-            {(orgsQuery.data ?? []).map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.legal_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="field-label">חשבון עמותה</label>
-          <select value={accountId} onChange={(e) => { setAccountId(e.target.value); setSelectedTransactionId(null); }} className="input-field" disabled={!orgId}>
-            <option value="">— בחרי —</option>
-            {(bankAccountsQuery.data ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.bank_name ?? "בנק"} · {a.account_number_masked}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <p className="mb-4 text-xs text-slate-500 max-w-2xl">
+        כל תנועת בנק (או חלק ממנה) מקושרת ליעד עסקי מאושר - אצוות מס״ב, תרומה, החזרה, עמלה, הוצאה/הכנסה אחרת, או הצד השני של העברה בין חשבונות. תנועה יכולה להתאים לכמה יעדים (פיצול), ויעד יכול להיות מכוסה ע"י כמה תנועות.
+      </p>
 
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
 

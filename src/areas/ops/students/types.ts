@@ -9,13 +9,25 @@ export interface Student {
   birth_date: string | null;
   phone_raw: string | null;
   phone_normalized: string | null;
-  address: string | null;
+  address_street: string | null;
+  address_house_number: string | null;
+  address_city: string | null;
   student_type: string | null;
   study_code: string | null;
   status: StudentStatus;
   exit_date: string | null;
   exit_reason: string | null;
   created_at: string;
+}
+
+// עיצוב כתובת קריאה משלושת השדות המפוצלים - פונקציה משותפת אחת כדי שההיגיון לא ייסטה
+// בין המקומות שמציגים כתובת (במקום שכל מסך יכתוב תבנית משלו). "רחוב"/"מספר בית"
+// מוצמדים ברווח, "עיר" מצטרפת בפסיק - אבל רק כשיש משהו לפניה, אחרת נשאר פסיק תלוי
+// בהתחלה (למשל כשיש רק עיר, בלי רחוב/מספר בית).
+export function formatStudentAddress(student: Pick<Student, "address_street" | "address_house_number" | "address_city">): string {
+  const streetPart = [student.address_street, student.address_house_number].filter(Boolean).join(" ");
+  const parts = [streetPart, student.address_city].filter(Boolean);
+  return parts.length ? parts.join(", ") : "—";
 }
 
 export const ID_TYPE_LABEL: Record<StudentIdType, string> = {

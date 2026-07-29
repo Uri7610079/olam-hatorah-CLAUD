@@ -37,9 +37,23 @@ export function legacyXlsWarning(file: File): boolean {
   return isLegacyXls(file);
 }
 
-export async function analyzeFile(file: File): Promise<ClassifiedRow[]> {
-  const parsed = await parseImportFile(file);
-  return classifyRows(parsed.rows);
+export interface AnalyzeFileResult {
+  rows: ClassifiedRow[];
+  headerRowIndex: number;
+  headerConfidence: "high" | "low";
+  previewRows: string[][];
+}
+
+// headerRowIndex: מועבר רק אחרי שהמשתמשת אישרה/בחרה שורת כותרות דרך HeaderRowConfirm
+// (headerConfidence="low" בקריאה הראשונה) - קריאה שנייה עם השורה שנבחרה, לא ניחוש חוזר.
+export async function analyzeFile(file: File, headerRowIndex?: number): Promise<AnalyzeFileResult> {
+  const parsed = await parseImportFile(file, headerRowIndex);
+  return {
+    rows: classifyRows(parsed.rows),
+    headerRowIndex: parsed.headerRowIndex,
+    headerConfidence: parsed.headerConfidence,
+    previewRows: parsed.previewRows,
+  };
 }
 
 // שלב 2: יצירת האצווה בפועל (upload + import_batches + import_rows) - זהה למרכז היבוא

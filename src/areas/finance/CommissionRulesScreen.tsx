@@ -2,11 +2,14 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Percent, FlaskConical } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
+import { CommissionRulesImportPanel } from "./CommissionRulesImportPanel";
 
 interface OrgOption {
   id: string;
@@ -123,8 +126,9 @@ export function CommissionRulesScreen() {
   const { hasPermission: canManage } = useHasPermission("commission_rules", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +182,24 @@ export function CommissionRulesScreen() {
   const toggleActive = async (rule: CommissionRule) => {
     const { error: err } = await supabase.from("commission_rules").update({ is_active: !rule.is_active }).eq("id", rule.id);
     if (!err) queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
+  };
+
+  const exportToExcel = () => {
+    const rows = (rulesQuery.data ?? []).map((r) => ({
+      קבוצה: r.group?.name ?? "",
+      "קוד לימוד": r.study_code ?? "",
+      "חריג לתלמיד": r.student ? `${r.student.full_name} (${r.student.external_id})` : "",
+      "סוג חישוב": TYPE_LABEL[r.calculation_type],
+      אחוז: r.percentage ?? "",
+      "סכום קבוע": r.fixed_amount ?? "",
+      "כלל עיגול": ROUNDING_LABEL[r.rounding_rule],
+      עדיפות: r.priority,
+      "תקף מתאריך": r.effective_from,
+      "תקף עד תאריך": r.effective_until ?? "",
+      סטטוס: r.is_active ? "פעיל" : "כבוי",
+      הערות: r.notes ?? "",
+    }));
+    exportRowsToExcel(rows, "כללי עמלה", `commission-rules-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const runSimulation = async () => {
@@ -247,16 +269,39 @@ export function CommissionRulesScreen() {
         title="כללי עמלה"
         description="כלל תואם לפי עמותה, קבוצה, קוד לימוד או חריג לתלמיד ספציפי, בטווח תאריכים. כשכמה כללים תואמים - מנצח העדיפות הגבוהה ביותר."
         primaryAction={
-          orgId &&
-          canManage && (
-            <div className="flex gap-2">
-              <button onClick={() => setShowSim((v) => !v)} className="btn-secondary flex items-center gap-2">
-                <FlaskConical className="h-4 w-4" aria-hidden="true" />
-                {showSim ? "סגירת סימולציה" : "סימולציה"}
+          orgId && (
+            <div className="flex flex-wrap gap-2">
+              {canManage && (
+                <button onClick={() => setShowSim((v) => !v)} className="btn-secondary flex items-center gap-2">
+                  <FlaskConical className="h-4 w-4" aria-hidden="true" />
+                  {showSim ? "סגירת סימולציה" : "סימולציה"}
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setShowImport((v) => !v);
+                    setShowAdd(false);
+                  }}
+                  className="btn-secondary"
+                >
+                  {showImport ? "סגירת יבוא" : "יבוא מאקסל"}
+                </button>
+              )}
+              <button onClick={exportToExcel} disabled={!(rulesQuery.data ?? []).length} className="btn-secondary">
+                ייצוא לאקסל
               </button>
-              <button onClick={() => setShowAdd((v) => !v)} className="btn-primary">
-                {showAdd ? "סגירה" : "כלל חדש"}
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setShowAdd((v) => !v);
+                    setShowImport(false);
+                  }}
+                  className="btn-primary"
+                >
+                  {showAdd ? "סגירה" : "כלל חדש"}
+                </button>
+              )}
             </div>
           )
         }
@@ -336,6 +381,12 @@ export function CommissionRulesScreen() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {showImport && orgId && (
+        <div className="mb-6">
+          <CommissionRulesImportPanel orgId={orgId} />
         </div>
       )}
 

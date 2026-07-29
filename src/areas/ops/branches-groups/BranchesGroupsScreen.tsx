@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Network, Users } from "lucide-react";
+import { Network, Users, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -78,6 +79,7 @@ const EMPTY_BRANCH_FORM = { talmud_branch_code: "", internal_name: "", address: 
 const EMPTY_GROUP_FORM = { name: "", group_leader_id: "", opened_at: "", default_distribution_method: "" };
 
 export function BranchesGroupsScreen() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { hasPermission: canManageBranches } = useHasPermission("branches", "manage");
@@ -235,6 +237,31 @@ export function BranchesGroupsScreen() {
     if (data) setGroupForm((f) => ({ ...f, group_leader_id: data.id }));
   };
 
+  const handleExportBranches = () => {
+    exportRowsToExcel(
+      (branchesQuery.data ?? []).map((r) => ({
+        "קוד סניף": r.talmud_branch_code,
+        "שם פנימי": r.internal_name,
+        "סטטוס": r.status === "active" ? "פעיל" : "סגור",
+      })),
+      "סניפים",
+      `branches-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  };
+
+  const handleExportGroups = () => {
+    exportRowsToExcel(
+      (groupsQuery.data ?? []).map((r) => ({
+        "שם קבוצה": r.name,
+        "ראש קבוצה": r.group_leader_name ?? "",
+        "שיטת חלוקה": r.default_distribution_method ? DISTRIBUTION_LABEL[r.default_distribution_method] : "",
+        "סטטוס": r.status === "active" ? "פעילה" : "סגורה",
+      })),
+      "קבוצות",
+      `groups-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  };
+
   const branchColumns: DataTableColumn<BranchRow>[] = [
     { key: "code", header: "קוד סניף", className: "tabular", render: (r) => r.talmud_branch_code },
     { key: "name", header: "שם פנימי", render: (r) => r.internal_name },
@@ -325,7 +352,18 @@ export function BranchesGroupsScreen() {
 
   return (
     <div>
-      <PageHeader title="סניפים וקבוצות" description="ניהול סניפים וקבוצות בתוך עמותה." />
+      <PageHeader
+        title="סניפים וקבוצות"
+        description="ניהול סניפים וקבוצות בתוך עמותה."
+        primaryAction={
+          <div className="flex flex-col items-start">
+            <button onClick={() => navigate("/ops/import-center")} className="btn-secondary">
+              יבוא מאקסל
+            </button>
+            <span className="mt-0.5 text-xs text-slate-500">יבוא עמותות/סניפים/קבוצות - כולל סניפים וקבוצות</span>
+          </div>
+        }
+      />
 
       <div className="mb-6 max-w-sm">
         <label className="field-label">עמותה</label>
@@ -346,11 +384,21 @@ export function BranchesGroupsScreen() {
           <div className="mb-6">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700">סניפים</h3>
-              {canManageBranches && (
-                <button onClick={() => setShowAddBranch((v) => !v)} className="btn-secondary text-xs">
-                  {showAddBranch ? "סגירה" : "סניף חדש"}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportBranches}
+                  disabled={!(branchesQuery.data && branchesQuery.data.length > 0)}
+                  className="btn-secondary flex items-center gap-1.5 text-xs"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  ייצוא לאקסל
                 </button>
-              )}
+                {canManageBranches && (
+                  <button onClick={() => setShowAddBranch((v) => !v)} className="btn-secondary text-xs">
+                    {showAddBranch ? "סגירה" : "סניף חדש"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {showAddBranch && (
@@ -420,11 +468,21 @@ export function BranchesGroupsScreen() {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-700">קבוצות — {selectedBranch?.internal_name}</h3>
-                {canManageGroups && (
-                  <button onClick={() => setShowAddGroup((v) => !v)} className="btn-secondary text-xs">
-                    {showAddGroup ? "סגירה" : "קבוצה חדשה"}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportGroups}
+                    disabled={!(groupsQuery.data && groupsQuery.data.length > 0)}
+                    className="btn-secondary flex items-center gap-1.5 text-xs"
+                  >
+                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                    ייצוא לאקסל
                   </button>
-                )}
+                  {canManageGroups && (
+                    <button onClick={() => setShowAddGroup((v) => !v)} className="btn-secondary text-xs">
+                      {showAddGroup ? "סגירה" : "קבוצה חדשה"}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {showAddGroup && (

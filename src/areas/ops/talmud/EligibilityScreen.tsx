@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
 import type { ClassifiedRow } from "@/lib/importParsing";
 import {
   analyzeFile,
@@ -17,8 +18,18 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
+import { Tabs, type TabDef } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
+
+type SectionTabKey = "month" | "missing" | "history";
+
+const SECTION_TABS: TabDef<SectionTabKey>[] = [
+  { key: "month", label: "זכאות לחודש" },
+  { key: "missing", label: "תלמידים פעילים שלא הופיעו בדוח" },
+  { key: "history", label: "היסטוריית יבוא זכאות" },
+];
 
 interface OrgOption {
   id: string;
@@ -128,7 +139,7 @@ export function EligibilityScreen() {
   const { hasPermission: canImport, isLoading: permissionLoading } = useHasPermission("talmud", "import");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ClassifiedRow[] | null>(null);
@@ -137,6 +148,9 @@ export function EligibilityScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
+
+  const [sectionTab, setSectionTab] = useState<SectionTabKey>("month");
 
   const [reviewBatchId, setReviewBatchId] = useState<string | null>(null);
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
@@ -168,6 +182,7 @@ export function EligibilityScreen() {
     setLegacyWarning(false);
     setDuplicateId(null);
     setError(null);
+    setHeaderConfirm(null);
   };
 
   const closeReview = () => {
@@ -187,12 +202,36 @@ export function EligibilityScreen() {
         return;
       }
       setLegacyWarning(legacyXlsWarning(selected));
-      setParsedRows(await analyzeFile(selected));
+      const result = await analyzeFile(selected);
+      if (result.headerConfidence === "low") {
+        setHeaderConfirm({ file: selected, previewRows: result.previewRows, detectedIndex: result.headerRowIndex });
+        return;
+      }
+      setParsedRows(result.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleHeaderConfirm = async (chosenIndex: number) => {
+    if (!headerConfirm) return;
+    setAnalyzing(true);
+    try {
+      const result = await analyzeFile(headerConfirm.file, chosenIndex);
+      setHeaderConfirm(null);
+      setParsedRows(result.rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleHeaderCancel = () => {
+    setHeaderConfirm(null);
+    resetForm();
   };
 
   const submitBatch = async () => {
@@ -327,19 +366,29 @@ export function EligibilityScreen() {
           )}
           {error && <ErrorState message={error} />}
 
-          {parsedRows && !duplicateId && (
-            <>
-              <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
-                {(tab) => {
-                  const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
-                  return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
-                }}
-              </ImportPreviewTabs>
-              <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
-                <Upload className="h-4 w-4" aria-hidden="true" />
-                {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
-              </button>
-            </>
+          {headerConfirm ? (
+            <HeaderRowConfirm
+              previewRows={headerConfirm.previewRows}
+              detectedIndex={headerConfirm.detectedIndex}
+              onConfirm={handleHeaderConfirm}
+              onCancel={handleHeaderCancel}
+            />
+          ) : (
+            parsedRows &&
+            !duplicateId && (
+              <>
+                <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
+                  {(tab) => {
+                    const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
+                    return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
+                  }}
+                </ImportPreviewTabs>
+                <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
+                </button>
+              </>
+            )
           )}
         </div>
       )}
@@ -395,58 +444,63 @@ export function EligibilityScreen() {
 
       {orgId && (
         <>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">זכאות לחודש</h2>
-          <DataTable
-            columns={[
-              { key: "id", header: "מזהה", className: "tabular", render: (r: EligibilityRow) => r.student?.external_id ?? "—" },
-              { key: "name", header: "שם", render: (r: EligibilityRow) => r.student?.full_name ?? "—" },
-              { key: "amount", header: "סכום ברוטו", className: "tabular", render: (r: EligibilityRow) => r.gross_amount.toLocaleString("he-IL") },
-              { key: "score", header: "ניקוד/סוג תשלום", render: (r: EligibilityRow) => r.score_or_payment_type ?? "—" },
-            ]}
-            rows={monthDataQuery.data ?? []}
-            rowKey={(r: EligibilityRow) => r.id}
-            loading={monthDataQuery.isLoading}
-            emptyTitle="אין זכאות לחודש זה עדיין"
-          />
+          <Tabs tabs={SECTION_TABS} activeTab={sectionTab} onChange={setSectionTab} ariaLabel="לשוניות זכאות" />
 
-          <h2 className="mb-2 mt-6 text-sm font-semibold text-slate-700">תלמידים פעילים שלא הופיעו בדוח</h2>
-          <DataTable
-            columns={[
-              { key: "id", header: "מזהה", className: "tabular", render: (r: MissingStudent) => r.external_id },
-              { key: "name", header: "שם", render: (r: MissingStudent) => r.full_name },
-            ]}
-            rows={missingQuery.data ?? []}
-            rowKey={(r: MissingStudent) => r.id}
-            loading={missingQuery.isLoading}
-            emptyTitle="אין חריגות - כל התלמידים הפעילים הופיעו בדוח"
-          />
+          {sectionTab === "month" && (
+            <DataTable
+              columns={[
+                { key: "id", header: "מזהה", className: "tabular", render: (r: EligibilityRow) => r.student?.external_id ?? "—" },
+                { key: "name", header: "שם", render: (r: EligibilityRow) => r.student?.full_name ?? "—" },
+                { key: "amount", header: "סכום ברוטו", className: "tabular", render: (r: EligibilityRow) => r.gross_amount.toLocaleString("he-IL") },
+                { key: "score", header: "ניקוד/סוג תשלום", render: (r: EligibilityRow) => r.score_or_payment_type ?? "—" },
+              ]}
+              rows={monthDataQuery.data ?? []}
+              rowKey={(r: EligibilityRow) => r.id}
+              loading={monthDataQuery.isLoading}
+              emptyTitle="אין זכאות לחודש זה עדיין"
+            />
+          )}
 
-          <h2 className="mb-2 mt-6 text-sm font-semibold text-slate-700">היסטוריית יבוא זכאות</h2>
-          <DataTable
-            columns={[
-              { key: "file", header: "קובץ", render: (b: EligibilityBatchSummary) => b.file_name },
-              { key: "month", header: "חודש", className: "tabular", render: (b: EligibilityBatchSummary) => b.period_month ?? "—" },
-              {
-                key: "counts",
-                header: "תקין / דורש החלטה / שגוי",
-                className: "tabular",
-                render: (b: EligibilityBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
-              },
-              {
-                key: "status",
-                header: "סטטוס",
-                render: (b: EligibilityBatchSummary) => (
-                  <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
-                ),
-              },
-              { key: "date", header: "תאריך", className: "tabular", render: (b: EligibilityBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
-            ]}
-            rows={batchesQuery.data ?? []}
-            rowKey={(b: EligibilityBatchSummary) => b.id}
-            loading={batchesQuery.isLoading}
-            emptyTitle="אין עדיין יבואים"
-            onRowClick={(b: EligibilityBatchSummary) => setReviewBatchId(b.id)}
-          />
+          {sectionTab === "missing" && (
+            <DataTable
+              columns={[
+                { key: "id", header: "מזהה", className: "tabular", render: (r: MissingStudent) => r.external_id },
+                { key: "name", header: "שם", render: (r: MissingStudent) => r.full_name },
+              ]}
+              rows={missingQuery.data ?? []}
+              rowKey={(r: MissingStudent) => r.id}
+              loading={missingQuery.isLoading}
+              emptyTitle="אין חריגות - כל התלמידים הפעילים הופיעו בדוח"
+            />
+          )}
+
+          {sectionTab === "history" && (
+            <DataTable
+              columns={[
+                { key: "file", header: "קובץ", render: (b: EligibilityBatchSummary) => b.file_name },
+                { key: "month", header: "חודש", className: "tabular", render: (b: EligibilityBatchSummary) => b.period_month ?? "—" },
+                {
+                  key: "counts",
+                  header: "תקין / דורש החלטה / שגוי",
+                  className: "tabular",
+                  render: (b: EligibilityBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+                },
+                {
+                  key: "status",
+                  header: "סטטוס",
+                  render: (b: EligibilityBatchSummary) => (
+                    <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
+                  ),
+                },
+                { key: "date", header: "תאריך", className: "tabular", render: (b: EligibilityBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+              ]}
+              rows={batchesQuery.data ?? []}
+              rowKey={(b: EligibilityBatchSummary) => b.id}
+              loading={batchesQuery.isLoading}
+              emptyTitle="אין עדיין יבואים"
+              onRowClick={(b: EligibilityBatchSummary) => setReviewBatchId(b.id)}
+            />
+          )}
         </>
       )}
     </div>

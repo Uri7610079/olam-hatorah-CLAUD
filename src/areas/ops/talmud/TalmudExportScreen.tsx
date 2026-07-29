@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { AlertTriangle, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 
@@ -87,6 +89,29 @@ async function fetchExportHistory(orgId: string) {
   return data ?? [];
 }
 
+// היסטוריית היצוא ממוינת לפי created_at (לא בהכרח לפי period_end) - כדי למצוא את
+// "החודש האחרון שיוצא בפועל" יש לחפש את ה-period_end הגבוה ביותר בין כל הרשומות.
+function mostRecentPeriodEnd(history: { period_end: string }[] | undefined | null): string | null {
+  if (!history || history.length === 0) return null;
+  let max = history[0].period_end;
+  for (const h of history) if (h.period_end > max) max = h.period_end;
+  return max;
+}
+
+function addDaysToDateString(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// ברירת המחדל לסוף תקופה: סוף אותו חודש קלנדרי שבו מתחילה התקופה - תואם למוסכמה
+// הקיימת של יצוא חודשי (ניתן לשנות ידנית בשדה אם התקופה בפועל שונה).
+function endOfMonthForDateString(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  return end.toISOString().slice(0, 10);
+}
+
 // בונה XLSX טיוטה - מבנה העמודות אינו התבנית המאושרת בפועל של תלמוד/מרכבה (זו טרם
 // התקבלה, ר' יומן ההחלטות באפיון). מסומן בבירור בממשק כטיוטה.
 function buildExportWorkbook(students: CandidateStudent[]): Blob {
@@ -107,7 +132,7 @@ export function TalmudExportScreen() {
   const { hasPermission: canExport, isLoading: permissionLoading } = useHasPermission("talmud", "export");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canExport });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [branchId, setBranchId] = useState("");
   const [groupId, setGroupId] = useState("");
   const [periodStart, setPeriodStart] = useState("");
@@ -118,6 +143,7 @@ export function TalmudExportScreen() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultFileName, setResultFileName] = useState<string | null>(null);
+  const [candidateSearch, setCandidateSearch] = useState("");
 
   const branchesQuery = useQuery({ queryKey: ["branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
   const groupsQuery = useQuery({ queryKey: ["groups", branchId], queryFn: () => fetchGroups(branchId), enabled: !!branchId });
@@ -128,10 +154,34 @@ export function TalmudExportScreen() {
   });
   const historyQuery = useQuery({ queryKey: ["talmud-export-history", orgId], queryFn: () => fetchExportHistory(orgId), enabled: !!orgId });
 
+  // מילוי ברירת מחדל של תקופת היצוא לפי היסטוריית היצוא: תחילת תקופה = היום שאחרי
+  // period_end האחרון שיוצא בפועל לעמותה זו, וסוף תקופה = סוף אותו חודש קלנדרי.
+  // רק "השלמה" - אם כבר יש ערך בשדה (מולא ידנית או ע"י ריצה קודמת של האפקט) לא דורסים
+  // אותו; השדות עצמם נשארים לגמרי ניתנים לעריכה ידנית בכל שלב.
+  useEffect(() => {
+    if (!orgId || !historyQuery.isSuccess) return;
+    if (periodStart || periodEnd) return;
+    const lastEnd = mostRecentPeriodEnd(historyQuery.data);
+    if (!lastEnd) return;
+    const start = addDaysToDateString(lastEnd, 1);
+    const end = endOfMonthForDateString(start);
+    setPeriodStart(start);
+    setPeriodEnd(end);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, historyQuery.isSuccess, historyQuery.data]);
+
   const selectable = useMemo(
     () => (candidatesQuery.data ?? []).filter((s) => override || (!s.already_exported && s.status === "ready_for_talmud")),
     [candidatesQuery.data, override],
   );
+
+  const filteredCandidates = useMemo(() => {
+    const term = candidateSearch.trim().toLowerCase();
+    if (!term) return candidatesQuery.data ?? [];
+    return (candidatesQuery.data ?? []).filter(
+      (s) => s.full_name.toLowerCase().includes(term) || s.external_id.toLowerCase().includes(term),
+    );
+  }, [candidatesQuery.data, candidateSearch]);
 
   const toggleAll = () => {
     setSelected(selected.size === selectable.length ? new Set() : new Set(selectable.map((s) => s.id)));
@@ -230,6 +280,8 @@ export function TalmudExportScreen() {
                 setBranchId("");
                 setGroupId("");
                 setSelected(new Set());
+                setPeriodStart("");
+                setPeriodEnd("");
               }}
               className="input-field"
             >
@@ -294,7 +346,8 @@ export function TalmudExportScreen() {
             <button onClick={toggleAll} className="link-action mb-2 text-xs">
               {selected.size === selectable.length && selectable.length > 0 ? "בטל בחירת הכול" : "בחר הכול"}
             </button>
-            <DataTable columns={columns} rows={candidatesQuery.data ?? []} rowKey={(s) => s.id} loading={candidatesQuery.isLoading} emptyTitle="אין תלמידים מתאימים" />
+            <SearchAndFilters searchValue={candidateSearch} onSearchChange={setCandidateSearch} searchPlaceholder="חיפוש לפי שם או מזהה…" />
+            <DataTable columns={columns} rows={filteredCandidates} rowKey={(s) => s.id} loading={candidatesQuery.isLoading} emptyTitle="אין תלמידים מתאימים" />
           </div>
         )}
 

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -71,15 +72,15 @@ export function GroupBalancesScreen() {
   const { hasPermission: canCorrect } = useHasPermission("ledger", "correct");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
+  const [selectedGroupId, setSelectedGroupId] = useLastSelected<string>("last-group", "");
   const [showCorrection, setShowCorrection] = useState(false);
   const [correction, setCorrection] = useState(EMPTY_CORRECTION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const balancesQuery = useQuery({ queryKey: ["group-balances", orgId], queryFn: () => fetchGroupBalances(orgId), enabled: !!orgId });
-  const entriesQuery = useQuery({ queryKey: ["group-ledger-entries", selectedGroupId], queryFn: () => fetchLedgerEntries(selectedGroupId!), enabled: !!selectedGroupId });
+  const entriesQuery = useQuery({ queryKey: ["group-ledger-entries", selectedGroupId], queryFn: () => fetchLedgerEntries(selectedGroupId), enabled: !!selectedGroupId });
 
   const selectedGroup = balancesQuery.data?.find((g) => g.group_id === selectedGroupId) ?? null;
   const totalLiabilities = (balancesQuery.data ?? []).reduce((sum, g) => sum + g.balance, 0);
@@ -152,7 +153,7 @@ export function GroupBalancesScreen() {
           value={orgId}
           onChange={(e) => {
             setOrgId(e.target.value);
-            setSelectedGroupId(null);
+            setSelectedGroupId("");
           }}
           className="input-field"
         >

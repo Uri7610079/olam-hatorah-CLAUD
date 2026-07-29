@@ -1,13 +1,17 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HeartHandshake } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SensitiveValue } from "@/components/SensitiveValue";
 import { ErrorState } from "@/components/ErrorState";
+import { DonationsImportPanel } from "./DonationsImportPanel";
 
 interface OrgOption {
   id: string;
@@ -84,10 +88,12 @@ export function DonationsScreen() {
   const { hasPermission: canApprove } = useHasPermission("donations", "approve");
   const { hasPermission: canReveal } = useHasPermission("bank_accounts", "view_sensitive");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
+  const [searchParams] = useSearchParams();
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [unassignedOnly, setUnassignedOnly] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -100,6 +106,12 @@ export function DonationsScreen() {
   const [assignReason, setAssignReason] = useState("");
   const [rowError, setRowError] = useState<string | null>(null);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    const orgParam = searchParams.get("org");
+    if (orgParam) setOrgId(orgParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const groupsQuery = useQuery({ queryKey: ["donations-org-groups", orgId], queryFn: () => fetchOrgGroups(orgId), enabled: !!orgId });
   const donationsQuery = useQuery({
@@ -200,6 +212,20 @@ export function DonationsScreen() {
   const openDocument = async (path: string) => {
     const { data, error: err } = await supabase.storage.from("donation-documents").createSignedUrl(path, 60);
     if (!err && data) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const exportToExcel = () => {
+    const rows = (donationsQuery.data ?? []).map((r) => ({
+      "תאריך תרומה": r.donation_date,
+      סכום: r.amount,
+      "קבוצה": r.group?.name ?? "ללא (ברמת עמותה)",
+      "מקור (ממוסך)": r.donor_reference_masked ?? "",
+      אסמכתה: r.reference ?? "",
+      סטטוס: STATUS_LABEL[r.status],
+      "סיבת דחייה": r.rejection_reason ?? "",
+      הערות: r.notes ?? "",
+    }));
+    exportRowsToExcel(rows, "תרומות", `donations-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const columns: DataTableColumn<DonationRow>[] = [
@@ -328,11 +354,34 @@ export function DonationsScreen() {
         title="תרומות"
         description="רק תרומה מאושרת ומשויכת לקבוצה יוצרת זכות בספר התנועות. שינוי שיוך לאחר אישור מבטל את התנועה הקודמת ויוצר חדשה - לא דורס."
         primaryAction={
-          orgId &&
-          canManage && (
-            <button onClick={() => setShowAdd((v) => !v)} className="btn-primary">
-              {showAdd ? "סגירה" : "תרומה חדשה"}
-            </button>
+          orgId && (
+            <div className="flex gap-2">
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setShowImport((v) => !v);
+                    setShowAdd(false);
+                  }}
+                  className="btn-secondary"
+                >
+                  {showImport ? "סגירת יבוא" : "יבוא מאקסל"}
+                </button>
+              )}
+              <button onClick={exportToExcel} disabled={!(donationsQuery.data ?? []).length} className="btn-secondary">
+                ייצוא לאקסל
+              </button>
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setShowAdd((v) => !v);
+                    setShowImport(false);
+                  }}
+                  className="btn-primary"
+                >
+                  {showAdd ? "סגירה" : "תרומה חדשה"}
+                </button>
+              )}
+            </div>
           )
         }
       />
@@ -401,6 +450,12 @@ export function DonationsScreen() {
             {submitting ? "שומרת…" : "שמירת תרומה"}
           </button>
         </form>
+      )}
+
+      {showImport && orgId && (
+        <div className="mb-6">
+          <DonationsImportPanel orgId={orgId} />
+        </div>
       )}
 
       {rowError && <div className="mb-4"><ErrorState message={rowError} /></div>}

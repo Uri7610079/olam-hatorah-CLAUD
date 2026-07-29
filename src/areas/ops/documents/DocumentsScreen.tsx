@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Mail, AlertTriangle } from "lucide-react";
+import { FileText, Mail, AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
+import { exportRowsToExcel, logReportExport } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
+import { DocumentsImportPanel } from "./DocumentsImportPanel";
 
 interface OrgOption {
   id: string;
@@ -108,11 +111,12 @@ export function DocumentsScreen() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
   const [tab, setTab] = useState<"documents" | "letters">("documents");
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [error, setError] = useState<string | null>(null);
 
   // מסמכים
   const [showDocForm, setShowDocForm] = useState(false);
+  const [showDocImport, setShowDocImport] = useState(false);
   const [docFile, setDocFile] = useState<File | null>(null);
   const [docForm, setDocForm] = useState({ document_type: "", title: "", issued_date: "", expiry_date: "", external_link: "", is_sensitive: false });
   const [savingDoc, setSavingDoc] = useState(false);
@@ -183,6 +187,26 @@ export function DocumentsScreen() {
   const openDocument = async (path: string) => {
     const { data, error: err } = await supabase.storage.from("organization-documents").createSignedUrl(path, 60);
     if (!err && data) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  // ייצוא מטא-דאטה בלבד (כותרת/סוג/תאריכים/קישור) - לעולם לא תוכן הקובץ עצמו, גם אם
+  // file_path קיים (מסמכים אישיים לא נשלחים כקובץ בתוך גיליון האקסל).
+  const exportDocuments = async () => {
+    const rows = documentsQuery.data ?? [];
+    exportRowsToExcel(
+      rows.map((d) => ({
+        "סוג מסמך": d.document_type,
+        כותרת: d.title,
+        "תאריך הנפקה": d.issued_date ?? "",
+        "תאריך תפוגה": d.expiry_date ?? "",
+        "קישור חיצוני": d.external_link ?? "",
+        רגיש: d.is_sensitive ? "כן" : "לא",
+        סטטוס: d.status === "active" ? "פעיל" : "נגנז",
+      })),
+      "מסמכים",
+      "מסמכים.xlsx",
+    );
+    await logReportExport("documents", { organization_id: orgId }, rows.length);
   };
 
   const submitTemplate = async (e: FormEvent) => {
@@ -362,13 +386,25 @@ export function DocumentsScreen() {
 
       {tab === "documents" && orgId && (
         <>
-          {canManageDocs && (
-            <div className="mb-4">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {canManageDocs && (
               <button onClick={() => setShowDocForm((v) => !v)} className="btn-primary">
                 {showDocForm ? "סגירה" : "מסמך חדש"}
               </button>
-            </div>
-          )}
+            )}
+            {canManageDocs && (
+              <button onClick={() => setShowDocImport((v) => !v)} className="btn-secondary flex items-center gap-2 text-xs">
+                <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
+                {showDocImport ? "סגירת יבוא" : "יבוא מסמכים מאקסל"}
+              </button>
+            )}
+            <button onClick={exportDocuments} disabled={!documentsQuery.data?.length} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50">
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              ייצוא לאקסל
+            </button>
+          </div>
+
+          {showDocImport && <DocumentsImportPanel orgId={orgId} />}
 
           {showDocForm && (
             <form onSubmit={submitDocument} className="card mb-6 max-w-2xl space-y-3 p-4">

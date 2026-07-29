@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Upload } from "lucide-react";
+import { ClipboardList, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
 import type { ClassifiedRow } from "@/lib/importParsing";
 import { analyzeFile, checkDuplicateFile, legacyXlsWarning, createImportBatch, fetchImportBatchRows, resolveImportRow, type StoredImportRow } from "@/lib/importBatches";
+import { exportRowsToExcel, logReportExport } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
+import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { AuditsContainerImportPanel } from "./AuditsContainerImportPanel";
 
 interface OrgOption {
   id: string;
@@ -88,8 +92,9 @@ export function AuditsScreen() {
   const { hasPermission: canManage } = useHasPermission("audits", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [showCreate, setShowCreate] = useState(false);
+  const [showContainerImport, setShowContainerImport] = useState(false);
   const [branchId, setBranchId] = useState("");
   const [auditDate, setAuditDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [creating, setCreating] = useState(false);
@@ -103,6 +108,7 @@ export function AuditsScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
   const [reviewBatchId, setReviewBatchId] = useState<string | null>(null);
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -134,12 +140,27 @@ export function AuditsScreen() {
     setSelectedAuditId(data.id);
   };
 
+  const exportAudits = async () => {
+    const rows = auditsQuery.data ?? [];
+    exportRowsToExcel(
+      rows.map((a) => ({
+        תאריך: a.audit_date,
+        סניף: a.branch?.internal_name ?? "כל הסניפים",
+        סטטוס: AUDIT_STATUS_LABEL[a.status],
+      })),
+      "ביקורות",
+      "ביקורות.xlsx",
+    );
+    await logReportExport("audits", { organization_id: orgId }, rows.length);
+  };
+
   const resetImportForm = () => {
     setFile(null);
     setParsedRows(null);
     setLegacyWarning(false);
     setDuplicateId(null);
     setError(null);
+    setHeaderConfirm(null);
   };
 
   const handleFileChange = async (selected: File | null) => {
@@ -154,12 +175,35 @@ export function AuditsScreen() {
         return;
       }
       setLegacyWarning(legacyXlsWarning(selected));
-      setParsedRows(await analyzeFile(selected));
+      const result = await analyzeFile(selected);
+      if (result.headerConfidence === "low") {
+        setHeaderConfirm({ file: selected, previewRows: result.previewRows, detectedIndex: result.headerRowIndex });
+        return;
+      }
+      setParsedRows(result.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleHeaderConfirm = async (chosenIndex: number) => {
+    if (!headerConfirm) return;
+    setAnalyzing(true);
+    try {
+      const result = await analyzeFile(headerConfirm.file, chosenIndex);
+      setHeaderConfirm(null);
+      setParsedRows(result.rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleHeaderCancel = () => {
+    resetImportForm();
   };
 
   const submitBatch = async () => {
@@ -257,11 +301,24 @@ export function AuditsScreen() {
         title="ביקורות משרד החינוך"
         description="אירוע ביקורת לפי עמותה/סניף/תאריך + רשימת חסרים מיובאת. התאמה לתלמיד לפי מזהה; לא מותאם נשאר להחלטה. חוסר חוזר (אותו תלמיד הופיע כחסר גם בביקורת קודמת) מסומן ומועלה בעדיפות."
         primaryAction={
-          orgId &&
-          canManage && (
-            <button onClick={() => setShowCreate((v) => !v)} className="btn-primary">
-              {showCreate ? "סגירה" : "אירוע ביקורת חדש"}
-            </button>
+          orgId && (
+            <div className="flex flex-wrap items-center gap-2">
+              {canManage && (
+                <button onClick={() => setShowCreate((v) => !v)} className="btn-primary">
+                  {showCreate ? "סגירה" : "אירוע ביקורת חדש"}
+                </button>
+              )}
+              {canManage && (
+                <button onClick={() => setShowContainerImport((v) => !v)} className="btn-secondary flex items-center gap-2 text-xs">
+                  <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
+                  {showContainerImport ? "סגירת יבוא אירועים" : "יבוא אירועי ביקורת מאקסל"}
+                </button>
+              )}
+              <button onClick={exportAudits} disabled={!auditsQuery.data?.length} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50">
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                ייצוא לאקסל
+              </button>
+            </div>
           )
         }
       />
@@ -311,6 +368,8 @@ export function AuditsScreen() {
         </div>
       )}
 
+      {showContainerImport && orgId && <AuditsContainerImportPanel />}
+
       {orgId && (
         <DataTable
           columns={[
@@ -346,31 +405,42 @@ export function AuditsScreen() {
 
           {showImport && !reviewBatchId && (
             <div className="space-y-3 border-t border-slate-200 pt-4">
-              <p className="text-xs text-slate-500">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
-              {analyzing && <LoadingState rows={2} />}
-              {duplicateId && (
-                <div className="space-y-2">
-                  <ErrorState message="הקובץ הזה כבר יובא בעבר." />
-                  <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
-                    פתיחת האצווה הקיימת
-                  </button>
-                </div>
-              )}
-              {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
-              {error && <ErrorState message={error} />}
-              {parsedRows && !duplicateId && (
+              {headerConfirm ? (
+                <HeaderRowConfirm
+                  previewRows={headerConfirm.previewRows}
+                  detectedIndex={headerConfirm.detectedIndex}
+                  onConfirm={handleHeaderConfirm}
+                  onCancel={handleHeaderCancel}
+                />
+              ) : (
                 <>
-                  <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
-                    {(tab) => {
-                      const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
-                      return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
-                    }}
-                  </ImportPreviewTabs>
-                  <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
-                    <Upload className="h-4 w-4" aria-hidden="true" />
-                    {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
-                  </button>
+                  <p className="text-xs text-slate-500">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
+                  <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+                  {analyzing && <LoadingState rows={2} />}
+                  {duplicateId && (
+                    <div className="space-y-2">
+                      <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                      <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
+                        פתיחת האצווה הקיימת
+                      </button>
+                    </div>
+                  )}
+                  {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+                  {error && <ErrorState message={error} />}
+                  {parsedRows && !duplicateId && (
+                    <>
+                      <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
+                        {(tab) => {
+                          const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
+                          return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
+                        }}
+                      </ImportPreviewTabs>
+                      <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
+                        <Upload className="h-4 w-4" aria-hidden="true" />
+                        {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </div>

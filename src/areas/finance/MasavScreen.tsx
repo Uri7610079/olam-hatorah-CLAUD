@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { Landmark, AlertTriangle, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -163,9 +165,10 @@ export function MasavScreen() {
   const { hasPermission: canApprove } = useHasPermission("masav", "approve");
   const { hasPermission: canReveal } = useHasPermission("bank_accounts", "view_sensitive");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
+  const [searchParams] = useSearchParams();
 
-  const [orgId, setOrgId] = useState("");
-  const [bankAccountId, setBankAccountId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
+  const [bankAccountId, setBankAccountId] = useLastSelected<string>("last-bank-account", "");
   const [periodMonth, setPeriodMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +177,12 @@ export function MasavScreen() {
   const [confirmTransmit, setConfirmTransmit] = useState(false);
   const [reasonAction, setReasonAction] = useState<"cancel" | "correction" | null>(null);
   const [reasonText, setReasonText] = useState("");
+
+  useEffect(() => {
+    const orgParam = searchParams.get("org");
+    if (orgParam) setOrgId(orgParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const bankAccountsQuery = useQuery({ queryKey: ["masav-org-accounts", orgId], queryFn: () => fetchOrgBankAccounts(orgId), enabled: !!orgId });
   const batchesQuery = useQuery({ queryKey: ["masav-batches", orgId], queryFn: () => fetchBatches(orgId), enabled: !!orgId });

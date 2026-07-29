@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { History } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -32,6 +33,17 @@ async function fetchAuditEvents(): Promise<AuditEventRow[]> {
 export function AdminAuditLog() {
   const { hasPermission, isLoading: permissionLoading } = useHasPermission("audit", "view");
   const query = useQuery({ queryKey: ["audit-events"], queryFn: fetchAuditEvents, enabled: hasPermission });
+  const [resourceFilter, setResourceFilter] = useState("");
+
+  const resourceOptions = useMemo(
+    () => Array.from(new Set((query.data ?? []).map((r) => r.resource))).sort(),
+    [query.data],
+  );
+
+  const filteredRows = useMemo(() => {
+    if (!resourceFilter) return query.data ?? [];
+    return (query.data ?? []).filter((r) => r.resource === resourceFilter);
+  }, [query.data, resourceFilter]);
 
   if (permissionLoading) return <LoadingState rows={4} />;
 
@@ -63,9 +75,20 @@ export function AdminAuditLog() {
   return (
     <div>
       <PageHeader title="יומן פעילות" description={`${AUDIT_EVENTS_LIMIT} האירועים האחרונים בלבד.`} />
+      <div className="mb-4 max-w-xs">
+        <label className="field-label">משאב</label>
+        <select value={resourceFilter} onChange={(e) => setResourceFilter(e.target.value)} className="input-field">
+          <option value="">— הכול —</option>
+          {resourceOptions.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      </div>
       <DataTable
         columns={columns}
-        rows={query.data ?? []}
+        rows={filteredRows}
         rowKey={(r) => r.id}
         loading={query.isLoading}
         emptyTitle="אין רשומות ביומן"

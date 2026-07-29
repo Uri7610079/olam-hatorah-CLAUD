@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Phone, Upload, Sparkles } from "lucide-react";
+import { Phone, Upload, Sparkles, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
-import { parseImportFile, hashFile, isLegacyXls } from "@/lib/importParsing";
+import { useLastSelected } from "@/lib/useLastSelected";
+import { parseImportFile, hashFile, isLegacyXls, type ParsedFile } from "@/lib/importParsing";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 
 interface OrgOption {
   id: string;
@@ -61,8 +64,7 @@ function normalizePhone(raw: string): string {
   return raw.replace(/\D/g, "");
 }
 
-async function analyzePhoneFile(file: File): Promise<LocalRow[]> {
-  const parsed = await parseImportFile(file);
+function buildLocalRows(parsed: ParsedFile): LocalRow[] {
   const phoneKey = parsed.headers.find((h) => h.includes("טלפון")) ?? parsed.headers[0];
   const seen = new Set<string>();
   return parsed.rows.map((raw, index) => {
@@ -120,13 +122,14 @@ export function PhoneListsScreen() {
   const { hasPermission: canPerform } = useHasPermission("phone_lists", "perform");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [showImport, setShowImport] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [localRows, setLocalRows] = useState<LocalRow[] | null>(null);
   const [previewTab, setPreviewTab] = useState<"pending" | "duplicate" | "invalid">("pending");
   const [legacyWarning, setLegacyWarning] = useState(false);
   const [duplicateFileId, setDuplicateFileId] = useState<string | null>(null);
+  const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +149,7 @@ export function PhoneListsScreen() {
     setLocalRows(null);
     setLegacyWarning(false);
     setDuplicateFileId(null);
+    setHeaderConfirm(null);
     setError(null);
   };
 
@@ -162,12 +166,36 @@ export function PhoneListsScreen() {
         return;
       }
       setLegacyWarning(isLegacyXls(selected));
-      setLocalRows(await analyzePhoneFile(selected));
+      const parsed = await parseImportFile(selected);
+      if (parsed.headerConfidence === "low") {
+        setHeaderConfirm({ file: selected, previewRows: parsed.previewRows, detectedIndex: parsed.headerRowIndex });
+        return;
+      }
+      setLocalRows(buildLocalRows(parsed));
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleHeaderConfirm = async (chosenIndex: number) => {
+    if (!headerConfirm) return;
+    setAnalyzing(true);
+    try {
+      const parsed = await parseImportFile(headerConfirm.file, chosenIndex);
+      setLocalRows(buildLocalRows(parsed));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
+    } finally {
+      setHeaderConfirm(null);
+      setAnalyzing(false);
+    }
+  };
+
+  const handleHeaderCancel = () => {
+    setHeaderConfirm(null);
+    resetForm();
   };
 
   const submitImport = async () => {
@@ -235,6 +263,20 @@ export function PhoneListsScreen() {
   const localDuplicate = (localRows ?? []).filter((r) => r.status === "duplicate");
   const localInvalid = (localRows ?? []).filter((r) => r.status === "invalid");
 
+  const handleExportEntries = () => {
+    if (!selectedImport) return;
+    exportRowsToExcel(
+      (entriesQuery.data ?? []).map((r) => ({
+        "טלפון גולמי": r.raw_phone ?? "",
+        "מנורמל": r.normalized_phone ?? "",
+        "סטטוס": ENTRY_STATUS_LABEL[r.status],
+        "תלמיד תואם": r.matched_student ? `${r.matched_student.full_name} (${r.matched_student.external_id})` : "",
+      })),
+      "רשימת טלפונים",
+      `phone-list-${selectedImport.file_name.replace(/\.[^.]+$/, "")}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  };
+
   const localCols: DataTableColumn<LocalRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
     { key: "raw", header: "טלפון גולמי", render: (r) => r.rawPhone || "—" },
@@ -278,41 +320,52 @@ export function PhoneListsScreen() {
 
       {showImport && orgId && (
         <div className="card mb-6 max-w-2xl space-y-4 p-5">
-          <p className="text-xs text-slate-500">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
-          {analyzing && <LoadingState rows={2} />}
-          {duplicateFileId && (
-            <div className="space-y-2">
-              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
-              <button onClick={() => setSelectedImportId(duplicateFileId)} className="link-action text-xs">
-                פתיחת הייבוא הקיים
-              </button>
-            </div>
-          )}
-          {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
-          {error && <ErrorState message={error} />}
-          {localRows && !duplicateFileId && (
+          {headerConfirm ? (
+            <HeaderRowConfirm
+              previewRows={headerConfirm.previewRows}
+              detectedIndex={headerConfirm.detectedIndex}
+              onConfirm={handleHeaderConfirm}
+              onCancel={handleHeaderCancel}
+            />
+          ) : (
             <>
-              <Tabs
-                tabs={[
-                  { key: "pending", label: "ממתין", badge: localPending.length },
-                  { key: "duplicate", label: "כפול", badge: localDuplicate.length },
-                  { key: "invalid", label: "לא תקין", badge: localInvalid.length },
-                ]}
-                activeTab={previewTab}
-                onChange={setPreviewTab}
-                ariaLabel="תצוגה מקדימה"
-              />
-              <DataTable
-                columns={localCols}
-                rows={previewTab === "pending" ? localPending : previewTab === "duplicate" ? localDuplicate : localInvalid}
-                rowKey={(r) => String(r.rowNumber)}
-                emptyTitle="אין שורות"
-              />
-              <button onClick={submitImport} disabled={uploading || localPending.length === 0} className="btn-primary flex items-center gap-2">
-                <Upload className="h-4 w-4" aria-hidden="true" />
-                {uploading ? "מעלה…" : "יצירת ייבוא"}
-              </button>
+              <p className="text-xs text-slate-500">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+              {analyzing && <LoadingState rows={2} />}
+              {duplicateFileId && (
+                <div className="space-y-2">
+                  <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                  <button onClick={() => setSelectedImportId(duplicateFileId)} className="link-action text-xs">
+                    פתיחת הייבוא הקיים
+                  </button>
+                </div>
+              )}
+              {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+              {error && <ErrorState message={error} />}
+              {localRows && !duplicateFileId && (
+                <>
+                  <Tabs
+                    tabs={[
+                      { key: "pending", label: "ממתין", badge: localPending.length },
+                      { key: "duplicate", label: "כפול", badge: localDuplicate.length },
+                      { key: "invalid", label: "לא תקין", badge: localInvalid.length },
+                    ]}
+                    activeTab={previewTab}
+                    onChange={setPreviewTab}
+                    ariaLabel="תצוגה מקדימה"
+                  />
+                  <DataTable
+                    columns={localCols}
+                    rows={previewTab === "pending" ? localPending : previewTab === "duplicate" ? localDuplicate : localInvalid}
+                    rowKey={(r) => String(r.rowNumber)}
+                    emptyTitle="אין שורות"
+                  />
+                  <button onClick={submitImport} disabled={uploading || localPending.length === 0} className="btn-primary flex items-center gap-2">
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    {uploading ? "מעלה…" : "יצירת ייבוא"}
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
@@ -345,6 +398,14 @@ export function PhoneListsScreen() {
             <h2 className="text-sm font-semibold text-slate-700">{selectedImport.file_name}</h2>
             <div className="flex items-center gap-2">
               <StatusBadge severity={selectedImport.status === "committed" ? "ok" : "medium"} label={IMPORT_STATUS_LABEL[selectedImport.status]} />
+              <button
+                onClick={handleExportEntries}
+                disabled={!(entriesQuery.data && entriesQuery.data.length > 0)}
+                className="btn-secondary flex items-center gap-2 text-xs"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                ייצוא לאקסל
+              </button>
               {selectedImport.status === "uploaded" && canPerform && (
                 <button onClick={commit} disabled={committing} className="btn-primary flex items-center gap-2 text-xs">
                   <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />

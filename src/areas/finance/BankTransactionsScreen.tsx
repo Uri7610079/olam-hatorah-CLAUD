@@ -4,23 +4,12 @@ import { AlertTriangle, ArrowLeftRight, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { parseImportFile, hashFile, isLegacyXls } from "@/lib/importParsing";
-import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
-
-interface OrgOption {
-  id: string;
-  legal_name: string;
-}
-
-interface BankAccountOption {
-  id: string;
-  bank_name: string | null;
-  account_number_masked: string | null;
-}
+import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 
 interface TransactionType {
   id: string;
@@ -127,8 +116,20 @@ async function computeFingerprint(accountId: string, row: NormalizedBankRow): Pr
     .join("");
 }
 
-async function analyzeBankFile(file: File, accountId: string): Promise<ClassifiedBankRow[]> {
-  const parsed = await parseImportFile(file);
+interface AnalyzeBankFileResult {
+  rows: ClassifiedBankRow[];
+  headerRowIndex: number;
+  headerConfidence: "high" | "low";
+  previewRows: string[][];
+}
+
+// headerRowIndexOverride: מועבר רק אחרי שהמשתמשת אישרה/בחרה שורת כותרות ידנית דרך
+// HeaderRowConfirm (ר' handleFileChange/handleHeaderConfirm למטה) - זה בדיוק המקרה האמיתי
+// שחשף את הבאג המקורי: דוח תנועות בנק אמיתי מלקוח הגיע עם 5 שורות כותרת מוסדית/פרטי
+// חשבון לפני שורת הכותרות האמיתית ("יתרה", "תאריך ערך" וכו') - הנחת "שורה 1 תמיד כותרות"
+// הייתה גורמת לכל השורות לצאת שגויות בשקט.
+async function analyzeBankFile(file: File, accountId: string, headerRowIndexOverride?: number): Promise<AnalyzeBankFileResult> {
+  const parsed = await parseImportFile(file, headerRowIndexOverride);
   const { data: existing } = await supabase.from("bank_transactions").select("fingerprint").eq("organization_bank_account_id", accountId);
   const existingSet = new Set((existing ?? []).map((r) => r.fingerprint));
   const seen = new Set<string>();
@@ -155,23 +156,7 @@ async function analyzeBankFile(file: File, accountId: string): Promise<Classifie
       rows.push({ rowNumber, raw, normalized, fingerprint, status: "valid", errorMessage: null });
     }
   }
-  return rows;
-}
-
-async function fetchOrgs(): Promise<OrgOption[]> {
-  const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
-  if (error) throw error;
-  return data ?? [];
-}
-
-async function fetchOrgBankAccounts(orgId: string): Promise<BankAccountOption[]> {
-  const { data, error } = await supabase
-    .from("organization_bank_accounts_view")
-    .select("id, bank_name, account_number_masked")
-    .eq("organization_id", orgId)
-    .eq("is_active", true);
-  if (error) throw error;
-  return data ?? [];
+  return { rows, headerRowIndex: parsed.headerRowIndex, headerConfidence: parsed.headerConfidence, previewRows: parsed.previewRows };
 }
 
 async function fetchTransactionTypes(): Promise<TransactionType[]> {
@@ -210,15 +195,14 @@ async function fetchTransactions(accountId: string, filter: ClassificationFilter
   }));
 }
 
-export function BankTransactionsScreen() {
+// accountId מגיע מהמסך המאחד (BankScreen.tsx) - אין כאן יותר בורר עמותה/חשבון עצמאי,
+// כדי שלא יצטרכו לבחור את אותו חשבון פעם נוספת אחרי שכבר נבחר למעלה.
+export function BankTransactionsPanel({ accountId }: { accountId: string }) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport } = useHasPermission("bank_import", "perform");
   const { hasPermission: canClassify } = useHasPermission("transaction_classification", "perform");
-  const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const typesQuery = useQuery({ queryKey: ["bank-transaction-types-active"], queryFn: fetchTransactionTypes });
 
-  const [orgId, setOrgId] = useState("");
-  const [accountId, setAccountId] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [filter, setFilter] = useState<ClassificationFilter>("all");
   const [previewTab, setPreviewTab] = useState<RowStatus>("valid");
@@ -230,12 +214,12 @@ export function BankTransactionsScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
   const [reviewBatchId, setReviewBatchId] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ committed_count: number; duplicate_count: number; invalid_count: number } | null>(null);
   const [suggesting, setSuggesting] = useState(false);
 
-  const bankAccountsQuery = useQuery({ queryKey: ["bank-org-accounts", orgId], queryFn: () => fetchOrgBankAccounts(orgId), enabled: !!orgId });
   const batchesQuery = useQuery({ queryKey: ["bank-import-batches", accountId], queryFn: () => fetchBatches(accountId), enabled: !!accountId });
   const transactionsQuery = useQuery({
     queryKey: ["bank-transactions", accountId, filter],
@@ -249,6 +233,7 @@ export function BankTransactionsScreen() {
     setLegacyWarning(false);
     setDuplicateFileId(null);
     setError(null);
+    setHeaderConfirm(null);
   };
 
   const handleFileChange = async (selected: File | null) => {
@@ -264,12 +249,37 @@ export function BankTransactionsScreen() {
         return;
       }
       setLegacyWarning(isLegacyXls(selected));
-      setParsedRows(await analyzeBankFile(selected, accountId));
+      const result = await analyzeBankFile(selected, accountId);
+      if (result.headerConfidence === "low") {
+        setHeaderConfirm({ file: selected, previewRows: result.previewRows, detectedIndex: result.headerRowIndex });
+        return;
+      }
+      setParsedRows(result.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleHeaderConfirm = async (chosenIndex: number) => {
+    if (!headerConfirm || !accountId) return;
+    const chosenFile = headerConfirm.file;
+    setHeaderConfirm(null);
+    setAnalyzing(true);
+    try {
+      const result = await analyzeBankFile(chosenFile, accountId, chosenIndex);
+      setParsedRows(result.rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleHeaderCancel = () => {
+    setHeaderConfirm(null);
+    resetForm();
   };
 
   const submitBatch = async () => {
@@ -413,50 +423,15 @@ export function BankTransactionsScreen() {
 
   return (
     <div>
-      <PageHeader
-        title="תנועות בנק"
-        description="סיווג תנועה הוא הצעה/קטגוריה בלבד - אינו משנה יתרת קבוצה ללא התאמה עסקית מאושרת (שלב 12)."
-        primaryAction={
-          orgId &&
-          accountId &&
-          canImport && (
-            <button onClick={() => setShowImport((v) => !v)} className="btn-secondary">
-              {showImport ? "סגירה" : "יבוא תנועות"}
-            </button>
-          )
-        }
-      />
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-2xl mb-4">
-        <div>
-          <label className="field-label">עמותה</label>
-          <select
-            value={orgId}
-            onChange={(e) => {
-              setOrgId(e.target.value);
-              setAccountId("");
-            }}
-            className="input-field"
-          >
-            <option value="">— בחרי —</option>
-            {(orgsQuery.data ?? []).map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.legal_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="field-label">חשבון עמותה</label>
-          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input-field" disabled={!orgId}>
-            <option value="">— בחרי —</option>
-            {(bankAccountsQuery.data ?? []).map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.bank_name ?? "בנק"} · {a.account_number_masked}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-xs text-slate-500 max-w-2xl">
+          סיווג תנועה הוא הצעה/קטגוריה בלבד - אינו משנה יתרת קבוצה ללא התאמה עסקית מאושרת (שלב 12).
+        </p>
+        {accountId && canImport && (
+          <button onClick={() => setShowImport((v) => !v)} className="btn-secondary shrink-0">
+            {showImport ? "סגירה" : "יבוא תנועות"}
+          </button>
+        )}
       </div>
 
       {showImport && accountId && !reviewBatchId && (
@@ -481,7 +456,15 @@ export function BankTransactionsScreen() {
             </div>
           )}
           {error && <ErrorState message={error} />}
-          {parsedRows && !duplicateFileId && (
+          {headerConfirm && !duplicateFileId && (
+            <HeaderRowConfirm
+              previewRows={headerConfirm.previewRows}
+              detectedIndex={headerConfirm.detectedIndex}
+              onConfirm={handleHeaderConfirm}
+              onCancel={handleHeaderCancel}
+            />
+          )}
+          {parsedRows && !duplicateFileId && !headerConfirm && (
             <>
               <Tabs
                 tabs={[

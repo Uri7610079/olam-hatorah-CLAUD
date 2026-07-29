@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Calculator } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -78,7 +79,7 @@ export function FinancialPeriodsScreen() {
   const { hasPermission: canCalculate, isLoading: permLoading } = useHasPermission("commission", "calculate");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);

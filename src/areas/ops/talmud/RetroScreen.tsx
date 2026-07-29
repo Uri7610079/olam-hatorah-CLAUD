@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -68,6 +69,22 @@ async function fetchRetro(orgId: string): Promise<RetroRow[]> {
   return (data ?? []).map((r: any) => ({ ...r, student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student }));
 }
 
+// מוצאת את רשומת הרטרו ה"קודמת" הרלוונטית ביותר לתלמיד (או ברמת עמותה/סניף אם
+// studentId הוא null) - הגרסה עם חודש המקור הגבוה ביותר שעדיין קודם ל-beforeMonth
+// (אם לא נבחר עדיין חודש מקור לרשומה החדשה, מתעלמים מהגבלת החודש ומחזירים את
+// הרשומה העדכנית ביותר בסך הכול). "current" של אותה רשומה קודמת = "prior" של החדשה.
+function findPriorRetroRecord(rows: RetroRow[], studentId: string | null, beforeMonth: string): RetroRow | null {
+  const candidates = rows.filter((r) => r.student_id === studentId && (!beforeMonth || r.source_month < beforeMonth));
+  if (candidates.length === 0) return null;
+  let best = candidates[0];
+  for (const r of candidates) {
+    if (r.source_month > best.source_month || (r.source_month === best.source_month && r.created_at > best.created_at)) {
+      best = r;
+    }
+  }
+  return best;
+}
+
 const EMPTY_FORM = {
   studentId: "",
   sourceMonth: "",
@@ -88,7 +105,7 @@ export function RetroScreen() {
   const { hasPermission: canManage } = useHasPermission("retro", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -96,6 +113,23 @@ export function RetroScreen() {
 
   const studentsQuery = useQuery({ queryKey: ["retro-students", orgId], queryFn: () => fetchStudents(orgId), enabled: !!orgId });
   const retroQuery = useQuery({ queryKey: ["retro", orgId], queryFn: () => fetchRetro(orgId), enabled: !!orgId });
+
+  // מילוי ברירת מחדל של "מס' זכאים קודם" ו"סכום קודם" מתוך הרשומה הקיימת האחרונה
+  // הרלוונטית (לפי תלמיד/עמותה/חודש שנבחרו) - לא דורס ערך שכבר קיים בשדה (בין אם
+  // הוזן ידנית ובין אם מולא ע"י ריצה קודמת של האפקט עצמו); השדות נשארים לגמרי
+  // ניתנים לעריכה ידנית.
+  useEffect(() => {
+    if (!showAdd || !retroQuery.data) return;
+    if (form.priorEligibleCount !== "" || form.priorAmount !== "") return;
+    const prior = findPriorRetroRecord(retroQuery.data, form.studentId || null, form.sourceMonth);
+    if (!prior) return;
+    setForm((f) => ({
+      ...f,
+      priorEligibleCount: prior.current_eligible_count != null ? String(prior.current_eligible_count) : "",
+      priorAmount: prior.current_amount != null ? String(prior.current_amount) : "",
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAdd, form.studentId, form.sourceMonth, retroQuery.data]);
 
   const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
 
@@ -189,7 +223,11 @@ export function RetroScreen() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="field-label">תלמיד (לא חובה - ריק = ברמת סניף/כללי)</label>
-              <select value={form.studentId} onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))} className="input-field">
+              <select
+                value={form.studentId}
+                onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value, priorEligibleCount: "", priorAmount: "" }))}
+                className="input-field"
+              >
                 <option value="">— ללא —</option>
                 {(studentsQuery.data ?? []).map((s) => (
                   <option key={s.id} value={s.id}>
@@ -200,7 +238,13 @@ export function RetroScreen() {
             </div>
             <div>
               <label className="field-label">חודש מקור</label>
-              <input required type="date" value={form.sourceMonth} onChange={(e) => setForm((f) => ({ ...f, sourceMonth: e.target.value }))} className="input-field" />
+              <input
+                required
+                type="date"
+                value={form.sourceMonth}
+                onChange={(e) => setForm((f) => ({ ...f, sourceMonth: e.target.value, priorEligibleCount: "", priorAmount: "" }))}
+                className="input-field"
+              />
             </div>
             <div>
               <label className="field-label">חודש קבלה</label>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
 import { ExceptionGrid, type ExceptionCounter } from "@/components/ExceptionGrid";
 import { LoadingState } from "@/components/LoadingState";
@@ -39,21 +40,21 @@ async function fetchFinanceCounts(orgId: string, month: string): Promise<Finance
   return data as unknown as FinanceCounts;
 }
 
-function buildItems(c: FinanceCounts): ExceptionCounter[] {
+function buildItems(c: FinanceCounts, orgId: string): ExceptionCounter[] {
   return [
-    { key: "masav-in-process", label: "אצוות מס\"ב בהכנה (טרם שודרו)", count: c.masav_in_process_count, severity: c.masav_in_process_count > 0 ? "medium" : "ok", href: "/finance/masav" },
-    { key: "masav-not-completed", label: "אצוות מס\"ב ששודרו וטרם סומנו כבוצעו", count: c.masav_transmitted_not_completed_count, severity: c.masav_transmitted_not_completed_count > 0 ? "high" : "ok", href: "/finance/bank-matching" },
-    { key: "open-returns", label: "תשלומים שחזרו וטרם טופלו", count: c.open_returns, severity: c.open_returns > 0 ? "high" : "ok", href: "/finance/returns" },
-    { key: "unclassified-transactions", label: "תנועות בנק לא מסווגות סופית", count: c.unclassified_transactions, severity: c.unclassified_transactions > 0 ? "critical" : "ok", href: "/finance/bank-transactions" },
-    { key: "open-bank-exceptions", label: "חריגות התאמת בנק פתוחות", count: c.open_bank_exceptions, severity: c.open_bank_exceptions > 0 ? "critical" : "ok", href: "/finance/bank-matching" },
-    { key: "unassigned-donations", label: "תרומות לא משויכות/ממתינות", count: c.unassigned_donations, severity: c.unassigned_donations > 0 ? "medium" : "ok", href: "/finance/donations" },
-    { key: "ratio-90-10", label: "מצב 90%/10% (כבוי עד אישור הנוסחה)", count: 0, severity: "neutral", href: "/finance/reports" },
+    { key: "masav-in-process", label: "אצוות מס\"ב בהכנה (טרם שודרו)", count: c.masav_in_process_count, severity: c.masav_in_process_count > 0 ? "medium" : "ok", href: `/finance/masav?org=${orgId}` },
+    { key: "masav-not-completed", label: "אצוות מס\"ב ששודרו וטרם סומנו כבוצעו", count: c.masav_transmitted_not_completed_count, severity: c.masav_transmitted_not_completed_count > 0 ? "high" : "ok", href: `/finance/bank-matching?org=${orgId}` },
+    { key: "open-returns", label: "תשלומים שחזרו וטרם טופלו", count: c.open_returns, severity: c.open_returns > 0 ? "high" : "ok", href: `/finance/returns?org=${orgId}` },
+    { key: "unclassified-transactions", label: "תנועות בנק לא מסווגות סופית", count: c.unclassified_transactions, severity: c.unclassified_transactions > 0 ? "critical" : "ok", href: `/finance/bank-transactions?org=${orgId}` },
+    { key: "open-bank-exceptions", label: "חריגות התאמת בנק פתוחות", count: c.open_bank_exceptions, severity: c.open_bank_exceptions > 0 ? "critical" : "ok", href: `/finance/bank-matching?org=${orgId}` },
+    { key: "unassigned-donations", label: "תרומות לא משויכות/ממתינות", count: c.unassigned_donations, severity: c.unassigned_donations > 0 ? "medium" : "ok", href: `/finance/donations?org=${orgId}` },
+    { key: "ratio-90-10", label: "מצב 90%/10% (כבוי עד אישור הנוסחה)", count: 0, severity: "neutral", href: `/finance/reports?org=${orgId}` },
   ];
 }
 
 export function FinanceDashboard() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
 
   const countsQuery = useQuery({ queryKey: ["finance-dashboard-counts", orgId, month], queryFn: () => fetchFinanceCounts(orgId, month), enabled: !!orgId });
@@ -109,7 +110,7 @@ export function FinanceDashboard() {
             <p className="text-sm text-slate-600">התחייבות כוללת לקבוצות (יתרת ספר תנועות)</p>
             <p className="tabular mt-1 text-xl font-semibold text-slate-900">{countsQuery.data.group_commitment_total.toLocaleString("he-IL")}</p>
           </div>
-          <ExceptionGrid items={buildItems(countsQuery.data)} />
+          <ExceptionGrid items={buildItems(countsQuery.data, orgId)} />
         </>
       )}
     </div>

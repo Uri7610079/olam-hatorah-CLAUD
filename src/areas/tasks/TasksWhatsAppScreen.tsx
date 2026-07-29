@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
@@ -39,7 +40,9 @@ function ConvertForm({ message, onDone }: ConvertFormProps) {
   const [title, setTitle] = useState(message.body?.slice(0, 80) ?? "");
   const [description, setDescription] = useState(message.body ?? "");
   const [dueDate, setDueDate] = useState("");
-  const [ownerIds, setOwnerIds] = useState<string[]>([]);
+  // ברירת מחדל = הבחירה האחרונה (נשמר ב-DB דרך useLastSelected), לא ריק - שינוי הבחירה
+  // כאן מעדכן את ה-hook, כדי שההמרה הבאה תזכור אותה.
+  const [ownerIds, setOwnerIds] = useLastSelected<string[]>("last-task-owners", []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const usersQuery = useQuery({ queryKey: ["assignable-users"], queryFn: fetchAssignableUsers });

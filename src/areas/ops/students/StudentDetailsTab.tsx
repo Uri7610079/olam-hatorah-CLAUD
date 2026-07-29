@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { ErrorState } from "@/components/ErrorState";
-import { ID_TYPE_LABEL, type Student, type StudentIdType } from "./types";
+import { formatStudentAddress, ID_TYPE_LABEL, type Student, type StudentIdType } from "./types";
 
 interface StudentDetailsTabProps {
   student: Student;
@@ -18,7 +18,9 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
     full_name: student.full_name,
     birth_date: student.birth_date ?? "",
     phone: student.phone_raw ?? "",
-    address: student.address ?? "",
+    address_street: student.address_street ?? "",
+    address_house_number: student.address_house_number ?? "",
+    address_city: student.address_city ?? "",
     student_type: student.student_type ?? "",
     study_code: student.study_code ?? "",
   });
@@ -39,7 +41,9 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
         birth_date: values.birth_date || null,
         phone_raw: values.phone || null,
         phone_normalized: phoneDigits || null,
-        address: values.address || null,
+        address_street: values.address_street || null,
+        address_house_number: values.address_house_number || null,
+        address_city: values.address_city || null,
         student_type: values.student_type || null,
         study_code: values.study_code || null,
       })
@@ -66,7 +70,7 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           <span className="font-medium text-slate-800">טלפון:</span> {student.phone_raw ?? "—"}
         </p>
         <p>
-          <span className="font-medium text-slate-800">כתובת:</span> {student.address ?? "—"}
+          <span className="font-medium text-slate-800">כתובת:</span> {formatStudentAddress(student)}
         </p>
       </div>
     );
@@ -113,9 +117,19 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           <input value={values.phone} onChange={(e) => setValues((v) => ({ ...v, phone: e.target.value }))} className="input-field" />
         </div>
       </div>
-      <div>
-        <label className="field-label">כתובת</label>
-        <input value={values.address} onChange={(e) => setValues((v) => ({ ...v, address: e.target.value }))} className="input-field" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label className="field-label">רחוב</label>
+          <input value={values.address_street} onChange={(e) => setValues((v) => ({ ...v, address_street: e.target.value }))} className="input-field" />
+        </div>
+        <div>
+          <label className="field-label">מספר בית</label>
+          <input value={values.address_house_number} onChange={(e) => setValues((v) => ({ ...v, address_house_number: e.target.value }))} className="input-field" />
+        </div>
+        <div>
+          <label className="field-label">עיר</label>
+          <input value={values.address_city} onChange={(e) => setValues((v) => ({ ...v, address_city: e.target.value }))} className="input-field" />
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>

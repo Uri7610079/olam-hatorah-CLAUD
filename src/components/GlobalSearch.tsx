@@ -23,16 +23,19 @@ async function search(term: string): Promise<SearchResult[]> {
   const like = `%${term}%`;
   const [students, groups, branches, orgs, tasks] = await Promise.all([
     supabase.from("students").select("id, external_id, full_name").or(`full_name.ilike.${like},external_id.ilike.${like}`).limit(5),
-    supabase.from("groups").select("id, name").ilike("name", like).limit(5),
-    supabase.from("branches").select("id, internal_name").ilike("internal_name", like).limit(5),
+    supabase.from("groups").select("id, name, branch:branches(organization_id)").ilike("name", like).limit(5),
+    supabase.from("branches").select("id, internal_name, organization_id").ilike("internal_name", like).limit(5),
     supabase.from("organizations").select("id, legal_name").ilike("legal_name", like).limit(5),
     supabase.from("tasks").select("id, title").ilike("title", like).limit(5),
   ]);
 
   const results: SearchResult[] = [];
   for (const s of students.data ?? []) results.push({ kind: "student", id: s.id, label: s.full_name, sublabel: s.external_id, href: `/ops/students/${s.id}` });
-  for (const g of groups.data ?? []) results.push({ kind: "group", id: g.id, label: g.name, href: "/ops/branches-groups" });
-  for (const b of branches.data ?? []) results.push({ kind: "branch", id: b.id, label: b.internal_name, href: "/ops/branches-groups" });
+  for (const g of groups.data ?? []) {
+    const orgId = Array.isArray(g.branch) ? g.branch[0]?.organization_id : (g.branch as any)?.organization_id;
+    results.push({ kind: "group", id: g.id, label: g.name, href: orgId ? `/ops/branches-groups?org=${orgId}` : "/ops/branches-groups" });
+  }
+  for (const b of branches.data ?? []) results.push({ kind: "branch", id: b.id, label: b.internal_name, href: `/ops/branches-groups?org=${b.organization_id}` });
   for (const o of orgs.data ?? []) results.push({ kind: "organization", id: o.id, label: o.legal_name, href: `/ops/organizations/${o.id}` });
   for (const t of tasks.data ?? []) results.push({ kind: "task", id: t.id, label: t.title, href: `/tasks/all?open=${t.id}` });
   return results;
@@ -40,7 +43,8 @@ async function search(term: string): Promise<SearchResult[]> {
 
 // חיפוש גלובלי אמיתי: תלמיד/קבוצה/סניף/עמותה/משימה (RLS כבר מגביל לכל משתמש את מה
 // שהוא רואה ממילא - אין כאן בדיקת הרשאה נוספת). קבוצה/סניף מקשרים למסך סניפים-וקבוצות
-// הכללי (אין עדיין deep-link לקבוצה/סניף ספציפיים), תלמיד/עמותה/משימה מקשרים ישירות לכרטיס.
+// עם ?org=<organization_id> כדי לקדם-בחור את העמותה הנכונה (אין עדיין deep-link לסניף/קבוצה
+// ספציפיים בתוך המסך עצמו), תלמיד/עמותה/משימה מקשרים ישירות לכרטיס.
 export function GlobalSearch() {
   const navigate = useNavigate();
   const [term, setTerm] = useState("");

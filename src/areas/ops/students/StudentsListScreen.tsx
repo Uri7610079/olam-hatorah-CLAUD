@@ -6,12 +6,14 @@ import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { useSavedFilters } from "@/lib/savedFilters";
 import { useEscapeToClose } from "@/lib/useEscapeToClose";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge, type Severity } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
-import { ID_TYPE_LABEL, STATUS_LABEL, type Student, type StudentIdType } from "./types";
+import { formatStudentAddress, ID_TYPE_LABEL, STATUS_LABEL, type Student, type StudentIdType } from "./types";
+import { StudentsImportPanel } from "./StudentsImportPanel";
 
 const PAGE_SIZE = 25;
 const SCREEN_KEY = "students-list";
@@ -28,7 +30,7 @@ async function fetchStudents(search: string, statusFilter: string, page: number)
   let query = supabase
     .from("students")
     .select(
-      "id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address, student_type, study_code, status, exit_date, exit_reason, created_at",
+      "id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address_street, address_house_number, address_city, student_type, study_code, status, exit_date, exit_reason, created_at",
       { count: "exact" },
     )
     .order("full_name")
@@ -65,6 +67,7 @@ export function StudentsListScreen() {
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -116,6 +119,21 @@ export function StudentsListScreen() {
     if (data) navigate(`/ops/students/${data.id}`);
   };
 
+  const exportStudents = () => {
+    const rows = (query.data?.rows ?? []).map((s) => ({
+      מזהה: `${ID_TYPE_LABEL[s.id_type]} ${s.external_id}`,
+      שם: s.full_name,
+      טלפון: s.phone_raw ?? "",
+      סטטוס: STATUS_LABEL[s.status],
+      "סוג תלמיד": s.student_type ?? "",
+      "קוד לימוד": s.study_code ?? "",
+      רחוב: s.address_street ?? "",
+      "מספר בית": s.address_house_number ?? "",
+      עיר: s.address_city ?? "",
+    }));
+    exportRowsToExcel(rows, "תלמידים", `students-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const columns: DataTableColumn<Student>[] = [
     { key: "id", header: "מזהה", className: "tabular", render: (s) => `${ID_TYPE_LABEL[s.id_type]} ${s.external_id}` },
     {
@@ -131,7 +149,7 @@ export function StudentsListScreen() {
     { key: "status", header: "סטטוס", render: (s) => <StatusBadge severity={STATUS_SEVERITY[s.status]} label={STATUS_LABEL[s.status]} /> },
     { key: "student_type", header: "סוג תלמיד", hiddenByDefault: true, render: (s) => s.student_type ?? "—" },
     { key: "study_code", header: "קוד לימוד", hiddenByDefault: true, render: (s) => s.study_code ?? "—" },
-    { key: "address", header: "כתובת", hiddenByDefault: true, render: (s) => s.address ?? "—" },
+    { key: "address", header: "כתובת", hiddenByDefault: true, render: (s) => formatStudentAddress(s) },
   ];
 
   return (
@@ -140,13 +158,26 @@ export function StudentsListScreen() {
         title="תלמידים"
         description="ניהול תלמידים, שיוכים וחשבונות בנק."
         primaryAction={
-          canManage && (
-            <button onClick={() => setShowCreate(true)} className="btn-primary">
-              תלמיד חדש
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={exportStudents} className="btn-secondary">
+              ייצוא לאקסל
             </button>
-          )
+            {canManage && (
+              <button onClick={() => setShowImport((v) => !v)} className="btn-secondary">
+                {showImport ? "סגירת יבוא" : "יבוא מאקסל"}
+              </button>
+            )}
+            {canManage && (
+              <button onClick={() => setShowCreate(true)} className="btn-primary">
+                תלמיד חדש
+              </button>
+            )}
+          </div>
         }
       />
+
+      {showImport && canManage && <StudentsImportPanel />}
+
       <SearchAndFilters
         searchValue={search}
         onSearchChange={(v) => {

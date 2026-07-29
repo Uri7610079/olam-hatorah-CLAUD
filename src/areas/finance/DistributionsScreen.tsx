@@ -1,15 +1,18 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Split, Upload } from "lucide-react";
+import { Download, Split, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
 import { parseImportFile } from "@/lib/importParsing";
+import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 
 interface OrgOption {
   id: string;
@@ -136,8 +139,8 @@ export function DistributionsScreen() {
   const { hasPermission: canApprove } = useHasPermission("distributions", "approve");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
-  const [orgId, setOrgId] = useState("");
-  const [groupId, setGroupId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
+  const [groupId, setGroupId] = useLastSelected<string>("last-group", "");
   const [showNewBatch, setShowNewBatch] = useState(false);
   const [newBatch, setNewBatch] = useState(EMPTY_NEW_BATCH);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +154,8 @@ export function DistributionsScreen() {
   const [savingLines, setSavingLines] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
+  const [fileWarnings, setFileWarnings] = useState<string[]>([]);
+  const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
 
   const groupsQuery = useQuery({ queryKey: ["distributions-org-groups", orgId], queryFn: () => fetchOrgGroups(orgId), enabled: !!orgId });
   const balanceQuery = useQuery({ queryKey: ["group-balance-single", groupId], queryFn: () => fetchGroupBalance(groupId), enabled: !!groupId });
@@ -172,6 +177,8 @@ export function DistributionsScreen() {
     setEqualTotal("");
     setPctTotal("");
     setError(null);
+    setFileWarnings([]);
+    setHeaderConfirm(null);
   };
 
   const createBatch = async (e: FormEvent) => {
@@ -224,26 +231,85 @@ export function DistributionsScreen() {
     });
   };
 
+  // מילוי-אוטומטי של סכומים מקובץ (עמודות "מזהה תלמיד"/"סכום") - מנגנון קליינט-בלבד, לא דרך
+  // מנוע היבוא הכללי (import_batches/import_rows): זו רק "עזרה במילוי טופס" שמזינה את אותו
+  // amounts/selectedIds state כמו הזנה ידנית שורה-שורה, לא זרם רשומות שנשמר/נגרם commit
+  // עצמאי - saveLines() הרגילה היא זו שכותבת בפועל (full-replace). מזהה מהקובץ שלא נמצא
+  // בקבוצה לא נזרק בשקט - נאסף ל-fileWarnings ומוצג למשתמש (בעבר לא הוצג כלל, מה שיכול
+  // היה להטעות לגבי "סה"כ נוכחי בטופס" שנראה נמוך מהצפוי בלי הסבר).
+  const applyInstructionRows = (rows: Record<string, string>[]) => {
+    const nextAmounts: Record<string, string> = {};
+    const nextSelected = new Set<string>();
+    const notFound: string[] = [];
+    let matchedCount = 0;
+    for (const row of rows) {
+      const externalId = (row["מזהה תלמיד"] ?? "").trim();
+      const amountRaw = (row["סכום"] ?? "").trim();
+      if (!externalId && !amountRaw) continue; // שורה ריקה לגמרי - מתעלמים בשקט
+      const student = (groupStudentsQuery.data ?? []).find((s) => s.external_id === externalId);
+      if (!student) {
+        if (externalId) notFound.push(externalId);
+        continue;
+      }
+      if (!amountRaw) continue;
+      nextAmounts[student.id] = amountRaw;
+      nextSelected.add(student.id);
+      matchedCount++;
+    }
+    setAmounts(nextAmounts);
+    setSelectedIds(nextSelected);
+    setFileWarnings(notFound);
+    if (matchedCount === 0 && notFound.length === 0) {
+      setError('לא נמצאו שורות תקינות בקובץ - יש לוודא עמודות בשם מדויק "מזהה תלמיד" ו"סכום"');
+    }
+  };
+
+  // אותה בעיית "שורות כותרת מוסדית/פרטי חשבון לפני הטבלה" שנחשפה בדוח הבנק האמיתי יכולה
+  // להופיע גם כאן (קובץ הוראות חלוקה) - headerConfidence="low" תמיד מוצג לאישור המשתמשת,
+  // לעולם לא מדלגים בשקט על שורות (ר' importParsing.ts/detectHeaderRow).
   const handleInstructionFile = async (file: File | null) => {
     if (!file) return;
     setError(null);
+    setFileWarnings([]);
+    setHeaderConfirm(null);
     try {
       const parsed = await parseImportFile(file);
-      const nextAmounts: Record<string, string> = {};
-      const nextSelected = new Set<string>();
-      for (const row of parsed.rows) {
-        const externalId = (row["מזהה תלמיד"] ?? "").trim();
-        const amountRaw = (row["סכום"] ?? "").trim();
-        const student = (groupStudentsQuery.data ?? []).find((s) => s.external_id === externalId);
-        if (!student || !amountRaw) continue;
-        nextAmounts[student.id] = amountRaw;
-        nextSelected.add(student.id);
+      if (parsed.headerConfidence === "low") {
+        setHeaderConfirm({ file, previewRows: parsed.previewRows, detectedIndex: parsed.headerRowIndex });
+        return;
       }
-      setAmounts(nextAmounts);
-      setSelectedIds(nextSelected);
+      applyInstructionRows(parsed.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     }
+  };
+
+  const handleHeaderConfirm = async (chosenIndex: number) => {
+    if (!headerConfirm) return;
+    const chosenFile = headerConfirm.file;
+    setHeaderConfirm(null);
+    setError(null);
+    try {
+      const parsed = await parseImportFile(chosenFile, chosenIndex);
+      applyInstructionRows(parsed.rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
+    }
+  };
+
+  const handleHeaderCancel = () => {
+    setHeaderConfirm(null);
+    setFileWarnings([]);
+  };
+
+  const exportLines = () => {
+    if (!selectedBatch) return;
+    const rows = lines.map((l) => ({
+      "מזהה תלמיד": l.student.external_id,
+      "שם": l.student.full_name,
+      "סכום": l.amount,
+    }));
+    exportRowsToExcel(rows, "שורות חלוקה", `שורות-חלוקה-${selectedBatch.period_month}-גרסה-${selectedBatch.version}.xlsx`);
   };
 
   const saveLines = async () => {
@@ -479,10 +545,29 @@ export function DistributionsScreen() {
                       <input type="number" step="0.01" value={pctTotal} onChange={(e) => setPctTotal(e.target.value)} className="input-field tabular w-48" />
                     </div>
                   )}
-                  {selectedBatch.method === "instruction_file" && (
+                  {selectedBatch.method !== "percentages" && (
                     <div>
-                      <label className="field-label">קובץ הוראות (עמודות: מזהה תלמיד, סכום)</label>
+                      <label className="field-label">
+                        {selectedBatch.method === "instruction_file"
+                          ? "קובץ הוראות (עמודות: מזהה תלמיד, סכום)"
+                          : 'או: טעינת קובץ למילוי מהיר (עמודות: "מזהה תלמיד", "סכום")'}
+                      </label>
                       <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleInstructionFile(e.target.files?.[0] ?? null)} className="input-field" />
+                      {headerConfirm && (
+                        <div className="mt-2">
+                          <HeaderRowConfirm
+                            previewRows={headerConfirm.previewRows}
+                            detectedIndex={headerConfirm.detectedIndex}
+                            onConfirm={handleHeaderConfirm}
+                            onCancel={handleHeaderCancel}
+                          />
+                        </div>
+                      )}
+                      {fileWarnings.length > 0 && (
+                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                          {fileWarnings.length} מזהי תלמיד מהקובץ לא נמצאו בקבוצה זו ולכן לא נכללו: {fileWarnings.join(", ")}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -548,6 +633,13 @@ export function DistributionsScreen() {
                   </div>
                 </div>
               )}
+
+              <div className="flex items-center justify-end">
+                <button onClick={exportLines} className="btn-secondary flex items-center gap-2 text-xs">
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  ייצוא לאקסל
+                </button>
+              </div>
 
               <DataTable columns={lineColumns} rows={lines} rowKey={(r) => r.id} loading={linesQuery.isLoading} emptyTitle="אין עדיין שורות באצווה" />
 

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useLastSelected } from "@/lib/useLastSelected";
 import type { ClassifiedRow } from "@/lib/importParsing";
 import {
   analyzeFile,
@@ -19,6 +20,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 
 interface OrgOption {
   id: string;
@@ -116,7 +118,7 @@ export function ErrorsCenterScreen() {
   const { hasPermission: canManage } = useHasPermission("talmud_errors", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
   const [statusFilter, setStatusFilter] = useState("");
   const [showImport, setShowImport] = useState(false);
@@ -128,6 +130,7 @@ export function ErrorsCenterScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
   const [reviewBatchId, setReviewBatchId] = useState<string | null>(null);
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -144,6 +147,7 @@ export function ErrorsCenterScreen() {
     setLegacyWarning(false);
     setDuplicateId(null);
     setError(null);
+    setHeaderConfirm(null);
   };
 
   const closeReview = () => {
@@ -163,12 +167,36 @@ export function ErrorsCenterScreen() {
         return;
       }
       setLegacyWarning(legacyXlsWarning(selected));
-      setParsedRows(await analyzeFile(selected));
+      const result = await analyzeFile(selected);
+      if (result.headerConfidence === "low") {
+        setHeaderConfirm({ file: selected, previewRows: result.previewRows, detectedIndex: result.headerRowIndex });
+        return;
+      }
+      setParsedRows(result.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const handleHeaderConfirm = async (chosenIndex: number) => {
+    if (!headerConfirm) return;
+    setAnalyzing(true);
+    try {
+      const result = await analyzeFile(headerConfirm.file, chosenIndex);
+      setHeaderConfirm(null);
+      setParsedRows(result.rows);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleHeaderCancel = () => {
+    setHeaderConfirm(null);
+    resetForm();
   };
 
   const submitBatch = async () => {
@@ -322,19 +350,29 @@ export function ErrorsCenterScreen() {
             </div>
           )}
           {error && <ErrorState message={error} />}
-          {parsedRows && !duplicateId && (
-            <>
-              <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
-                {(tab) => {
-                  const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
-                  return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
-                }}
-              </ImportPreviewTabs>
-              <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
-                <Upload className="h-4 w-4" aria-hidden="true" />
-                {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
-              </button>
-            </>
+          {headerConfirm ? (
+            <HeaderRowConfirm
+              previewRows={headerConfirm.previewRows}
+              detectedIndex={headerConfirm.detectedIndex}
+              onConfirm={handleHeaderConfirm}
+              onCancel={handleHeaderCancel}
+            />
+          ) : (
+            parsedRows &&
+            !duplicateId && (
+              <>
+                <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
+                  {(tab) => {
+                    const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
+                    return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
+                  }}
+                </ImportPreviewTabs>
+                <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
+                </button>
+              </>
+            )
           )}
         </div>
       )}

@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Undo2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -135,8 +137,9 @@ export function ReturnsScreen() {
   const queryClient = useQueryClient();
   const { hasPermission: canManage } = useHasPermission("payment_returns", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
+  const [searchParams] = useSearchParams();
 
-  const [orgId, setOrgId] = useState("");
+  const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [showForm, setShowForm] = useState(false);
   const [batchId, setBatchId] = useState("");
   const [lineId, setLineId] = useState("");
@@ -151,6 +154,12 @@ export function ReturnsScreen() {
   const [retryLineId, setRetryLineId] = useState("");
   const [linking, setLinking] = useState(false);
   const [resolving, setResolving] = useState(false);
+
+  useEffect(() => {
+    const orgParam = searchParams.get("org");
+    if (orgParam) setOrgId(orgParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const batchesQuery = useQuery({ queryKey: ["returns-transmitted-batches", orgId], queryFn: () => fetchTransmittedBatches(orgId), enabled: !!orgId });
   const linesQuery = useQuery({ queryKey: ["returns-valid-lines", batchId], queryFn: () => fetchValidLines(batchId), enabled: !!batchId });

@@ -33,19 +33,12 @@ import { DonationsScreen } from "./areas/finance/DonationsScreen";
 import { DistributionsScreen } from "./areas/finance/DistributionsScreen";
 import { MasavScreen } from "./areas/finance/MasavScreen";
 import { ReturnsScreen } from "./areas/finance/ReturnsScreen";
-import { BankTransactionsScreen } from "./areas/finance/BankTransactionsScreen";
-import { BankMatchingScreen } from "./areas/finance/BankMatchingScreen";
-import { TransactionTypesScreen } from "./areas/admin/TransactionTypesScreen";
-import { RecognitionRulesScreen } from "./areas/admin/RecognitionRulesScreen";
+import { BankScreen } from "./areas/finance/BankScreen";
+import { BankClassificationScreen } from "./areas/admin/BankClassificationScreen";
 import { DemoDataScreen } from "./areas/admin/DemoDataScreen";
 import { TasksHomeScreen } from "./areas/tasks/TasksHomeScreen";
 import { TasksAllScreen } from "./areas/tasks/TasksAllScreen";
-import { TasksTeamScreen } from "./areas/tasks/TasksTeamScreen";
 import { TasksWhatsAppScreen } from "./areas/tasks/TasksWhatsAppScreen";
-import { TasksRecurringScreen } from "./areas/tasks/TasksRecurringScreen";
-import { TasksBoardScreen } from "./areas/tasks/TasksBoardScreen";
-import { TasksCalendarScreen } from "./areas/tasks/TasksCalendarScreen";
-import { TasksTemplatesScreen } from "./areas/tasks/TasksTemplatesScreen";
 import { TasksSettingsScreen } from "./areas/tasks/TasksSettingsScreen";
 
 // המסכים האלה כבר נבנו בפועל (שלבים 2-7) - לא עוברים דרך מפת ה-placeholder הכללית.
@@ -77,18 +70,13 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/finance/returns",
   "/finance/bank-transactions",
   "/finance/bank-matching",
+  "/finance/bank-auto-sync",
   "/finance/documents",
-  "/admin/transaction-types",
-  "/admin/recognition-rules",
+  "/admin/bank-classification",
   "/admin/demo-data",
   "/tasks",
   "/tasks/all",
-  "/tasks/team",
   "/tasks/whatsapp",
-  "/tasks/recurring",
-  "/tasks/board",
-  "/tasks/calendar",
-  "/tasks/templates",
   "/tasks/settings",
 ]);
 
@@ -129,20 +117,17 @@ export default function App() {
             <Route path="/finance/distributions" element={<DistributionsScreen />} />
             <Route path="/finance/masav" element={<MasavScreen />} />
             <Route path="/finance/returns" element={<ReturnsScreen />} />
-            <Route path="/finance/bank-transactions" element={<BankTransactionsScreen />} />
-            <Route path="/finance/bank-matching" element={<BankMatchingScreen />} />
+            {/* מסך "בנק" מאוחד (תנועות/התאמות/משיכה אוטומטית) - שלושת הנתיבים הישנים
+                נשמרים בכוונה (קישורים/כרטיסי חריגה קיימים) ורק בוחרים טאב פתיחה שונה. */}
+            <Route path="/finance/bank-transactions" element={<BankScreen initialTab="transactions" />} />
+            <Route path="/finance/bank-matching" element={<BankScreen initialTab="matching" />} />
+            <Route path="/finance/bank-auto-sync" element={<BankScreen initialTab="auto-sync" />} />
             <Route path="/finance/documents" element={<DocumentsScreen />} />
-            <Route path="/admin/transaction-types" element={<TransactionTypesScreen />} />
-            <Route path="/admin/recognition-rules" element={<RecognitionRulesScreen />} />
+            <Route path="/admin/bank-classification" element={<BankClassificationScreen />} />
             <Route path="/admin/demo-data" element={<DemoDataScreen />} />
             <Route path="/tasks" element={<TasksHomeScreen />} />
             <Route path="/tasks/all" element={<TasksAllScreen />} />
-            <Route path="/tasks/team" element={<TasksTeamScreen />} />
             <Route path="/tasks/whatsapp" element={<TasksWhatsAppScreen />} />
-            <Route path="/tasks/recurring" element={<TasksRecurringScreen />} />
-            <Route path="/tasks/board" element={<TasksBoardScreen />} />
-            <Route path="/tasks/calendar" element={<TasksCalendarScreen />} />
-            <Route path="/tasks/templates" element={<TasksTemplatesScreen />} />
             <Route path="/tasks/settings" element={<TasksSettingsScreen />} />
             {SCREENS.filter((s) => !SCREENS_WITH_REAL_PAGES.has(s.path)).map((s) => (
               <Route

@@ -53,7 +53,7 @@ async function fetchStudent(id: string): Promise<Student> {
   const { data, error } = await supabase
     .from("students")
     .select(
-      "id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address, student_type, study_code, status, exit_date, exit_reason, created_at",
+      "id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address_street, address_house_number, address_city, student_type, study_code, status, exit_date, exit_reason, created_at",
     )
     .eq("id", id)
     .single();
@@ -154,15 +154,22 @@ export function StudentDetailScreen() {
 
       {canManage && student.status !== "inactive" && (
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          {student.status === "draft" && (
-            <button
-              onClick={advance}
-              disabled={!hasDetails || !hasAssignment || !hasBank || advancing}
-              className="btn-primary text-sm"
-            >
-              {advancing ? "מעדכנת…" : "קידום למוכן לתלמוד"}
-            </button>
-          )}
+          {student.status === "draft" && (() => {
+            const missing: string[] = [];
+            if (!hasDetails) missing.push("פרטים מלאים");
+            if (!hasAssignment) missing.push("שיוך פעיל");
+            if (!hasBank) missing.push("חשבון בנק מאומת");
+            return (
+              <button
+                onClick={advance}
+                disabled={missing.length > 0 || advancing}
+                title={missing.length > 0 ? `חסר: ${missing.join(", ")}` : undefined}
+                className="btn-primary text-sm"
+              >
+                {advancing ? "מעדכנת…" : "קידום למוכן לתלמוד"}
+              </button>
+            );
+          })()}
           {(student.status === "ready_for_talmud" || student.status === "sent_to_talmud") && (
             <p className="text-xs text-slate-500">
               {student.status === "ready_for_talmud"
