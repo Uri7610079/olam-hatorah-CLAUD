@@ -4,5 +4,8 @@
       "path": "/api/bank-sync",
       "schedule": "0 1 * * *"
     }
+  ],
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
