@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { safeStorageKey } from "@/lib/storagePath";
 import { addDaysIso } from "./dateUtils";
 import type {
   AssignableUser,
@@ -271,7 +272,7 @@ export async function fetchAttachments(taskId: string): Promise<TaskAttachment[]
 }
 
 export async function uploadAttachment(taskId: string, userId: string, file: File): Promise<void> {
-  const path = `${taskId}/${Date.now()}_${file.name}`;
+  const path = `${taskId}/${safeStorageKey(file.name)}`;
   const { error: uploadError } = await supabase.storage.from("task-attachments").upload(path, file);
   if (uploadError) throw uploadError;
   const { error } = await supabase

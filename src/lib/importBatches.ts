@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { parseImportFile, hashFile, classifyRows, isLegacyXls, type ClassifiedRow } from "./importParsing";
+import { safeStorageKey } from "./storagePath";
 
 export class DuplicateImportError extends Error {
   constructor(public existingBatchId: string) {
@@ -63,7 +64,7 @@ export async function createImportBatch(params: CreateBatchParams, rows: Classif
   const hash = await hashFile(file);
   const profileId = await getProfileId(profileKey);
 
-  const path = `${crypto.randomUUID()}-${file.name}`;
+  const path = safeStorageKey(file.name);
   const { error: uploadError } = await supabase.storage.from(storageBucket).upload(path, file);
   if (uploadError) throw new Error(`העלאת הקובץ נכשלה: ${uploadError.message}`);
 

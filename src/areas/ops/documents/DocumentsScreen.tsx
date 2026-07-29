@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Mail, AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { safeStorageKey } from "@/lib/storagePath";
 import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { exportRowsToExcel, logReportExport } from "@/lib/reportExport";
@@ -153,7 +154,7 @@ export function DocumentsScreen() {
     try {
       let filePath: string | null = null;
       if (docFile) {
-        filePath = `${orgId}/${crypto.randomUUID()}-${docFile.name}`;
+        filePath = `${orgId}/${safeStorageKey(docFile.name)}`;
         const { error: uploadError } = await supabase.storage.from("organization-documents").upload(filePath, docFile);
         if (uploadError) throw new Error(`העלאת הקובץ נכשלה: ${uploadError.message}`);
       }

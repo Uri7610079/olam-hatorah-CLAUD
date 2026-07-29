@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { HeartHandshake } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { safeStorageKey } from "@/lib/storagePath";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
 import { exportRowsToExcel } from "@/lib/reportExport";
@@ -129,7 +130,7 @@ export function DonationsScreen() {
 
     let filePath: string | null = null;
     if (file) {
-      const path = `${orgId}/${crypto.randomUUID()}-${file.name}`;
+      const path = `${orgId}/${safeStorageKey(file.name)}`;
       const { error: uploadError } = await supabase.storage.from("donation-documents").upload(path, file);
       if (uploadError) {
         setSubmitting(false);

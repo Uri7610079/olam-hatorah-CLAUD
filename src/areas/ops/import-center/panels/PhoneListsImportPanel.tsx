@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { safeStorageKey } from "@/lib/storagePath";
 import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { parseImportFile, hashFile, isLegacyXls, type ParsedFile } from "@/lib/importParsing";
@@ -163,7 +164,7 @@ export function PhoneListsImportPanel() {
     setError(null);
     try {
       const hash = await hashFile(file);
-      const path = `${orgId}/${crypto.randomUUID()}-${file.name}`;
+      const path = `${orgId}/${safeStorageKey(file.name)}`;
       const { error: uploadError } = await supabase.storage.from("phone-list-files").upload(path, file);
       if (uploadError) throw new Error(`העלאת הקובץ נכשלה: ${uploadError.message}`);
 

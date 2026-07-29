@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { safeStorageKey } from "@/lib/storagePath";
 import { useHasPermission } from "@/lib/permissions";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -54,7 +55,7 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
 
     let documentPath: string | null = null;
     if (file) {
-      const path = `${studentId}/${crypto.randomUUID()}-${file.name}`;
+      const path = `${studentId}/${safeStorageKey(file.name)}`;
       const { error: uploadError } = await supabase.storage.from("student-documents").upload(path, file);
       if (uploadError) {
         setSubmitting(false);

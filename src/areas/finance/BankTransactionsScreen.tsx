@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowLeftRight, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { parseImportFile, hashFile, isLegacyXls } from "@/lib/importParsing";
+import { safeStorageKey } from "@/lib/storagePath";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs } from "@/components/Tabs";
@@ -288,7 +289,7 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
     setError(null);
     try {
       const hash = await hashFile(file);
-      const path = `${accountId}/${crypto.randomUUID()}-${file.name}`;
+      const path = `${accountId}/${safeStorageKey(file.name)}`;
       const { error: uploadError } = await supabase.storage.from("bank-import-files").upload(path, file);
       if (uploadError) throw new Error(`העלאת הקובץ נכשלה: ${uploadError.message}`);
 
