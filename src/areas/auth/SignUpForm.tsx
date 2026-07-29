@@ -65,11 +65,12 @@ export function SignUpForm({ onBackToLogin }: SignUpFormProps) {
           <input
             id="signup-email"
             type="email"
+            dir="ltr"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="input-field"
+            className="input-field text-right"
           />
         </div>
         <div>

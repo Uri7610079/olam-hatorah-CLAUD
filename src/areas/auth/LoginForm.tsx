@@ -34,11 +34,12 @@ export function LoginForm({ onSignUp, onForgot }: LoginFormProps) {
           <input
             id="login-email"
             type="email"
+            dir="ltr"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="input-field"
+            className="input-field text-right"
           />
         </div>
         <div>
