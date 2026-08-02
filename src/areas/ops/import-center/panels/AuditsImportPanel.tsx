@@ -238,7 +238,7 @@ export function AuditsImportPanel() {
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -250,7 +250,7 @@ export function AuditsImportPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">יבוא רשימת חסרים לאירוע ביקורת (התאמה לתלמיד לפי מזהה). לניהול מלא של אירועי ביקורת ותוצאות - מסך "ביקורות משרד החינוך".</p>
+      <p className="text-sm text-ink-muted">יבוא רשימת חסרים לאירוע ביקורת (התאמה לתלמיד לפי מזהה). לניהול מלא של אירועי ביקורת ותוצאות - מסך "ביקורות משרד החינוך".</p>
 
       <div className="max-w-sm">
         <label className="field-label">עמותה</label>
@@ -331,7 +331,7 @@ export function AuditsImportPanel() {
             />
           ) : (
             <>
-              <p className="text-xs text-slate-500">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
+              <p className="text-xs text-ink-subtle">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
               <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
               {analyzing && <LoadingState rows={2} />}
               {duplicateId && (
@@ -342,7 +342,7 @@ export function AuditsImportPanel() {
                   </button>
                 </div>
               )}
-              {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+              {legacyWarning && <p className="text-xs text-warn-ink">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
               {error && <ErrorState message={error} />}
               {parsedRows && !duplicateId && (
                 <>
@@ -369,7 +369,7 @@ export function AuditsImportPanel() {
             <LoadingState rows={3} />
           ) : (
             <>
-              <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הרשימה.</p>
+              <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הרשימה.</p>
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
                   const data = tab === "valid" ? storedValid : tab === "needsDecision" ? storedNeeds : storedInvalid;
@@ -381,7 +381,7 @@ export function AuditsImportPanel() {
                 <button onClick={commit} disabled={committing} className="btn-primary">
                   {committing ? "קולטת…" : "קליטת רשימת החסרים"}
                 </button>
-                <button onClick={() => setReviewBatchId(null)} className="text-xs text-slate-500 underline">
+                <button onClick={() => setReviewBatchId(null)} className="text-xs text-ink-subtle underline">
                   חזרה
                 </button>
               </div>
@@ -391,13 +391,13 @@ export function AuditsImportPanel() {
       )}
 
       {commitResult && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+        <div className="rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
           נקלטו {commitResult.matched} רשומות. {commitResult.unmatched > 0 && `${commitResult.unmatched} שורות עם בעיה לא נכללו.`}
         </div>
       )}
 
       {orgId && selectedAudit && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-ink-subtle">
           סטטוס הביקורת הנוכחית: <StatusBadge severity={selectedAudit.status === "completed" ? "ok" : "medium"} label={AUDIT_STATUS_LABEL[selectedAudit.status]} />
           {selectedAudit.status === "completed" && " - ביקורת שהושלמה אינה פתוחה ליבוא נוסף; לצפייה בתוצאות עברי למסך הביקורות."}
         </p>

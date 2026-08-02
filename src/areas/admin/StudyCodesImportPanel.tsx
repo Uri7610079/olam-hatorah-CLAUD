@@ -232,7 +232,7 @@ export function StudyCodesImportPanel() {
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -244,11 +244,11 @@ export function StudyCodesImportPanel() {
 
   return (
     <div className="card mb-4 max-w-3xl space-y-4 p-5">
-      <p className="text-sm text-slate-600">יבוא קודי לימוד חדשים מקובץ אקסל.</p>
+      <p className="text-sm text-ink-muted">יבוא קודי לימוד חדשים מקובץ אקסל.</p>
 
       {!reviewBatchId && (
         <>
-          <p className="text-xs text-slate-500">עמודות בקובץ: קוד (חובה, ייחודי), תיאור (חובה), קטגוריה (לא חובה).</p>
+          <p className="text-xs text-ink-subtle">עמודות בקובץ: קוד (חובה, ייחודי), תיאור (חובה), קטגוריה (לא חובה).</p>
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
 
           {analyzing && <LoadingState rows={2} />}
@@ -261,7 +261,7 @@ export function StudyCodesImportPanel() {
             </div>
           )}
           {legacyWarning && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-control border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</span>
             </div>
@@ -301,14 +301,14 @@ export function StudyCodesImportPanel() {
           ) : reviewBatchQuery.data ? (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-900">{reviewBatchQuery.data.file_name}</p>
+                <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
                   label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
                 />
               </div>
 
-              {reviewIsOpen && <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הקובץ (שורות "שגוי" יישארו מחוץ ליבוא).</p>}
+              {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הקובץ (שורות "שגוי" יישארו מחוץ ליבוא).</p>}
 
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
@@ -324,7 +324,7 @@ export function StudyCodesImportPanel() {
                   {committing ? "קולטת…" : "קליטת קודי הלימוד"}
                 </button>
               )}
-              <button onClick={closeReview} className="text-xs text-slate-500 underline">
+              <button onClick={closeReview} className="text-xs text-ink-subtle underline">
                 חזרה / יבוא נוסף
               </button>
             </>
@@ -335,7 +335,7 @@ export function StudyCodesImportPanel() {
       )}
 
       {commitResult && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+        <div className="rounded-control bg-ok-soft p-3 text-sm text-ok-ink">
           נוצרו {commitResult.created} קודי לימוד חדשים.
           {commitResult.duplicate > 0 && ` ${commitResult.duplicate} שורות דולגו (קוד קיים כבר).`}
           {commitResult.invalid > 0 && ` ${commitResult.invalid} שורות שגויות (חסר שדה חובה).`}
@@ -343,7 +343,7 @@ export function StudyCodesImportPanel() {
       )}
 
       <div>
-        <h3 className="mb-2 mt-2 text-sm font-semibold text-slate-700">היסטוריית יבוא קודי לימוד</h3>
+        <h3 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא קודי לימוד</h3>
         <DataTable
           columns={[
             { key: "file", header: "קובץ", render: (b: StudyCodesBatchSummary) => b.file_name },

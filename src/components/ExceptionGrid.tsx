@@ -22,8 +22,8 @@ export function ExceptionGrid({ items }: { items: ExceptionCounter[] }) {
           className="card flex items-center justify-between px-4 py-3.5 text-right transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <div>
-            <p className="text-sm text-slate-600">{item.label}</p>
-            <p className="tabular mt-1 text-2xl font-semibold text-slate-900">{item.count}</p>
+            <p className="text-sm text-ink-muted">{item.label}</p>
+            <p className="tabular mt-1 text-2xl font-semibold text-ink">{item.count}</p>
           </div>
           <StatusBadge severity={item.severity} />
         </button>

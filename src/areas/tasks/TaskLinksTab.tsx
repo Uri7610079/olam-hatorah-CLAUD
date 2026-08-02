@@ -46,9 +46,9 @@ export function TaskLinksTab({ taskId, canEdit, userId }: TaskLinksTabProps) {
     <div className="space-y-3">
       {links.length === 0 && <EmptyState title="אין קישורים לישויות" description="ניתן לקשר את המשימה לעמותה, תלמיד, מסמך ועוד." />}
       {links.map((link) => (
-        <div key={link.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 p-2 text-sm">
+        <div key={link.id} className="flex items-center justify-between gap-2 rounded-control border border-line p-2 text-sm">
           <span>
-            {ENTITY_TYPE_LABEL[link.entity_type] ?? link.entity_type}: <span className="tabular text-slate-500">{link.entity_id}</span>
+            {ENTITY_TYPE_LABEL[link.entity_type] ?? link.entity_type}: <span className="tabular ltr-num text-ink-subtle">{link.entity_id}</span>
           </span>
           {canEdit && (
             <button
@@ -56,7 +56,7 @@ export function TaskLinksTab({ taskId, canEdit, userId }: TaskLinksTabProps) {
                 await removeLink(link.id);
                 refresh();
               }}
-              className="text-xs text-red-600 underline hover:text-red-800"
+              className="text-xs text-danger underline hover:text-danger-ink"
             >
               הסרה
             </button>
@@ -65,7 +65,7 @@ export function TaskLinksTab({ taskId, canEdit, userId }: TaskLinksTabProps) {
       ))}
 
       {canEdit && (
-        <div className="space-y-2 border-t border-slate-100 pt-3">
+        <div className="space-y-2 border-t border-line pt-3">
           <label className="field-label">סוג ישות</label>
           <select value={entityType} onChange={(e) => setEntityType(e.target.value)} className="input-field">
             {Object.entries(ENTITY_TYPE_LABEL).map(([key, label]) => (
@@ -84,10 +84,10 @@ export function TaskLinksTab({ taskId, canEdit, userId }: TaskLinksTabProps) {
                 className="input-field"
               />
               {(searchQuery.data ?? []).length > 0 && (
-                <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-1">
+                <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto rounded-control border border-line p-1">
                   {searchQuery.data!.map((r) => (
                     <li key={r.id}>
-                      <button onClick={() => handleAdd(r.id)} className="w-full rounded px-2 py-1 text-right text-sm hover:bg-slate-50">
+                      <button onClick={() => handleAdd(r.id)} className="w-full rounded px-2 py-1 text-right text-sm hover:bg-surface-muted">
                         {r.label}
                       </button>
                     </li>

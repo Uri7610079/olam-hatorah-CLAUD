@@ -11,11 +11,11 @@ const SEVERITY_LABEL: Record<Severity, string> = {
 };
 
 const SEVERITY_CLASSES: Record<Severity, string> = {
-  critical: "bg-red-50 text-red-700 ring-1 ring-red-200",
-  high: "bg-orange-50 text-orange-700 ring-1 ring-orange-200",
-  medium: "bg-yellow-50 text-yellow-800 ring-1 ring-yellow-200",
-  ok: "bg-green-50 text-green-700 ring-1 ring-green-200",
-  neutral: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
+  critical: "bg-danger-soft text-danger-ink ring-1 ring-danger/25",
+  high: "bg-warn-soft text-warn-ink ring-1 ring-warn/25",
+  medium: "bg-warn-soft text-warn-ink ring-1 ring-warn/20",
+  ok: "bg-ok-soft text-ok-ink ring-1 ring-ok/25",
+  neutral: "bg-neutral-soft text-neutral-ink ring-1 ring-neutral/25",
 };
 
 // אייקון שונה לכל רמת חומרה - כדי שהמשמעות תיקרא גם דרך צורה, לא רק דרך צבע

@@ -109,7 +109,7 @@ export function BankScreen({ initialTab = "transactions" }: { initialTab?: BankT
         />
       </div>
 
-      {!accountId && <p className="text-sm text-slate-500">בחרי עמותה וחשבון כדי להציג נתונים.</p>}
+      {!accountId && <p className="text-sm text-ink-subtle">בחרי עמותה וחשבון כדי להציג נתונים.</p>}
 
       {accountId && tab === "transactions" && <BankTransactionsPanel accountId={accountId} />}
       {accountId && tab === "matching" && <BankMatchingPanel orgId={orgId} accountId={accountId} />}

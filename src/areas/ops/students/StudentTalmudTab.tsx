@@ -67,7 +67,7 @@ export function StudentTalmudTab({ studentId }: { studentId: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-700">זכאות חודשית</h3>
+        <h3 className="mb-2 text-sm font-semibold text-ink-muted">זכאות חודשית</h3>
         <DataTable
           columns={eligibilityCols}
           rows={eligibilityQuery.data ?? []}
@@ -78,7 +78,7 @@ export function StudentTalmudTab({ studentId }: { studentId: string }) {
         />
       </div>
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-700">שגיאות</h3>
+        <h3 className="mb-2 text-sm font-semibold text-ink-muted">שגיאות</h3>
         <DataTable columns={errorCols} rows={errorsQuery.data ?? []} rowKey={(r) => r.id} loading={errorsQuery.isLoading} emptyTitle="אין שגיאות רשומות" />
       </div>
     </div>

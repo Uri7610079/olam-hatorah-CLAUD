@@ -185,7 +185,7 @@ export function MasterDataImportWizard() {
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -197,10 +197,10 @@ export function MasterDataImportWizard() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-ink-muted">
         יבוא קובץ אב ליצירת עמותות/סניפים/קבוצות/ראשי קבוצה אמיתיים. עמותה/סניף/קבוצה/ראש קבוצה קיימים (לפי מספר עמותה או שם מדויק, קוד סניף, שם קבוצה) לא ייווצרו כפול - רק יושלם מה שחסר. הנתונים הנוצרים כאן אינם מסומנים כדמו לעולם, ולא יכולים להתערבב עם חבילת דמו.
       </p>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-ink-subtle">
         עמודות מצופות בקובץ: <span className="tabular">legal_name</span> (חובה), <span className="tabular">org_number</span>,{" "}
         <span className="tabular">contact_phone</span>, <span className="tabular">contact_email</span>, <span className="tabular">contact_address</span>,{" "}
         <span className="tabular">talmud_branch_code</span>, <span className="tabular">branch_internal_name</span>, <span className="tabular">branch_address</span>,{" "}
@@ -210,7 +210,7 @@ export function MasterDataImportWizard() {
       {error && <ErrorState message={error} />}
 
       {commitResult && (
-        <div className="space-y-2 rounded-md bg-green-50 p-3 text-sm text-green-800">
+        <div className="space-y-2 rounded-control bg-ok-soft p-3 text-sm text-ok-ink">
           <p>הקובץ נקלט בהצלחה.</p>
           <ul className="space-y-0.5 text-xs">
             <li>עמותות חדשות: {commitResult.created_organizations}</li>
@@ -245,7 +245,7 @@ export function MasterDataImportWizard() {
                   </button>
                 </div>
               )}
-              {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+              {legacyWarning && <p className="text-xs text-warn-ink">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
               {parsedRows && !duplicateId && (
                 <>
                   <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
@@ -271,7 +271,7 @@ export function MasterDataImportWizard() {
             <LoadingState rows={3} />
           ) : (
             <>
-              <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הקובץ.</p>
+              <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הקובץ.</p>
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
                   const data = tab === "valid" ? storedValid : tab === "needsDecision" ? storedNeeds : storedInvalid;
@@ -282,7 +282,7 @@ export function MasterDataImportWizard() {
                 <button onClick={commit} disabled={committing || storedNeeds.length > 0} className="btn-primary">
                   {committing ? "קולטת…" : "קליטת קובץ האב"}
                 </button>
-                <button onClick={startOver} className="text-xs text-slate-500 underline">
+                <button onClick={startOver} className="text-xs text-ink-subtle underline">
                   ביטול
                 </button>
               </div>

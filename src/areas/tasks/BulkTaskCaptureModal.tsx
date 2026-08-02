@@ -179,20 +179,20 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
       <div role="dialog" aria-modal="true" aria-labelledby="bulk-capture-title" className="card max-h-[85vh] w-full max-w-xl overflow-y-auto p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 id="bulk-capture-title" className="text-base font-semibold text-slate-900">
+          <h2 id="bulk-capture-title" className="text-base font-semibold text-ink">
             יצירה מרובה מטקסט חופשי
           </h2>
-          <button onClick={close} aria-label="סגירה" title="סגירת החלון" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100">
+          <button onClick={close} aria-label="סגירה" title="סגירת החלון" className="rounded-control p-1.5 text-ink-subtle hover:bg-surface-muted">
             ✕
           </button>
         </div>
 
         {drafts.length === 0 ? (
           <div className="space-y-3">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-subtle">
               כתבו או הדביקו טקסט חופשי - כל שורה (או משפט מופרד בפסיק) תהפוך להצעת משימה נפרדת. תהיה הזדמנות לערוך ולאשר לפני היצירה בפועל.
             </p>
             <textarea
@@ -223,13 +223,13 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-subtle">
               הפיצול הוא הצעה ראשונית בלבד - אפשר לערוך, למחוק שורה, או לבטל סימון של הצעה שלא רלוונטית.
             </p>
-            {aiNote && <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700">{aiNote}</p>}
+            {aiNote && <p className="rounded-control bg-warn-soft p-2 text-xs text-warn-ink">{aiNote}</p>}
             <div className="space-y-2">
               {drafts.map((d) => (
-                <div key={d.id} className={`rounded-lg border p-2.5 ${d.included ? "border-slate-200" : "border-slate-100 opacity-50"}`}>
+                <div key={d.id} className={`rounded-control border p-2.5 ${d.included ? "border-line" : "border-line opacity-50"}`}>
                   <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
@@ -273,10 +273,10 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
+            <div className="grid grid-cols-2 gap-3 border-t border-line pt-3">
               <div>
                 <label className="field-label">אחראים (לכל המשימות)</label>
-                <div className="max-h-24 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                <div className="max-h-24 space-y-1 overflow-y-auto rounded-control border border-line p-2">
                   {(usersQuery.data ?? []).map((u) => (
                     <label key={u.id} className="flex items-center gap-2 text-xs">
                       <input
@@ -293,7 +293,7 @@ export function BulkTaskCaptureModal({ open, onClose, onCreated }: BulkTaskCaptu
               </div>
               <div>
                 <label className="field-label">צוותים (לכל המשימות)</label>
-                <div className="max-h-24 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                <div className="max-h-24 space-y-1 overflow-y-auto rounded-control border border-line p-2">
                   {(teamsQuery.data ?? []).map((t) => (
                     <label key={t.id} className="flex items-center gap-2 text-xs">
                       <input

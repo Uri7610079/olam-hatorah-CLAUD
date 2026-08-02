@@ -77,10 +77,11 @@ export function OrganizationBankAccountsTab({ organizationId }: OrganizationBank
 
   const columns: DataTableColumn<OrganizationBankAccount>[] = [
     { key: "bank", header: "בנק", render: (r) => r.bank_name ?? "—" },
-    { key: "branch", header: "סניף", className: "tabular", render: (r) => r.bank_branch_code ?? "—" },
+    { key: "branch", header: "סניף", className: "tabular ltr-num", render: (r) => r.bank_branch_code ?? "—" },
     {
       key: "account_number",
       header: "מספר חשבון",
+      className: "ltr-num",
       render: (r) => (
         <SensitiveValue
           masked={r.account_number_masked ?? "—"}
@@ -104,7 +105,7 @@ export function OrganizationBankAccountsTab({ organizationId }: OrganizationBank
       header: "",
       render: (r) =>
         canManage && r.is_active ? (
-          <button onClick={() => closeAccount(r.id)} className="text-xs text-red-600 underline hover:text-red-800">
+          <button onClick={() => closeAccount(r.id)} className="text-xs text-danger underline hover:text-danger-ink">
             סגירת חשבון
           </button>
         ) : null,

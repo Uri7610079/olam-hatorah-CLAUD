@@ -145,7 +145,7 @@ export function StudentsListScreen() {
         </button>
       ),
     },
-    { key: "phone", header: "טלפון", render: (s) => s.phone_raw ?? "—" },
+    { key: "phone", header: "טלפון", className: "ltr-num", render: (s) => s.phone_raw ?? "—" },
     { key: "status", header: "סטטוס", render: (s) => <StatusBadge severity={STATUS_SEVERITY[s.status]} label={STATUS_LABEL[s.status]} /> },
     { key: "student_type", header: "סוג תלמיד", hiddenByDefault: true, render: (s) => s.student_type ?? "—" },
     { key: "study_code", header: "קוד לימוד", hiddenByDefault: true, render: (s) => s.study_code ?? "—" },
@@ -238,10 +238,10 @@ export function StudentsListScreen() {
       />
 
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
           <div role="dialog" aria-modal="true" aria-labelledby="new-student-title" className="card w-full max-w-md p-6">
-            <h2 id="new-student-title" className="mb-1 text-base font-semibold text-slate-900">תלמיד חדש</h2>
-            <p className="mb-4 text-xs text-slate-500">נוצר כטיוטה. שיוך, חשבון בנק והפעלה מתבצעים בכרטיס התלמיד.</p>
+            <h2 id="new-student-title" className="mb-1 text-base font-semibold text-ink">תלמיד חדש</h2>
+            <p className="mb-4 text-xs text-ink-subtle">נוצר כטיוטה. שיוך, חשבון בנק והפעלה מתבצעים בכרטיס התלמיד.</p>
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>

@@ -29,6 +29,7 @@ import {
   ListChecks,
   SlidersHorizontal,
   MessageSquare,
+  Palette,
 } from "lucide-react";
 import type { Area } from "./AreaContext";
 
@@ -262,6 +263,15 @@ export const SCREENS: ScreenDef[] = [
     title: "ניהול נתוני דמו",
     builtInStage: "שלב 15",
     icon: FlaskConical,
+  },
+  {
+    path: "/admin/appearance",
+    area: "admin",
+    navLabel: "עיצוב ותצוגה",
+    title: "עיצוב ותצוגה",
+    description: "בחירה בין המראה הקיים למראה המעודכן של המערכת",
+    builtInStage: "שלב 26",
+    icon: Palette,
   },
   {
     path: "/admin/audit-log",

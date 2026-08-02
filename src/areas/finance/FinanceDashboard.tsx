@@ -81,34 +81,34 @@ export function FinanceDashboard() {
         </div>
       </div>
 
-      {!orgId && <p className="text-sm text-slate-500">בחרי עמותה כדי להציג את מצב החודש.</p>}
+      {!orgId && <p className="text-sm text-ink-subtle">בחרי עמותה כדי להציג את מצב החודש.</p>}
       {countsQuery.isLoading && <LoadingState rows={3} />}
       {countsQuery.isError && <ErrorState message="שגיאה בטעינת נתוני הדשבורד." />}
       {countsQuery.data && (
         <>
           <div className="card mb-4 max-w-sm p-4">
-            <p className="text-sm text-slate-600">סטטוס החודש</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">
+            <p className="text-sm text-ink-muted">סטטוס החודש</p>
+            <p className="mt-1 text-lg font-semibold text-ink">
               {countsQuery.data.period_status ? PERIOD_STATUS_LABEL[countsQuery.data.period_status] ?? countsQuery.data.period_status : "טרם נפתח"}
             </p>
           </div>
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="card p-4">
-              <p className="text-sm text-slate-600">ברוטו</p>
-              <p className="tabular mt-1 text-xl font-semibold text-slate-900">{countsQuery.data.gross_amount.toLocaleString("he-IL")}</p>
+              <p className="text-sm text-ink-muted">ברוטו</p>
+              <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.gross_amount.toLocaleString("he-IL")}</p>
             </div>
             <div className="card p-4">
-              <p className="text-sm text-slate-600">עמלה</p>
-              <p className="tabular mt-1 text-xl font-semibold text-slate-900">{countsQuery.data.commission_amount.toLocaleString("he-IL")}</p>
+              <p className="text-sm text-ink-muted">עמלה</p>
+              <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.commission_amount.toLocaleString("he-IL")}</p>
             </div>
             <div className="card p-4">
-              <p className="text-sm text-slate-600">נטו</p>
-              <p className="tabular mt-1 text-xl font-semibold text-slate-900">{countsQuery.data.net_amount.toLocaleString("he-IL")}</p>
+              <p className="text-sm text-ink-muted">נטו</p>
+              <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.net_amount.toLocaleString("he-IL")}</p>
             </div>
           </div>
           <div className="card mb-4 max-w-sm p-4">
-            <p className="text-sm text-slate-600">התחייבות כוללת לקבוצות (יתרת ספר תנועות)</p>
-            <p className="tabular mt-1 text-xl font-semibold text-slate-900">{countsQuery.data.group_commitment_total.toLocaleString("he-IL")}</p>
+            <p className="text-sm text-ink-muted">התחייבות כוללת לקבוצות (יתרת ספר תנועות)</p>
+            <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.group_commitment_total.toLocaleString("he-IL")}</p>
           </div>
           <ExceptionGrid items={buildItems(countsQuery.data, orgId)} />
         </>

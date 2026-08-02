@@ -46,14 +46,14 @@ function CollapsibleSection({ title, subtitle, children }: { title: string; subt
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between px-4 py-3 text-right hover:bg-slate-50"
+        className="flex w-full items-center justify-between px-4 py-3 text-right hover:bg-surface-muted"
       >
-        <span className="text-sm font-semibold text-slate-800">{title}</span>
-        {open ? <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden="true" /> : <ChevronLeft className="h-4 w-4 text-slate-400" aria-hidden="true" />}
+        <span className="text-sm font-semibold text-ink">{title}</span>
+        {open ? <ChevronDown className="h-4 w-4 text-ink-subtle" aria-hidden="true" /> : <ChevronLeft className="h-4 w-4 text-ink-subtle" aria-hidden="true" />}
       </button>
       {open && (
-        <div className="border-t border-slate-100 p-4">
-          {subtitle && <p className="mb-3 text-xs text-slate-500">{subtitle}</p>}
+        <div className="border-t border-line p-4">
+          {subtitle && <p className="mb-3 text-xs text-ink-subtle">{subtitle}</p>}
           {children}
         </div>
       )}
@@ -113,14 +113,14 @@ function TeamMembersPanel({ teamId, canManage }: { teamId: string; canManage: bo
   };
 
   return (
-    <div className="mt-2 rounded-lg bg-slate-50 p-3">
+    <div className="mt-2 rounded-control bg-surface-muted p-3">
       <div className="mb-2 flex flex-wrap gap-1.5">
-        {[...memberIds].length === 0 && <span className="text-xs text-slate-400">אין חברים בצוות עדיין.</span>}
+        {[...memberIds].length === 0 && <span className="text-xs text-ink-subtle">אין חברים בצוות עדיין.</span>}
         {[...memberIds].map((id) => (
-          <span key={id} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs text-slate-700 ring-1 ring-slate-200">
+          <span key={id} className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-xs text-ink-muted ring-1 ring-line">
             {usersById.get(id) ?? "—"}
             {canManage && (
-              <button onClick={() => removeMember(id)} aria-label="הסרה" title="הסרת חבר מהצוות" className="text-slate-400 hover:text-red-600">
+              <button onClick={() => removeMember(id)} aria-label="הסרה" title="הסרת חבר מהצוות" className="text-ink-subtle hover:text-danger">
                 ✕
               </button>
             )}
@@ -255,7 +255,7 @@ function RecurringRulesSection() {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">כללים ליצירת משימה חדשה אוטומטית לפי לוח זמנים - לא לצורך מדידת ביצוע.</p>
+        <p className="text-xs text-ink-subtle">כללים ליצירת משימה חדשה אוטומטית לפי לוח זמנים - לא לצורך מדידת ביצוע.</p>
         <button
           onClick={() => {
             // ברירת מחדל לטופס יצירה חדש = הבחירה האחרונה של המשתמש, לא ריק.
@@ -278,9 +278,9 @@ function RecurringRulesSection() {
       />
 
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
           <div role="dialog" aria-modal="true" aria-labelledby="new-recurrence-title" className="card max-h-[85vh] w-full max-w-lg overflow-y-auto p-6">
-            <h2 id="new-recurrence-title" className="mb-4 text-base font-semibold text-slate-900">
+            <h2 id="new-recurrence-title" className="mb-4 text-base font-semibold text-ink">
               כלל חזרה חדש
             </h2>
             <div className="space-y-3">
@@ -398,7 +398,7 @@ function RecurringRulesSection() {
 
               <div>
                 <label className="field-label">אחראים</label>
-                <div className="max-h-28 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                <div className="max-h-28 space-y-1 overflow-y-auto rounded-control border border-line p-2">
                   {(usersQuery.data ?? []).map((u) => (
                     <label key={u.id} className="flex items-center gap-2 text-sm">
                       <input
@@ -418,7 +418,7 @@ function RecurringRulesSection() {
 
               <div>
                 <label className="field-label">צוותים</label>
-                <div className="space-y-1 rounded-lg border border-slate-200 p-2">
+                <div className="space-y-1 rounded-control border border-line p-2">
                   {(teamsQuery.data ?? []).map((t) => (
                     <label key={t.id} className="flex items-center gap-2 text-sm">
                       <input
@@ -546,7 +546,7 @@ function TaskTemplatesSection() {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">תבנית מאפשרת יצירה מהירה של משימה עם ערכים קבועים מראש - זמינה לכל מי שיכול ליצור משימה.</p>
+        <p className="text-xs text-ink-subtle">תבנית מאפשרת יצירה מהירה של משימה עם ערכים קבועים מראש - זמינה לכל מי שיכול ליצור משימה.</p>
         <button onClick={() => setShowCreate(true)} className="btn-primary text-sm shrink-0">
           תבנית חדשה
         </button>
@@ -562,9 +562,9 @@ function TaskTemplatesSection() {
       />
 
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
           <div role="dialog" aria-modal="true" aria-labelledby="new-template-title" className="card max-h-[85vh] w-full max-w-lg overflow-y-auto p-6">
-            <h2 id="new-template-title" className="mb-4 text-base font-semibold text-slate-900">
+            <h2 id="new-template-title" className="mb-4 text-base font-semibold text-ink">
               תבנית חדשה
             </h2>
             <div className="space-y-3">
@@ -738,7 +738,7 @@ export function TasksSettingsScreen() {
                     </button>
                     <div className="flex items-center gap-3">
                       <StatusBadge severity={team.is_active ? "ok" : "neutral"} label={team.is_active ? "פעיל" : "לא פעיל"} />
-                      <button onClick={() => toggleTeamActive(team)} className="text-xs text-slate-500 underline">
+                      <button onClick={() => toggleTeamActive(team)} className="text-xs text-ink-subtle underline">
                         {team.is_active ? "השבתה" : "הפעלה"}
                       </button>
                     </div>
@@ -762,7 +762,7 @@ export function TasksSettingsScreen() {
                   <span className="text-sm">{cat.label_he}</span>
                   <div className="flex items-center gap-3">
                     <StatusBadge severity={cat.is_active ? "ok" : "neutral"} label={cat.is_active ? "פעילה" : "לא פעילה"} />
-                    <button onClick={() => toggleCategoryActive(cat)} className="text-xs text-slate-500 underline">
+                    <button onClick={() => toggleCategoryActive(cat)} className="text-xs text-ink-subtle underline">
                       {cat.is_active ? "השבתה" : "הפעלה"}
                     </button>
                   </div>
@@ -791,8 +791,8 @@ export function TasksSettingsScreen() {
 
       {canManageWhatsApp && (
         <section>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">חיבור WhatsApp</h2>
-          <p className="mb-3 text-xs text-slate-500">
+          <h2 className="mb-3 text-sm font-semibold text-ink">חיבור WhatsApp</h2>
+          <p className="mb-3 text-xs text-ink-subtle">
             שני ספקים רשמיים נתמכים - אפשר לבחור לפי מה שהלקוח מעדיף להקים בפועל. שניהם משתמשים באותו "מזהה סוד" (WHATSAPP_WEBHOOK_SECRET) שהוגדר פעם אחת.
           </p>
           <div className="space-y-2">
@@ -800,12 +800,12 @@ export function TasksSettingsScreen() {
               <div key={group.id} className="card flex items-center justify-between p-3">
                 <div>
                   <span className="text-sm font-medium">{group.label}</span>
-                  <span className="mr-2 text-xs text-slate-400">{PROVIDER_LABEL[group.provider ?? ""] ?? group.provider ?? "—"}</span>
-                  <span className="mr-2 text-xs text-slate-400 tabular">{group.external_group_id}</span>
+                  <span className="mr-2 text-xs text-ink-subtle">{PROVIDER_LABEL[group.provider ?? ""] ?? group.provider ?? "—"}</span>
+                  <span className="mr-2 text-xs text-ink-subtle tabular ltr-num">{group.external_group_id}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <StatusBadge severity={group.is_active ? "ok" : "neutral"} label={group.is_active ? "מחוברת" : "מנותקת"} />
-                  <button onClick={() => toggleGroupActive(group.id, group.is_active)} className="text-xs text-slate-500 underline">
+                  <button onClick={() => toggleGroupActive(group.id, group.is_active)} className="text-xs text-ink-subtle underline">
                     {group.is_active ? "ניתוק" : "חיבור מחדש"}
                   </button>
                 </div>
@@ -832,7 +832,7 @@ export function TasksSettingsScreen() {
                 חיבור
               </button>
             </div>
-            <p className="text-xs text-slate-400">{PROVIDER_HELP[newGroupProvider]}</p>
+            <p className="text-xs text-ink-subtle">{PROVIDER_HELP[newGroupProvider]}</p>
           </form>
         </section>
       )}

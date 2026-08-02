@@ -384,7 +384,7 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
     { key: "direction", header: "צד", render: (r) => DIRECTION_LABEL[r.direction] },
     { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
     { key: "desc", header: "תיאור", render: (r) => r.description ?? "—" },
-    { key: "ref", header: "אסמכתה", render: (r) => r.reference ?? "—" },
+    { key: "ref", header: "אסמכתה", className: "ltr-num", render: (r) => r.reference ?? "—" },
     {
       key: "suggested",
       header: "הצעת סיווג",
@@ -425,7 +425,7 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-xs text-slate-500 max-w-2xl">
+        <p className="text-xs text-ink-subtle max-w-2xl">
           סיווג תנועה הוא הצעה/קטגוריה בלבד - אינו משנה יתרת קבוצה ללא התאמה עסקית מאושרת (שלב 12).
         </p>
         {accountId && canImport && (
@@ -437,7 +437,7 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
 
       {showImport && accountId && !reviewBatchId && (
         <div className="card mb-6 max-w-2xl space-y-4 p-5">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-subtle">
             עמודות צפויות (הנחה זמנית עד קבלת פורמט מאושר מהבנק): תאריך ביצוע, תאריך ערך, חובה/זכות, סכום, תיאור, אסמכתה, סוג פעולה, יתרה, מזהה בנק (לא חובה).
           </p>
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
@@ -451,7 +451,7 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
             </div>
           )}
           {legacyWarning && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</span>
             </div>
@@ -495,8 +495,8 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
       {reviewBatchId && (
         <div className="card mb-6 max-w-3xl space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-slate-900">אצווה נוצרה</p>
-            <button onClick={() => setReviewBatchId(null)} className="text-xs text-slate-500 underline">
+            <p className="text-sm font-medium text-ink">אצווה נוצרה</p>
+            <button onClick={() => setReviewBatchId(null)} className="text-xs text-ink-subtle underline">
               חזרה לרשימה
             </button>
           </div>
@@ -505,8 +505,9 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
             {committing ? "קולטת…" : "קליטת תנועות"}
           </button>
           {commitResult && (
-            <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
-              נקלטו {commitResult.committed_count} תנועות. {commitResult.duplicate_count} כפילויות ו-{commitResult.invalid_count} שגויות לא נכללו.
+            <div className="rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
+              נקלטו <span className="tabular">{commitResult.committed_count}</span> תנועות. <span className="tabular">{commitResult.duplicate_count}</span> כפילויות ו-
+              <span className="tabular">{commitResult.invalid_count}</span> שגויות לא נכללו.
             </div>
           )}
         </div>
@@ -514,7 +515,7 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
 
       {accountId && (
         <>
-          <h2 className="mb-2 mt-2 text-sm font-semibold text-slate-700">היסטוריית יבוא</h2>
+          <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא</h2>
           <DataTable
             columns={[
               { key: "file", header: "קובץ", render: (b: BatchSummary) => b.file_name },

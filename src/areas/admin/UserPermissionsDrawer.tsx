@@ -77,15 +77,15 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <button aria-label="סגור" className="flex-1 bg-slate-900/40" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-label="ניהול הרשאות" className="h-full w-full max-w-lg overflow-y-auto bg-white p-5 shadow-xl">
+      <button aria-label="סגור" className="flex-1 bg-ink/40" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="ניהול הרשאות" className="h-full w-full max-w-lg overflow-y-auto bg-surface p-5 shadow-xl">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">ניהול הרשאות — {userLabel}</h2>
-          <button onClick={onClose} aria-label="סגור" className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100">
+          <h2 className="text-base font-semibold text-ink">ניהול הרשאות — {userLabel}</h2>
+          <button onClick={onClose} aria-label="סגור" className="rounded-control p-1.5 text-ink-subtle transition hover:bg-surface-muted">
             ✕
           </button>
         </div>
-        <p className="mb-4 text-xs text-slate-500">
+        <p className="mb-4 text-xs text-ink-subtle">
           תפקיד: {roleLabel ?? "— טרם נקבע —"}. "ברירת מחדל" ניתנת מהתפקיד; ניתן לחרוג פר-משתמש בכל שורה בנפרד.
         </p>
 
@@ -97,20 +97,20 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
           <div className="space-y-5">
             {Array.from(grouped.entries()).map(([resource, items]) => (
               <div key={resource}>
-                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">{resource}</h3>
+                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{resource}</h3>
                 <ul className="space-y-1.5">
                   {items.map((item) => {
                     const override = overrides.get(item.id) ?? null;
                     const fromRole = roleGrants.has(item.id);
                     const effective = override === "revoke" ? false : override === "grant" ? true : fromRole;
                     return (
-                      <li key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-2.5">
+                      <li key={item.id} className="flex items-center justify-between gap-3 rounded-control border border-line p-2.5">
                         <div className="min-w-0">
-                          <p className="truncate text-sm text-slate-800">{item.label_he}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="truncate text-sm text-ink">{item.label_he}</p>
+                          <p className="text-xs text-ink-subtle">
                             {item.resource}.{item.action}
                             {override && (
-                              <span className="mr-2 text-amber-600">
+                              <span className="mr-2 text-warn">
                                 {override === "grant" ? "· הענקה ידנית" : "· שלילה ידנית"} (ברירת מחדל: {fromRole ? "כן" : "לא"})
                               </span>
                             )}
@@ -124,12 +124,12 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
                             </button>
                           )}
                           {fromRole && (
-                            <button onClick={() => setOverride(item.resource, item.action, "revoke")} disabled={override === "revoke"} className="text-xs text-red-600 underline disabled:opacity-40">
+                            <button onClick={() => setOverride(item.resource, item.action, "revoke")} disabled={override === "revoke"} className="text-xs text-danger underline disabled:opacity-40">
                               שלילה
                             </button>
                           )}
                           {override && (
-                            <button onClick={() => setOverride(item.resource, item.action, null)} className="text-xs text-slate-500 underline">
+                            <button onClick={() => setOverride(item.resource, item.action, null)} className="text-xs text-ink-subtle underline">
                               איפוס
                             </button>
                           )}

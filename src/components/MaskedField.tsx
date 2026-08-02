@@ -27,7 +27,7 @@ export function MaskedField({ label, value, onChange, readOnly, id }: MaskedFiel
           value={value}
           readOnly={readOnly}
           onChange={(e) => onChange?.(e.target.value)}
-          className="input-field tabular max-w-xs"
+          className="input-field tabular ltr-num max-w-xs"
         />
         <button type="button" onClick={() => setVisible((v) => !v)} aria-pressed={visible} className="link-action text-xs">
           {visible ? "הסתר" : "הצג"}

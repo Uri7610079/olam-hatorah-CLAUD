@@ -11,6 +11,18 @@
       rel="stylesheet"
     />
     <title>עולם התורה — מערכת ניהול משרד</title>
+    <script>
+      // מוחל את ערכת העיצוב לפני שה-CSS והאפליקציה נטענים, כדי שלא תהיה הבזקה
+      // של הערכה הלא-נכונה בכל טעינת עמוד. ר' src/lib/uiTheme.ts.
+      (function () {
+        try {
+          var t = localStorage.getItem("olam-ui-theme");
+          document.documentElement.setAttribute("data-ui", t === "v2" ? "v2" : "classic");
+        } catch (e) {
+          document.documentElement.setAttribute("data-ui", "classic");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

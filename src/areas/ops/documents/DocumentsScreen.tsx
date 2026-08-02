@@ -337,7 +337,7 @@ export function DocumentsScreen() {
             </a>
           )}
           {canManageDocs && d.status === "active" && (
-            <button onClick={() => archiveDocument(d.id)} className="text-xs text-red-600 underline">
+            <button onClick={() => archiveDocument(d.id)} className="text-xs text-danger underline">
               גניזה
             </button>
           )}
@@ -435,7 +435,7 @@ export function DocumentsScreen() {
                   <input value={docForm.external_link} onChange={(e) => setDocForm((f) => ({ ...f, external_link: e.target.value }))} className="input-field" placeholder="https://..." />
                 </div>
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
+              <label className="flex items-center gap-2 text-sm text-ink-muted">
                 <input type="checkbox" checked={docForm.is_sensitive} onChange={(e) => setDocForm((f) => ({ ...f, is_sensitive: e.target.checked }))} />
                 מסמך רגיש (גישה מוגבלת)
               </label>
@@ -454,7 +454,7 @@ export function DocumentsScreen() {
           {canManageTemplates && (
             <div className="card mb-6 max-w-2xl space-y-3 p-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-700">תבניות מכתבים</h2>
+                <h2 className="text-sm font-semibold text-ink-muted">תבניות מכתבים</h2>
                 <button onClick={() => setShowTemplateForm((v) => !v)} className="btn-secondary text-xs">
                   {showTemplateForm ? "סגירה" : "תבנית חדשה"}
                 </button>
@@ -472,7 +472,7 @@ export function DocumentsScreen() {
                   </button>
                 </form>
               )}
-              <ul className="space-y-1 text-sm text-slate-600">
+              <ul className="space-y-1 text-sm text-ink-muted">
                 {(templatesQuery.data ?? []).map((t) => (
                   <li key={t.id}>{t.label_he}</li>
                 ))}
@@ -538,7 +538,7 @@ export function DocumentsScreen() {
           {selectedLetter && canManageLetters && (
             <div className="card mt-4 max-w-2xl space-y-3 p-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-700">
+                <h2 className="text-sm font-semibold text-ink-muted">
                   {selectedLetter.recipient_name} · {selectedLetter.subject}
                 </h2>
                 <StatusBadge severity={LETTER_STATUS_SEVERITY[selectedLetter.status]} label={LETTER_STATUS_LABEL[selectedLetter.status]} />
@@ -546,7 +546,7 @@ export function DocumentsScreen() {
 
               {selectedLetter.status === "draft" && (
                 <>
-                  <p className="flex items-start gap-2 text-xs text-amber-700">
+                  <p className="flex items-start gap-2 text-xs text-warn-ink">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     אישור אנושי חובה - יש לערוך את הנוסח הסופי ולאשר לפני שהמכתב ייחשב מוכן לשליחה.
                   </p>
@@ -560,7 +560,7 @@ export function DocumentsScreen() {
 
               {selectedLetter.status === "approved" && (
                 <>
-                  <p className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">{selectedLetter.final_body}</p>
+                  <p className="whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-sm text-ink-muted">{selectedLetter.final_body}</p>
                   <label className="field-label">אופן שליחה</label>
                   <div className="flex gap-2">
                     <input value={sendMethodDraft} onChange={(e) => setSendMethodDraft(e.target.value)} className="input-field" placeholder="דואר / מייל / פקס..." />
@@ -573,15 +573,15 @@ export function DocumentsScreen() {
 
               {selectedLetter.status === "sent" && (
                 <>
-                  <p className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">{selectedLetter.final_body}</p>
-                  <p className="text-xs text-slate-500">נשלח {selectedLetter.sent_at} · {selectedLetter.send_method}</p>
+                  <p className="whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-sm text-ink-muted">{selectedLetter.final_body}</p>
+                  <p className="text-xs text-ink-subtle">נשלח {selectedLetter.sent_at} · {selectedLetter.send_method}</p>
                   <label className="field-label">רישום תשובה (לא חובה)</label>
                   <textarea value={responseNotesDraft} onChange={(e) => setResponseNotesDraft(e.target.value)} className="input-field" rows={3} />
                   <div className="flex gap-2">
                     <button onClick={recordResponse} disabled={letterBusy} className="btn-primary text-xs">
                       רישום תשובה
                     </button>
-                    <button onClick={archiveLetter} className="text-xs text-slate-500 underline">
+                    <button onClick={archiveLetter} className="text-xs text-ink-subtle underline">
                       גניזה
                     </button>
                   </div>
@@ -590,9 +590,9 @@ export function DocumentsScreen() {
 
               {selectedLetter.status === "answered" && (
                 <>
-                  <p className="whitespace-pre-wrap rounded-md bg-slate-50 p-3 text-sm text-slate-700">{selectedLetter.final_body}</p>
-                  <p className="text-xs text-slate-500">נענה {selectedLetter.responded_at}: {selectedLetter.response_notes}</p>
-                  <button onClick={archiveLetter} className="text-xs text-slate-500 underline">
+                  <p className="whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-sm text-ink-muted">{selectedLetter.final_body}</p>
+                  <p className="text-xs text-ink-subtle">נענה {selectedLetter.responded_at}: {selectedLetter.response_notes}</p>
+                  <button onClick={archiveLetter} className="text-xs text-ink-subtle underline">
                     גניזה
                   </button>
                 </>

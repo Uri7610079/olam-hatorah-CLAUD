@@ -15,7 +15,7 @@ interface TabsProps<K extends string> {
 // כל מסך פרטים עם כמה טאבים (למשל כרטיס עמותה משלב 3).
 export function Tabs<K extends string>({ tabs, activeTab, onChange, ariaLabel }: TabsProps<K>) {
   return (
-    <div role="tablist" aria-label={ariaLabel} className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
+    <div role="tablist" aria-label={ariaLabel} className="mb-4 flex flex-wrap gap-1 border-b border-line">
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -25,11 +25,11 @@ export function Tabs<K extends string>({ tabs, activeTab, onChange, ariaLabel }:
           className={`border-b-2 px-3 py-2 text-sm font-medium transition ${
             activeTab === tab.key
               ? "border-brand-600 text-brand-700"
-              : "border-transparent text-slate-500 hover:text-slate-700"
+              : "border-transparent text-ink-subtle hover:text-ink-muted"
           }`}
         >
           {tab.label}
-          {tab.badge !== undefined && <span className="tabular text-slate-400"> ({tab.badge})</span>}
+          {tab.badge !== undefined && <span className="tabular text-ink-subtle"> ({tab.badge})</span>}
         </button>
       ))}
     </div>

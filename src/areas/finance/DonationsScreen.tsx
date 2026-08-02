@@ -247,7 +247,7 @@ export function DonationsScreen() {
         />
       ),
     },
-    { key: "reference", header: "אסמכתה", render: (r) => r.reference ?? "—" },
+    { key: "reference", header: "אסמכתה", className: "ltr-num", render: (r) => r.reference ?? "—" },
     {
       key: "group",
       header: "קבוצה",
@@ -268,7 +268,7 @@ export function DonationsScreen() {
             <button onClick={submitAssign} disabled={!assignGroupId || rowBusy === r.id} className="link-action text-xs">
               אישור
             </button>
-            <button onClick={() => setAssigningId(null)} className="text-xs text-slate-500 underline">
+            <button onClick={() => setAssigningId(null)} className="text-xs text-ink-subtle underline">
               ביטול
             </button>
           </div>
@@ -297,7 +297,7 @@ export function DonationsScreen() {
       render: (r) => (
         <div>
           <StatusBadge severity={STATUS_SEVERITY[r.status]} label={STATUS_LABEL[r.status]} />
-          {r.status === "rejected" && r.rejection_reason && <p className="mt-1 text-xs text-slate-400">{r.rejection_reason}</p>}
+          {r.status === "rejected" && r.rejection_reason && <p className="mt-1 text-xs text-ink-subtle">{r.rejection_reason}</p>}
         </div>
       ),
     },
@@ -321,10 +321,10 @@ export function DonationsScreen() {
           rejectingId === r.id ? (
             <div className="flex items-center gap-1.5">
               <input placeholder="סיבת דחייה" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="input-field w-28 text-xs" />
-              <button onClick={submitReject} disabled={!rejectReason.trim() || rowBusy === r.id} className="text-xs text-red-600 underline">
+              <button onClick={submitReject} disabled={!rejectReason.trim() || rowBusy === r.id} className="text-xs text-danger underline">
                 אישור דחייה
               </button>
-              <button onClick={() => setRejectingId(null)} className="text-xs text-slate-500 underline">
+              <button onClick={() => setRejectingId(null)} className="text-xs text-ink-subtle underline">
                 ביטול
               </button>
             </div>
@@ -339,7 +339,7 @@ export function DonationsScreen() {
                   setRejectReason("");
                   setRowError(null);
                 }}
-                className="text-xs text-red-600 underline hover:text-red-800"
+                className="text-xs text-danger underline hover:text-danger-ink"
               >
                 דחייה
               </button>
@@ -400,7 +400,7 @@ export function DonationsScreen() {
           </select>
         </div>
         {orgId && (
-          <label className="flex items-center gap-2 pb-2 text-sm text-slate-600">
+          <label className="flex items-center gap-2 pb-2 text-sm text-ink-muted">
             <input type="checkbox" checked={unassignedOnly} onChange={(e) => setUnassignedOnly(e.target.checked)} />
             הצג רק תרומות לא משויכות לקבוצה
           </label>

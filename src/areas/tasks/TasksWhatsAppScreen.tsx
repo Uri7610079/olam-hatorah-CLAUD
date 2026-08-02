@@ -72,7 +72,7 @@ function ConvertForm({ message, onDone }: ConvertFormProps) {
   };
 
   return (
-    <div className="mt-2 space-y-2 rounded-lg bg-slate-50 p-3">
+    <div className="mt-2 space-y-2 rounded-control bg-surface-muted p-3">
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="כותרת המשימה" className="input-field" />
       <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="input-field" />
       <div className="flex flex-wrap items-center gap-2">
@@ -145,10 +145,10 @@ export function TasksWhatsAppScreen() {
             <div key={m.id} className="card p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-ink-subtle">
                     {groupLabel(m.group_id)} · {m.sender_name ?? "לא ידוע"} · {new Date(m.received_at).toLocaleString("he-IL")}
                   </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{m.body ?? "(ללא טקסט)"}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{m.body ?? "(ללא טקסט)"}</p>
                   {m.attachment_url && isSafeHttpUrl(m.attachment_url) && (
                     <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="link-action mt-1 inline-block text-xs">
                       קובץ מצורף
@@ -165,7 +165,7 @@ export function TasksWhatsAppScreen() {
                         await markWhatsAppMessageNotATask(m.id);
                         refresh();
                       }}
-                      className="text-slate-500 underline hover:text-slate-700"
+                      className="text-ink-subtle underline hover:text-ink-muted"
                     >
                       לא משימה
                     </button>

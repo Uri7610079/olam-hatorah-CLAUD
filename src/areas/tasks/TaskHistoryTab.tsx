@@ -20,13 +20,13 @@ export function TaskHistoryTab({ taskId }: TaskHistoryTabProps) {
   return (
     <ul className="space-y-2">
       {events.map((ev) => (
-        <li key={ev.id} className="rounded-lg border border-slate-100 p-2.5 text-sm">
+        <li key={ev.id} className="rounded-control border border-line p-2.5 text-sm">
           <div className="flex items-center justify-between">
-            <span className="font-medium text-slate-700">{HISTORY_EVENT_LABEL[ev.event_type] ?? ev.event_type}</span>
-            <span className="text-xs text-slate-400">{new Date(ev.created_at).toLocaleString("he-IL")}</span>
+            <span className="font-medium text-ink-muted">{HISTORY_EVENT_LABEL[ev.event_type] ?? ev.event_type}</span>
+            <span className="text-xs text-ink-subtle">{new Date(ev.created_at).toLocaleString("he-IL")}</span>
           </div>
           {ev.detail && Object.keys(ev.detail).length > 0 && (
-            <p className="mt-0.5 text-xs text-slate-500">{JSON.stringify(ev.detail)}</p>
+            <p className="mt-0.5 text-xs text-ink-subtle">{JSON.stringify(ev.detail)}</p>
           )}
         </li>
       ))}

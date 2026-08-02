@@ -122,7 +122,7 @@ export function GroupBalancesScreen() {
       key: "balance",
       header: "יתרה",
       className: "tabular",
-      render: (r) => <span className={r.balance < 0 ? "text-red-600" : "text-slate-900"}>{r.balance.toLocaleString("he-IL")}</span>,
+      render: (r) => <span className={r.balance < 0 ? "text-danger" : "text-ink"}>{r.balance.toLocaleString("he-IL")}</span>,
     },
   ];
 
@@ -133,11 +133,11 @@ export function GroupBalancesScreen() {
       key: "amount",
       header: "סכום",
       className: "tabular",
-      render: (r) => <span className={r.amount < 0 ? "text-red-600" : "text-green-700"}>{r.amount.toLocaleString("he-IL")}</span>,
+      render: (r) => <span className={r.amount < 0 ? "text-danger" : "text-ok-ink"}>{r.amount.toLocaleString("he-IL")}</span>,
     },
     { key: "month", header: "חודש", className: "tabular", render: (r) => r.period_month ?? "—" },
     { key: "source", header: "מקור", render: (r) => r.source_table ?? "—" },
-    { key: "ref", header: "אסמכתה / סיבה", render: (r) => r.reference ?? r.reason ?? "—" },
+    { key: "ref", header: "אסמכתה / סיבה", render: (r) => (r.reference ? <span className="ltr-num">{r.reference}</span> : r.reason ?? "—") },
   ];
 
   return (
@@ -169,8 +169,8 @@ export function GroupBalancesScreen() {
       {orgId && (
         <>
           <div className="card mb-4 max-w-sm p-4">
-            <p className="text-xs text-slate-500">סך התחייבויות לכל הקבוצות</p>
-            <p className={`mt-1 text-xl font-bold tabular ${totalLiabilities < 0 ? "text-red-600" : "text-slate-900"}`}>
+            <p className="text-xs text-ink-subtle">סך התחייבויות לכל הקבוצות</p>
+            <p className={`mt-1 text-xl font-bold tabular ${totalLiabilities < 0 ? "text-danger" : "text-ink"}`}>
               {totalLiabilities.toLocaleString("he-IL")}
             </p>
           </div>
@@ -189,8 +189,10 @@ export function GroupBalancesScreen() {
             <div className="card mt-6 max-w-4xl space-y-4 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-slate-700">כרטיס יתרה — {selectedGroup?.group_name}</h2>
-                  <p className="text-xs text-slate-500">יתרה נוכחית: {selectedGroup?.balance.toLocaleString("he-IL")}</p>
+                  <h2 className="text-sm font-semibold text-ink-muted">כרטיס יתרה — {selectedGroup?.group_name}</h2>
+                  <p className="text-xs text-ink-subtle">
+                    יתרה נוכחית: <span className="tabular">{selectedGroup?.balance.toLocaleString("he-IL")}</span>
+                  </p>
                 </div>
                 {canCorrect && (
                   <button onClick={() => setShowCorrection((v) => !v)} className="btn-secondary text-xs">
@@ -200,8 +202,8 @@ export function GroupBalancesScreen() {
               </div>
 
               {showCorrection && (
-                <form onSubmit={submitCorrection} className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
-                  <p className="text-xs text-slate-500">תיקון הוא תמיד תנועה נגדית חדשה עם סיבה - אין עריכה של יתרה או תנועה קיימת.</p>
+                <form onSubmit={submitCorrection} className="rounded-control border border-line bg-surface-muted p-4 space-y-3">
+                  <p className="text-xs text-ink-subtle">תיקון הוא תמיד תנועה נגדית חדשה עם סיבה - אין עריכה של יתרה או תנועה קיימת.</p>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <label className="field-label">סכום (חיובי/שלילי)</label>

@@ -233,7 +233,7 @@ export function PhoneListsImportPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-ink-muted">
         יבוא רשימת טלפונים והשוואה לתלמידים פעילים. אין API וללא סנכרון אוטומטי - קובץ בלבד.
       </p>
 
@@ -267,7 +267,7 @@ export function PhoneListsImportPanel() {
             />
           ) : (
             <>
-              <p className="text-xs text-slate-500">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
+              <p className="text-xs text-ink-subtle">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
               <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
               {analyzing && <LoadingState rows={2} />}
               {duplicateFileId && (
@@ -278,7 +278,7 @@ export function PhoneListsImportPanel() {
                   </button>
                 </div>
               )}
-              {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+              {legacyWarning && <p className="text-xs text-warn-ink">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
               {error && <ErrorState message={error} />}
               {localRows && !duplicateFileId && (
                 <>
@@ -311,7 +311,7 @@ export function PhoneListsImportPanel() {
 
       {selectedImportId && importsQuery.data?.find((i) => i.id === selectedImportId)?.status === "uploaded" && (
         <div className="card max-w-2xl space-y-3 p-4">
-          <p className="text-sm text-slate-600">הקובץ נשמר. הריצי התאמה כדי לסמן תואם/עודף/כפול מול התלמידים הפעילים.</p>
+          <p className="text-sm text-ink-muted">הקובץ נשמר. הריצי התאמה כדי לסמן תואם/עודף/כפול מול התלמידים הפעילים.</p>
           {error && <ErrorState message={error} />}
           <button onClick={commit} disabled={committing} className="btn-primary">
             {committing ? "מתאימה…" : "הרצת התאמה"}
@@ -321,7 +321,7 @@ export function PhoneListsImportPanel() {
 
       {orgId && (
         <>
-          <h2 className="mb-2 mt-2 text-sm font-semibold text-slate-700">היסטוריית ייבוא</h2>
+          <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית ייבוא</h2>
           <DataTable
             columns={[
               { key: "file", header: "קובץ", render: (i: ImportSummary) => i.file_name },
@@ -347,7 +347,7 @@ export function PhoneListsImportPanel() {
             emptyTitle="אין עדיין ייבואים"
             onRowClick={(i: ImportSummary) => setSelectedImportId(i.id === selectedImportId ? null : i.id)}
           />
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-subtle">
             לפירוט מלא של שורות (תואם/עודף/כפול/לא תקין) ולתלמידים חסרים ברשימה - עברי למסך "רשימות בימות המשיח".
           </p>
         </>

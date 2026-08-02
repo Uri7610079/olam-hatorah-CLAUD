@@ -271,7 +271,7 @@ export function MasavScreen() {
     { key: "id", header: "מזהה", className: "tabular", render: (r) => r.student.external_id },
     { key: "name", header: "שם", render: (r) => r.student.full_name },
     { key: "group", header: "קבוצה", render: (r) => r.group.name },
-    { key: "account", header: "חשבון", className: "tabular", render: (r) => r.bank_account?.account_number_masked ?? "—" },
+    { key: "account", header: "חשבון", className: "ltr-num", render: (r) => r.bank_account?.account_number_masked ?? "—" },
     { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
     {
       key: "status",
@@ -279,7 +279,7 @@ export function MasavScreen() {
       render: (r) => (
         <div>
           <StatusBadge severity={r.status === "valid" ? "ok" : r.status === "rejected" ? "critical" : r.status === "returned" ? "medium" : "neutral"} label={LINE_STATUS_LABEL[r.status]} />
-          {r.rejection_code && <p className="mt-1 text-xs text-slate-400">{r.rejection_code}</p>}
+          {r.rejection_code && <p className="mt-1 text-xs text-ink-subtle">{r.rejection_code}</p>}
         </div>
       ),
     },
@@ -292,7 +292,7 @@ export function MasavScreen() {
         description='מרכזת את כל הוראות החלוקה הנעולות לאותה עמותה/חודש. פורמט הקובץ הוא טיוטה בלבד - "פורמט שידור סופי טרם אושר" מול הבנק/מס"ב. אין שידור אוטומטי - כל שלב מסומן ידנית לאחר ביצוע בפועל מחוץ למערכת.'
       />
 
-      <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 mb-4">
+      <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink mb-4">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <span>פורמט שידור סופי טרם אושר מול הבנק/מס"ב. הקובץ המיוצא כאן הוא טיוטה לבדיקה/דמו בלבד ואינו מתאים לשידור אמיתי.</span>
       </div>
@@ -359,16 +359,17 @@ export function MasavScreen() {
       {selectedBatchId && selectedBatch && (
         <div className="card mt-6 max-w-5xl space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">אצוות מס״ב · {selectedBatch.period_month}</h2>
+            <h2 className="text-sm font-semibold text-ink-muted">אצוות מס״ב · {selectedBatch.period_month}</h2>
             <StatusBadge severity={STATUS_SEVERITY[selectedBatch.status]} label={STATUS_LABEL[selectedBatch.status]} />
           </div>
-          {selectedBatch.status_reason && <p className="text-xs text-slate-500">סיבה: {selectedBatch.status_reason}</p>}
+          {selectedBatch.status_reason && <p className="text-xs text-ink-subtle">סיבה: {selectedBatch.status_reason}</p>}
 
           {linesQuery.isLoading ? <LoadingState rows={3} /> : <DataTable columns={lineColumns} rows={linesQuery.data ?? []} rowKey={(r) => r.id} emptyTitle="אין שורות" />}
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-slate-600">
-              סה"כ: {selectedBatch.total_amount.toLocaleString("he-IL")} · {selectedBatch.payment_count} תשלומים
+            <p className="text-sm text-ink-muted">
+              סה"כ: <span className="tabular">{selectedBatch.total_amount.toLocaleString("he-IL")}</span> ·{" "}
+              <span className="tabular">{selectedBatch.payment_count}</span> תשלומים
             </p>
             <div className="flex flex-wrap gap-2">
               {selectedBatch.status === "draft" && canManage && (
@@ -409,10 +410,10 @@ export function MasavScreen() {
               )}
               {canManage && ["draft", "pending_review", "pending_approval"].includes(selectedBatch.status) && (
                 <>
-                  <button onClick={() => setReasonAction("correction")} className="text-xs text-amber-700 underline">
+                  <button onClick={() => setReasonAction("correction")} className="text-xs text-warn-ink underline">
                     דרישת תיקון
                   </button>
-                  <button onClick={() => setReasonAction("cancel")} className="text-xs text-red-600 underline">
+                  <button onClick={() => setReasonAction("cancel")} className="text-xs text-danger underline">
                     ביטול
                   </button>
                 </>
@@ -421,14 +422,14 @@ export function MasavScreen() {
           </div>
 
           {reasonAction && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="rounded-control border border-line bg-surface-muted p-3">
               <label className="field-label">{reasonAction === "cancel" ? "סיבת ביטול" : "סיבת דרישת תיקון"}</label>
               <div className="flex gap-2">
                 <input value={reasonText} onChange={(e) => setReasonText(e.target.value)} className="input-field" />
                 <button onClick={submitReasonAction} disabled={!reasonText.trim() || busy} className="btn-primary text-xs shrink-0">
                   אישור
                 </button>
-                <button onClick={() => setReasonAction(null)} className="text-xs text-slate-500 underline shrink-0">
+                <button onClick={() => setReasonAction(null)} className="text-xs text-ink-subtle underline shrink-0">
                   ביטול
                 </button>
               </div>

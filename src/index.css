@@ -2,12 +2,146 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   שכבת אסימוני עיצוב (Design Tokens)
+   ---------------------------------------------------------------------------
+   עד היום הצבעים היו כתובים ישירות בכל מסך (slate-200, red-50 וכו'), ולכן כל
+   שינוי עיצובי חייב מעבר ידני בעשרות קבצים. השכבה הזו הופכת את זה למקום אחד.
+
+   שתי ערכות מוגדרות במקביל, ומתחלפות לפי data-ui על <html>:
+     (ברירת מחדל / data-ui="classic") - העיצוב הקיים, בדיוק כפי שהיה.
+     data-ui="v2"                     - CRM-01 Operational Clarity מקטלוג העיצוב.
+   המתג עצמו במסך "עיצוב ותצוגה" (הגדרות). ר' src/lib/uiTheme.ts.
+
+   למה סקאלת brand-* ממופה לאסימונים ולא רק הצבעים החדשים: כך .btn-primary,
+   .link-action ומצב הפוקוס של .input-field מתחלפים עם הערכה בלי לגעת באף
+   קומפוננטה - במקום לשכפל כל מחלקה פעמיים.
+--------------------------------------------------------------------------- */
+:root,
+:root[data-ui="classic"] {
+  --ui-app-bg: 248 250 252;
+  --ui-surface: 255 255 255;
+  --ui-surface-muted: 241 245 249;
+  --ui-border: 226 232 240;
+  --ui-border-strong: 203 213 225;
+  --ui-ink: 15 23 42;
+  --ui-ink-muted: 71 85 105;
+  --ui-ink-subtle: 148 163 184;
+
+  --ui-brand-50: 238 242 255;
+  --ui-brand-100: 224 231 255;
+  --ui-brand-200: 199 210 254;
+  --ui-brand-300: 165 180 252;
+  --ui-brand-400: 129 140 248;
+  --ui-brand-500: 99 102 241;
+  --ui-brand-600: 79 70 229;
+  --ui-brand-700: 67 56 202;
+  --ui-brand-800: 55 48 163;
+  --ui-brand-900: 49 46 129;
+
+  --ui-ok: 22 163 74;
+  --ui-ok-soft: 240 253 244;
+  --ui-ok-ink: 21 128 61;
+  --ui-warn: 202 138 4;
+  --ui-warn-soft: 254 252 232;
+  --ui-warn-ink: 161 98 7;
+  --ui-danger: 220 38 38;
+  --ui-danger-soft: 254 242 242;
+  --ui-danger-ink: 185 28 28;
+  --ui-info: 2 132 199;
+  --ui-info-soft: 240 249 255;
+  --ui-info-ink: 3 105 161;
+  --ui-neutral: 107 114 128;
+  --ui-neutral-soft: 241 245 249;
+  --ui-neutral-ink: 71 85 105;
+
+  --ui-area-ops: 79 70 229;
+  --ui-area-ops-soft: 238 242 255;
+  --ui-area-finance: 6 95 70;
+  --ui-area-finance-soft: 236 253 245;
+  --ui-area-admin: 71 85 105;
+  --ui-area-admin-soft: 241 245 249;
+  --ui-area-tasks: 180 83 9;
+  --ui-area-tasks-soft: 255 251 235;
+
+  --ui-radius-card: 0.75rem;
+  --ui-radius-control: 0.5rem;
+  --ui-shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 6px -1px rgb(15 23 42 / 0.06);
+}
+
+/* CRM-01 Operational Clarity - כחול עמוק מאופק, רקע אפור-כחלחל, גבול דק במקום
+   צל, רדיוס 8-10px, צבעי סטטוס ברורים אך לא זוהרים. הערכים נלקחו מ-Token Seed
+   של הסגנון בקטלוג (AI/design/styles/CRM-01-operational-clarity.md). */
+:root[data-ui="v2"] {
+  --ui-app-bg: 244 246 249;
+  --ui-surface: 255 255 255;
+  --ui-surface-muted: 237 241 245;
+  --ui-border: 217 224 232;
+  --ui-border-strong: 194 205 216;
+  --ui-ink: 26 39 51;
+  --ui-ink-muted: 74 92 109;
+  --ui-ink-subtle: 122 138 153;
+
+  --ui-brand-50: 243 248 251;
+  --ui-brand-100: 232 241 247;
+  --ui-brand-200: 188 216 233;
+  --ui-brand-300: 143 189 216;
+  --ui-brand-400: 93 162 200;
+  --ui-brand-500: 50 136 189;
+  --ui-brand-600: 27 94 140;
+  --ui-brand-700: 22 76 114;
+  --ui-brand-800: 18 60 91;
+  --ui-brand-900: 14 45 69;
+
+  --ui-ok: 46 125 79;
+  --ui-ok-soft: 220 239 228;
+  --ui-ok-ink: 31 107 69;
+  --ui-warn: 168 104 26;
+  --ui-warn-soft: 248 233 210;
+  --ui-warn-ink: 143 87 20;
+  --ui-danger: 179 64 46;
+  --ui-danger-soft: 247 222 217;
+  --ui-danger-ink: 150 52 31;
+  --ui-info: 43 103 119;
+  --ui-info-soft: 220 236 240;
+  --ui-info-ink: 35 86 106;
+  --ui-neutral: 91 114 133;
+  --ui-neutral-soft: 237 241 245;
+  --ui-neutral-ink: 58 77 94;
+
+  /* ארבעה גוונים מובחנים אך מאופקים - כדי שיהיה ברור באיזה אזור נמצאים, בלי
+     שהמערכת תיראה צבעונית. תפעול=כחול עמוק, כספים=טורקיז, ניהול=אפור-כחול,
+     משימות=חרדל. */
+  --ui-area-ops: 27 94 140;
+  --ui-area-ops-soft: 232 241 247;
+  --ui-area-finance: 14 124 134;
+  --ui-area-finance-soft: 220 240 242;
+  --ui-area-admin: 91 114 133;
+  --ui-area-admin-soft: 237 241 245;
+  --ui-area-tasks: 168 104 26;
+  --ui-area-tasks-soft: 248 233 210;
+
+  --ui-radius-card: 0.625rem;
+  --ui-radius-control: 0.5rem;
+  --ui-shadow-card: none;
+}
+
+/* האזור הנוכחי נקבע ע"י data-area ב-Layout, וכל רכיב שמשתמש ב-area/area-soft
+   מקבל אוטומטית את הגוון הנכון - בלי להעביר props דרך כל העץ. */
+:root { --ui-area: var(--ui-area-ops); --ui-area-soft: var(--ui-area-ops-soft); }
+:root[data-area="ops"] { --ui-area: var(--ui-area-ops); --ui-area-soft: var(--ui-area-ops-soft); }
+:root[data-area="finance"] { --ui-area: var(--ui-area-finance); --ui-area-soft: var(--ui-area-finance-soft); }
+:root[data-area="admin"] { --ui-area: var(--ui-area-admin); --ui-area-soft: var(--ui-area-admin-soft); }
+:root[data-area="tasks"] { --ui-area: var(--ui-area-tasks); --ui-area-soft: var(--ui-area-tasks-soft); }
+
 html {
   direction: rtl;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  @apply bg-app text-ink font-sans antialiased;
+  /* גובה שורה 1.6 לעברית - כלל בסיס בקטלוג העיצוב (01-base-rules). */
+  line-height: 1.6;
 }
 
 * {
@@ -18,8 +152,23 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* בידוד דו-כיווני לטקסט לועזי בתוך עברית (אימייל, טלפון, מספר חשבון, IBAN).
+   בלי זה מחרוזת כמו "7610079@gmail.com" מוצגת הפוכה בתוך עמוד RTL - באג
+   אמיתי שנתפס בפועל בטופס ההרשמה ותוקן אז שדה-שדה. זו הצורה השיטתית למנוע
+   אותו מלכתחילה (01-base-rules בקטלוג). */
+.ltr-num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* האסימונים מוגדרים כשלשות ערוצי RGB (ולא כ-#hex) כדי ש-Tailwind יוכל להחיל
+   עליהם שקיפות - מחלקה כמו border-warn/30 עובדת רק כשהצבע בא בצורה
+   rgb(var(--x) / <alpha-value>). בערך #hex גולמי Tailwind משמיט את המחלקה כולה
+   בשקט. לכן שימוש ישיר באסימון ב-CSS רגיל חייב לעטוף ב-rgb() בעצמו. */
 :focus-visible {
-  outline: 2px solid theme("colors.brand.500");
+  outline: 2px solid rgb(var(--ui-brand-500));
   outline-offset: 2px;
 }
 
@@ -27,23 +176,23 @@ body {
    יקבל אוטומטית את אותו עיצוב עקבי במקום שכפול מחרוזות Tailwind בכל קומפוננטה. */
 @layer components {
   .input-field {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100;
+    @apply w-full rounded-control border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm transition placeholder:text-ink-subtle focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100;
   }
 
   .field-label {
-    @apply mb-1.5 block text-sm font-medium text-slate-700;
+    @apply mb-1.5 block text-sm font-medium text-ink-muted;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-control bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-control border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-muted shadow-sm transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-control bg-danger px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .link-action {
@@ -51,6 +200,6 @@ body {
   }
 
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-card;
+    @apply rounded-card border border-line bg-surface shadow-card;
   }
 }

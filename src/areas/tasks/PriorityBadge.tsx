@@ -4,17 +4,17 @@ import { PRIORITY_LABEL, type TaskPriority } from "./types";
 // לא רוויים, כדי לשמור על הסולידיות של שאר המערכת (לבקשת Chani: "קצת יותר חיוניות,
 // לשמור על הסולידיות"). אין קשר בין הצבע הזה לביצועי עובד - זה סידור עבודה בלבד (סעיף 9).
 const PRIORITY_CLASSES: Record<TaskPriority, string> = {
-  low: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-  normal: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
-  high: "bg-orange-50 text-orange-700 ring-1 ring-orange-200",
-  urgent: "bg-rose-50 text-rose-700 ring-1 ring-rose-300",
+  low: "bg-neutral-soft text-neutral-ink ring-1 ring-line",
+  normal: "bg-info-soft text-info-ink ring-1 ring-info/30",
+  high: "bg-warn-soft text-warn-ink ring-1 ring-warn/30",
+  urgent: "bg-danger-soft text-danger-ink ring-1 ring-danger/40",
 };
 
 const PRIORITY_DOT: Record<TaskPriority, string> = {
-  low: "bg-slate-400",
-  normal: "bg-sky-500",
-  high: "bg-orange-500",
-  urgent: "bg-rose-500",
+  low: "bg-neutral",
+  normal: "bg-info",
+  high: "bg-warn",
+  urgent: "bg-danger",
 };
 
 export function PriorityBadge({ priority }: { priority: TaskPriority }) {

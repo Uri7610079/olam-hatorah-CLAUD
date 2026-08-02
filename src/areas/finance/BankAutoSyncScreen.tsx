@@ -159,12 +159,12 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
       render: (r) =>
         r.gap_detected || r.status === "failed" ? (
           <div className="flex items-start gap-2" title={r.gap_detail ?? r.error_message ?? undefined}>
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
-            <span className="text-xs text-slate-600">{r.gap_detail ?? r.error_message ?? "שגיאה לא ידועה"}</span>
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden="true" />
+            <span className="text-xs text-ink-muted">{r.gap_detail ?? r.error_message ?? "שגיאה לא ידועה"}</span>
           </div>
         ) : (
           <span title="תקין">
-            <CheckCircle2 className="h-4 w-4 text-green-600" aria-hidden="true" />
+            <CheckCircle2 className="h-4 w-4 text-ok" aria-hidden="true" />
           </span>
         ),
     },
@@ -177,14 +177,14 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
             סימון כטופל
           </button>
         ) : r.is_resolved ? (
-          <span className="text-xs text-slate-400">טופל</span>
+          <span className="text-xs text-ink-subtle">טופל</span>
         ) : null,
     },
   ];
 
   return (
     <div>
-      <p className="mb-4 text-xs text-slate-500 max-w-2xl">
+      <p className="mb-4 text-xs text-ink-subtle max-w-2xl">
         משיכת תנועות בנק אוטומטית בכל לילה/שבוע/חודש (לפי ההגדרה כאן), סיווג וההצלבה עם מס״ב נעשים אוטומטית - אישור סופי עדיין נעשה בטאבים "תנועות"/"התאמות" של מסך זה.
       </p>
 
@@ -196,11 +196,11 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
         ) : (
           <div className="card mb-6 max-w-2xl space-y-4 p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-700">הגדרות משיכה</h2>
+              <h2 className="text-sm font-semibold text-ink-muted">הגדרות משיכה</h2>
               {setting && (
                 <button
                   onClick={() => loadFormFromSetting(setting)}
-                  className="text-xs text-slate-500 underline"
+                  className="text-xs text-ink-subtle underline"
                   title="ביטול השינויים שלא נשמרו וטעינה מחדש מהערכים השמורים"
                 >
                   איפוס טופס
@@ -219,7 +219,7 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
                 }}
                 disabled={!canManage}
               />
-              <label htmlFor="sync-enabled" className="text-sm text-slate-700" title="כשכבוי, המשיכה האוטומטית לא תרוץ בכלל עבור חשבון זה">
+              <label htmlFor="sync-enabled" className="text-sm text-ink-muted" title="כשכבוי, המשיכה האוטומטית לא תרוץ בכלל עבור חשבון זה">
                 משיכה אוטומטית פעילה
               </label>
             </div>
@@ -306,7 +306,7 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
             </div>
 
             {setting?.last_synced_at && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-ink-subtle">
                 משיכה אחרונה: {new Date(setting.last_synced_at).toLocaleString("he-IL")}
                 {setting.last_synced_execution_date && ` · תנועה אחרונה שנקלטה מתאריך ${setting.last_synced_execution_date}`}
               </p>
@@ -319,7 +319,7 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
               </button>
             )}
 
-            <p className="text-xs text-slate-400" title="חיבור בפועל ל-API של הבנק מוגדר ע״י מי שמתקין את המערכת, לא כאן">
+            <p className="text-xs text-ink-subtle" title="חיבור בפועל ל-API של הבנק מוגדר ע״י מי שמתקין את המערכת, לא כאן">
               החיבור הטכני בפועל אל הבנק (מפתח/הרשאת API) מוגדר פעם אחת בהגדרות השרת, לא במסך הזה - כאן קובעים רק את התדירות ורואים את היסטוריית ההרצות.
             </p>
           </div>
@@ -328,7 +328,7 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
 
       {setting && (
         <>
-          <h2 className="mb-2 mt-2 text-sm font-semibold text-slate-700">היסטוריית הרצות</h2>
+          <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית הרצות</h2>
           <DataTable
             columns={runColumns}
             rows={runsQuery.data ?? []}

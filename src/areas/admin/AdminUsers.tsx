@@ -123,7 +123,7 @@ export function AdminUsers() {
 
   const columns: DataTableColumn<AdminProfileRow>[] = [
     { key: "name", header: "שם", render: (r) => r.full_name ?? "—" },
-    { key: "email", header: "אימייל", render: (r) => r.email ?? "—" },
+    { key: "email", header: "אימייל", className: "ltr-num", render: (r) => r.email ?? "—" },
     {
       key: "status",
       header: "סטטוס",
@@ -142,7 +142,7 @@ export function AdminUsers() {
             </button>
           )}
           {r.status !== "disabled" && (
-            <button onClick={() => openAction(r, "disabled")} className="text-xs text-red-600 underline hover:text-red-800">
+            <button onClick={() => openAction(r, "disabled")} className="text-xs text-danger underline hover:text-danger-ink">
               {r.status === "pending" ? "דחייה" : "השבתה"}
             </button>
           )}

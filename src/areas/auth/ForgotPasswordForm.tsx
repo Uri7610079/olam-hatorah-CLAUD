@@ -29,7 +29,7 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
   if (done) {
     return (
       <AuthLayout title="נשלח מייל לאיפוס סיסמה">
-        <p className="text-sm text-slate-600">אם הכתובת קיימת במערכת, נשלח אליה קישור לאיפוס סיסמה.</p>
+        <p className="text-sm text-ink-muted">אם הכתובת קיימת במערכת, נשלח אליה קישור לאיפוס סיסמה.</p>
         <button onClick={onBackToLogin} className="link-action mt-4 text-sm">
           חזרה למסך כניסה
         </button>

@@ -315,7 +315,7 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
 
   return (
     <div>
-      <p className="mb-4 text-xs text-slate-500 max-w-2xl">
+      <p className="mb-4 text-xs text-ink-subtle max-w-2xl">
         כל תנועת בנק (או חלק ממנה) מקושרת ליעד עסקי מאושר - אצוות מס״ב, תרומה, החזרה, עמלה, הוצאה/הכנסה אחרת, או הצד השני של העברה בין חשבונות. תנועה יכולה להתאים לכמה יעדים (פיצול), ויעד יכול להיות מכוסה ע"י כמה תנועות.
       </p>
 
@@ -323,13 +323,18 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
 
       {orgId && (exceptionsQuery.data ?? []).length > 0 && (
         <div className="card mb-6 max-w-4xl space-y-2 p-4">
-          <h2 className="text-sm font-semibold text-slate-700">חריגות התאמה</h2>
+          <h2 className="text-sm font-semibold text-ink-muted">חריגות התאמה</h2>
           {(exceptionsQuery.data ?? []).map((e, i) => (
-            <div key={i} className={`flex items-start gap-2 rounded-md border p-2 text-sm ${e.severity === "critical" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+            <div key={i} className={`flex items-start gap-2 rounded-md border p-2 text-sm ${e.severity === "critical" ? "border-danger/30 bg-danger-soft text-danger-ink" : "border-warn/30 bg-warn-soft text-warn-ink"}`}>
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
                 <span className="font-medium">{SEVERITY_LABEL[e.severity]}:</span> {e.description}
-                {e.amount != null && ` · ${e.amount.toLocaleString("he-IL")}`}
+                {e.amount != null && (
+                  <>
+                    {" · "}
+                    <span className="tabular">{e.amount.toLocaleString("he-IL")}</span>
+                  </>
+                )}
                 {e.related_date && ` · ${e.related_date}`}
               </span>
             </div>
@@ -360,18 +365,19 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
 
       {selectedTransaction && (
         <div className="card mt-4 max-w-4xl space-y-4 p-5">
-          <h2 className="text-sm font-semibold text-slate-700">
-            תנועה · {selectedTransaction.execution_date} · {selectedTransaction.amount.toLocaleString("he-IL")} ({DIRECTION_LABEL[selectedTransaction.direction]})
+          <h2 className="text-sm font-semibold text-ink-muted">
+            תנועה · <span className="tabular">{selectedTransaction.execution_date}</span> ·{" "}
+            <span className="tabular">{selectedTransaction.amount.toLocaleString("he-IL")}</span> ({DIRECTION_LABEL[selectedTransaction.direction]})
           </h2>
 
           {selectedTransaction.matches.length > 0 && (
             <ul className="space-y-2">
               {selectedTransaction.matches.map((m) => (
-                <li key={m.id} className="flex items-center justify-between rounded-md border border-slate-200 p-2 text-sm">
+                <li key={m.id} className="flex items-center justify-between rounded-md border border-line p-2 text-sm">
                   <span>
-                    {MATCH_TYPE_LABEL[m.match_type]} · {m.matched_amount.toLocaleString("he-IL")}
-                    {m.suggested_reason && <span className="text-xs text-slate-400"> · {m.suggested_reason}</span>}
-                    {m.rejected_reason && <span className="text-xs text-red-500"> · נדחה: {m.rejected_reason}</span>}
+                    {MATCH_TYPE_LABEL[m.match_type]} · <span className="tabular">{m.matched_amount.toLocaleString("he-IL")}</span>
+                    {m.suggested_reason && <span className="text-xs text-ink-subtle"> · {m.suggested_reason}</span>}
+                    {m.rejected_reason && <span className="text-xs text-danger"> · נדחה: {m.rejected_reason}</span>}
                   </span>
                   <div className="flex items-center gap-2">
                     <StatusBadge severity={m.status === "approved" ? "ok" : m.status === "rejected" ? "critical" : "medium"} label={MATCH_STATUS_LABEL[m.status]} />
@@ -380,7 +386,7 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
                         <button onClick={() => approveMatch(m.id)} disabled={busyMatchId === m.id} className="btn-primary text-xs">
                           אישור
                         </button>
-                        <button onClick={() => setRejectingMatchId(m.id)} className="text-xs text-red-600 underline">
+                        <button onClick={() => setRejectingMatchId(m.id)} className="text-xs text-danger underline">
                           דחייה
                         </button>
                       </>
@@ -392,14 +398,14 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
           )}
 
           {rejectingMatchId && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="rounded-control border border-line bg-surface-muted p-3">
               <label className="field-label">סיבת דחייה (חובה)</label>
               <div className="flex gap-2">
                 <input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="input-field" />
                 <button onClick={submitReject} disabled={!rejectReason.trim() || busyMatchId === rejectingMatchId} className="btn-primary text-xs shrink-0">
                   אישור
                 </button>
-                <button onClick={() => setRejectingMatchId(null)} className="text-xs text-slate-500 underline shrink-0">
+                <button onClick={() => setRejectingMatchId(null)} className="text-xs text-ink-subtle underline shrink-0">
                   ביטול
                 </button>
               </div>
@@ -407,8 +413,8 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
           )}
 
           {canMatch && (
-            <div className="space-y-3 border-t border-slate-200 pt-4">
-              <h3 className="text-sm font-semibold text-slate-700">יצירת התאמה ידנית</h3>
+            <div className="space-y-3 border-t border-line pt-4">
+              <h3 className="text-sm font-semibold text-ink-muted">יצירת התאמה ידנית</h3>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="field-label">סוג התאמה</label>

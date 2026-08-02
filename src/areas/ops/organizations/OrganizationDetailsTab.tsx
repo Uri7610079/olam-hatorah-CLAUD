@@ -64,25 +64,26 @@ export function OrganizationDetailsTab({ organization }: OrganizationDetailsTabP
 
   if (!canManage) {
     return (
-      <div className="card max-w-xl space-y-2 p-5 text-sm text-slate-600">
+      <div className="card max-w-xl space-y-2 p-5 text-sm text-ink-muted">
         <p>
-          <span className="font-medium text-slate-800">שם משפטי:</span> {organization.legal_name}
+          <span className="font-medium text-ink">שם משפטי:</span> {organization.legal_name}
         </p>
         <p>
-          <span className="font-medium text-slate-800">מספר עמותה:</span> {organization.org_number ?? "—"}
+          <span className="font-medium text-ink">מספר עמותה:</span>{" "}
+          <span className="ltr-num">{organization.org_number ?? "—"}</span>
         </p>
         <p>
-          <span className="font-medium text-slate-800">טלפון:</span> {organization.contact_phone ?? "—"}
+          <span className="font-medium text-ink">טלפון:</span> <span className="ltr-num">{organization.contact_phone ?? "—"}</span>
         </p>
         <p>
-          <span className="font-medium text-slate-800">אימייל:</span> {organization.contact_email ?? "—"}
+          <span className="font-medium text-ink">אימייל:</span> <span className="ltr-num">{organization.contact_email ?? "—"}</span>
         </p>
         <p>
-          <span className="font-medium text-slate-800">כתובת:</span> {organization.contact_address ?? "—"}
+          <span className="font-medium text-ink">כתובת:</span> {organization.contact_address ?? "—"}
         </p>
         {organization.notes && (
           <p>
-            <span className="font-medium text-slate-800">הערות:</span> {organization.notes}
+            <span className="font-medium text-ink">הערות:</span> {organization.notes}
           </p>
         )}
       </div>
@@ -94,11 +95,11 @@ export function OrganizationDetailsTab({ organization }: OrganizationDetailsTabP
       <OrganizationForm initialValues={initialValues} onSubmit={handleSave} submitLabel="שמירה" submitting={saving} error={error} />
 
       {organization.status === "active" ? (
-        <button onClick={() => setConfirmClose(true)} className="mt-4 text-xs text-red-600 underline hover:text-red-800">
+        <button onClick={() => setConfirmClose(true)} className="mt-4 text-xs text-danger underline hover:text-danger-ink">
           סגירת עמותה
         </button>
       ) : (
-        <p className="mt-4 text-xs text-slate-400">העמותה סגורה.</p>
+        <p className="mt-4 text-xs text-ink-subtle">העמותה סגורה.</p>
       )}
 
       <ConfirmDialog

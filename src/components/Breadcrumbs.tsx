@@ -13,18 +13,18 @@ interface BreadcrumbsProps {
 export function Breadcrumbs({ items }: BreadcrumbsProps) {
   if (items.length === 0) return null;
   return (
-    <nav aria-label="breadcrumb" className="mb-1 flex flex-wrap items-center gap-1 text-sm text-slate-500">
+    <nav aria-label="breadcrumb" className="mb-1 flex flex-wrap items-center gap-1 text-sm text-ink-subtle">
       {items.map((item, i) => {
         const isLast = i === items.length - 1;
         return (
           <span key={i} className="flex items-center gap-1">
             {i > 0 && <span aria-hidden="true">/</span>}
             {item.href && !isLast ? (
-              <Link to={item.href} className="hover:text-slate-700 hover:underline">
+              <Link to={item.href} className="hover:text-ink hover:underline">
                 {item.label}
               </Link>
             ) : (
-              <span className={isLast ? "text-slate-700" : undefined} aria-current={isLast ? "page" : undefined}>
+              <span className={isLast ? "text-ink-muted" : undefined} aria-current={isLast ? "page" : undefined}>
                 {item.label}
               </span>
             )}

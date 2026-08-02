@@ -1,22 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ClipboardList, Wallet, Settings, CheckSquare, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardList, Wallet, Settings, CheckSquare, LogOut, Menu, type LucideIcon } from "lucide-react";
 import { useArea, type Area } from "./AreaContext";
 import { screensForArea } from "./screens";
 import { DemoBanner } from "@/components/DemoBanner";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { supabase } from "@/lib/supabase";
 
-const AREA_LABEL = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול", tasks: "משימות ותזכורות" } as const;
-const AREA_ICON: Record<Area, LucideIcon> = { ops: ClipboardList, finance: Wallet, admin: Settings, tasks: CheckSquare };
-const AREA_TEXT = { ops: "text-ops", finance: "text-finance", admin: "text-admin", tasks: "text-tasks" } as const;
-const AREA_BG_SOFT = { ops: "bg-ops-light", finance: "bg-finance-light", admin: "bg-admin-light", tasks: "bg-tasks-light" } as const;
-const AREA_TAB_ACTIVE = {
-  ops: "bg-ops-light text-ops",
-  finance: "bg-finance-light text-finance",
-  admin: "bg-admin-light text-admin",
-  tasks: "bg-tasks-light text-tasks",
-} as const;
+export const AREA_LABEL = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול", tasks: "משימות ותזכורות" } as const;
+export const AREA_ICON: Record<Area, LucideIcon> = { ops: ClipboardList, finance: Wallet, admin: Settings, tasks: CheckSquare };
 
 export function Layout() {
   const { fullName, roleLabel, currentArea, availableAreas } = useArea();
@@ -27,40 +19,51 @@ export function Layout() {
   const initial = (fullName ?? "מ").trim().charAt(0);
   const AreaHeaderIcon = AREA_ICON[currentArea];
 
+  // צבע האזור מוזרם דרך data-area על <html>, כך שכל רכיב שמשתמש ב-area/area-soft
+  // מקבל את הגוון הנכון אוטומטית - בלי להעביר את האזור כ-prop דרך כל עץ הרכיבים.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-area", currentArea);
+  }, [currentArea]);
+
   return (
     <div className="flex min-h-screen flex-col">
       <DemoBanner />
-      <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5 shadow-sm">
+
+      <header className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
         <button
-          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+          className="rounded-control p-2 text-ink-muted hover:bg-surface-muted lg:hidden"
           aria-label="פתח תפריט"
           onClick={() => setSidebarOpen((v) => !v)}
         >
-          ☰
+          <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
+
         <button onClick={() => navigate(dashboardHref)} className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-xs font-bold text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-600 text-xs font-bold text-white">
             עת
           </span>
-          <span className="hidden font-bold text-slate-900 sm:inline">עולם התורה</span>
+          <span className="hidden font-bold text-ink sm:inline">עולם התורה</span>
         </button>
 
         <GlobalSearch />
 
         <div className="flex-1" />
 
+        {/* מתג אזורים - האזור הפעיל מסומן במילוי מלא בצבע האזור, לא רק בגוון עדין,
+            כדי שיהיה חד-משמעי באיזה אזור נמצאים. */}
         {availableAreas.length > 1 && (
-          <div className="hidden gap-1 rounded-lg bg-slate-100 p-1 sm:flex" role="tablist" aria-label="מתג אזור">
+          <div className="hidden gap-1 rounded-control bg-surface-muted p-1 sm:flex" role="tablist" aria-label="מתג אזור">
             {availableAreas.map((area) => {
               const AreaIcon = AREA_ICON[area];
+              const isActive = currentArea === area;
               return (
                 <button
                   key={area}
                   role="tab"
-                  aria-selected={currentArea === area}
+                  aria-selected={isActive}
                   onClick={() => navigate(`/${area}`)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition ${
-                    currentArea === area ? `${AREA_TAB_ACTIVE[area]} shadow-sm` : "text-slate-500 hover:text-slate-700"
+                  className={`flex items-center gap-1.5 rounded-[calc(var(--ui-radius-control)-2px)] px-3 py-1 text-sm font-medium transition ${
+                    isActive ? "bg-area text-white" : "text-ink-muted hover:text-ink"
                   }`}
                 >
                   <AreaIcon className="h-4 w-4" aria-hidden="true" />
@@ -71,46 +74,48 @@ export function Layout() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-xs text-slate-600">
+        <div className="flex items-center gap-2 text-xs text-ink-muted">
           <span className="hidden items-center gap-2 sm:flex">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-ink-muted">
               {initial}
             </span>
             <span>
               {fullName ?? "משתמש"}
-              {roleLabel && <span className="text-slate-400"> · {roleLabel}</span>}
+              {roleLabel && <span className="text-ink-subtle"> · {roleLabel}</span>}
             </span>
           </span>
-          <button onClick={() => supabase.auth.signOut()} className="btn-secondary px-2.5 py-1.5 text-xs">
-            התנתקות
+          <button onClick={() => supabase.auth.signOut()} className="btn-secondary px-2.5 py-1.5 text-xs" title="התנתקות מהמערכת">
+            <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">התנתקות</span>
           </button>
         </div>
       </header>
 
       <div className="flex flex-1">
         <aside
-          className={`${
-            sidebarOpen ? "block" : "hidden"
-          } w-64 shrink-0 border-l border-slate-200 bg-white p-3 lg:block`}
+          className={`${sidebarOpen ? "block" : "hidden"} w-64 shrink-0 border-l border-line bg-surface lg:block`}
         >
-          <p className={`mb-2 flex items-center gap-1.5 px-2 text-xs font-semibold uppercase tracking-wide ${AREA_TEXT[currentArea]}`}>
-            <AreaHeaderIcon className="h-3.5 w-3.5" aria-hidden="true" />
-            {AREA_LABEL[currentArea]}
-          </p>
-          <nav className="space-y-0.5">
+          {/* כותרת האזור - פס צבע בצד ואייקון, כדי שהאזור הנוכחי יזוהה מיד גם
+              בלי לקרוא את הטקסט. */}
+          <div className="border-b border-line bg-area-soft px-3 py-3">
+            <p className="flex items-center gap-2 border-e-[3px] border-area pe-2 text-sm font-semibold text-area">
+              <AreaHeaderIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {AREA_LABEL[currentArea]}
+            </p>
+          </div>
+
+          <nav className="space-y-0.5 p-3">
             <NavLink
               to={dashboardHref}
               end
               className={({ isActive }) =>
-                `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
-                  isActive
-                    ? `${AREA_BG_SOFT[currentArea]} ${AREA_TEXT[currentArea]} font-medium`
-                    : "text-slate-600 hover:bg-slate-50"
+                `flex items-center gap-2.5 rounded-control px-3 py-2 text-sm transition ${
+                  isActive ? "bg-area-soft font-semibold text-area" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
                 }`
               }
             >
               <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />
-              Dashboard
+              מסך פתיחה
             </NavLink>
             {screens.map((s) => (
               <NavLink
@@ -118,10 +123,8 @@ export function Layout() {
                 to={s.path}
                 title={s.description}
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
-                    isActive
-                      ? `${AREA_BG_SOFT[currentArea]} ${AREA_TEXT[currentArea]} font-medium`
-                      : "text-slate-600 hover:bg-slate-50"
+                  `flex items-center gap-2.5 rounded-control px-3 py-2 text-sm transition ${
+                    isActive ? "bg-area-soft font-semibold text-area" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
                   }`
                 }
               >

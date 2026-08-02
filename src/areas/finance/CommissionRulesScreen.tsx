@@ -321,7 +321,7 @@ export function CommissionRulesScreen() {
 
       {showSim && orgId && (
         <div className="card mb-6 max-w-3xl space-y-3 p-4">
-          <p className="text-xs text-slate-500">בדיקת הכלל שהיה נבחר, בלי לכתוב/לשמור דבר.</p>
+          <p className="text-xs text-ink-subtle">בדיקת הכלל שהיה נבחר, בלי לכתוב/לשמור דבר.</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="field-label">קבוצה (לא חובה)</label>
@@ -370,14 +370,15 @@ export function CommissionRulesScreen() {
             {simRunning ? "מריצה…" : "הרצת סימולציה"}
           </button>
           {simResult && (
-            <div className="rounded-md bg-slate-50 p-3 text-sm">
+            <div className="rounded-md bg-surface-muted p-3 text-sm">
               {simResult.rule_id ? (
                 <p>
                   כלל תואם: <strong>{TYPE_LABEL[simResult.calculation_type as CalculationType]}</strong> · עמלה:{" "}
-                  <strong>{simResult.commission_amount.toLocaleString("he-IL")}</strong> · נטו: <strong>{simResult.net_amount.toLocaleString("he-IL")}</strong>
+                  <strong className="tabular">{simResult.commission_amount.toLocaleString("he-IL")}</strong> · נטו:{" "}
+                  <strong className="tabular">{simResult.net_amount.toLocaleString("he-IL")}</strong>
                 </p>
               ) : (
-                <p className="text-amber-700">לא נמצא כלל תואם - עמלה 0, נטו = ברוטו במלואו.</p>
+                <p className="text-warn-ink">לא נמצא כלל תואם - עמלה 0, נטו = ברוטו במלואו.</p>
               )}
             </div>
           )}

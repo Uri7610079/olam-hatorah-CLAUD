@@ -76,7 +76,7 @@ export function GlobalSearch() {
 
   return (
     <div ref={containerRef} className="relative mx-2 hidden w-80 sm:block">
-      <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+      <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-subtle" aria-hidden="true" />
       <input
         type="search"
         value={term}
@@ -87,7 +87,7 @@ export function GlobalSearch() {
         className="input-field pr-9"
       />
       {open && results.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+        <div className="absolute z-20 mt-1 w-full rounded-control border border-line bg-surface py-1 shadow-lg">
           {results.map((r) => (
             <button
               key={`${r.kind}-${r.id}`}
@@ -96,19 +96,19 @@ export function GlobalSearch() {
                 setOpen(false);
                 setTerm("");
               }}
-              className="flex w-full items-center justify-between px-3 py-2 text-right text-sm hover:bg-slate-50"
+              className="flex w-full items-center justify-between px-3 py-2 text-right text-sm hover:bg-surface-muted"
             >
               <span>
                 {r.label}
-                {r.sublabel && <span className="text-slate-400"> · {r.sublabel}</span>}
+                {r.sublabel && <span className="text-ink-subtle"> · {r.sublabel}</span>}
               </span>
-              <span className="text-xs text-slate-400">{KIND_LABEL[r.kind]}</span>
+              <span className="text-xs text-ink-subtle">{KIND_LABEL[r.kind]}</span>
             </button>
           ))}
         </div>
       )}
       {open && term.trim().length >= 2 && results.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-lg">אין תוצאות</div>
+        <div className="absolute z-20 mt-1 w-full rounded-control border border-line bg-surface p-3 text-sm text-ink-subtle shadow-lg">אין תוצאות</div>
       )}
     </div>
   );

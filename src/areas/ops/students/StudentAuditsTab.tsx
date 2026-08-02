@@ -44,7 +44,7 @@ export function StudentAuditsTab({ studentId }: { studentId: string }) {
 
   return (
     <div>
-      <h3 className="mb-2 text-sm font-semibold text-slate-700">היסטוריית חוסר בביקורות</h3>
+      <h3 className="mb-2 text-sm font-semibold text-ink-muted">היסטוריית חוסר בביקורות</h3>
       <DataTable
         columns={columns}
         rows={attendanceQuery.data ?? []}

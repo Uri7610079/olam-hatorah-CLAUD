@@ -88,19 +88,19 @@ export function OrganizationOfficeholdersTab({ organizationId }: OrganizationOff
   const columns: DataTableColumn<OrganizationOfficeholder>[] = [
     { key: "full_name", header: "שם", render: (r) => r.full_name },
     { key: "role", header: "תפקיד", render: (r) => `${OFFICEHOLDER_ROLE_LABEL[r.role_type]}${r.role_title ? ` — ${r.role_title}` : ""}` },
-    { key: "id_number", header: 'ת"ז', className: "tabular", render: (r) => r.id_number ?? "—" },
-    { key: "phone", header: "טלפון", render: (r) => r.phone ?? "—" },
+    { key: "id_number", header: 'ת"ז', className: "tabular ltr-num", render: (r) => r.id_number ?? "—" },
+    { key: "phone", header: "טלפון", className: "ltr-num", render: (r) => r.phone ?? "—" },
     { key: "tenure_start", header: "תחילת כהונה", className: "tabular", render: (r) => r.tenure_start ?? "—" },
     {
       key: "actions",
       header: "",
       render: (r) =>
         canManage && !r.tenure_end ? (
-          <button onClick={() => endTenure(r.id)} className="text-xs text-red-600 underline hover:text-red-800">
+          <button onClick={() => endTenure(r.id)} className="text-xs text-danger underline hover:text-danger-ink">
             סיום כהונה
           </button>
         ) : r.tenure_end ? (
-          <span className="text-xs text-slate-400">הסתיים {r.tenure_end}</span>
+          <span className="text-xs text-ink-subtle">הסתיים {r.tenure_end}</span>
         ) : null,
     },
   ];

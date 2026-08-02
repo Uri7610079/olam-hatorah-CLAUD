@@ -212,7 +212,7 @@ export function QuotasScreen() {
             <button onClick={() => saveQuota(r.branchId)} disabled={saving === r.branchId} className="link-action text-xs">
               {saving === r.branchId ? "שומרת…" : "שמירה"}
             </button>
-            <button onClick={() => cancelEdit(r.branchId)} className="text-xs text-slate-500 underline">
+            <button onClick={() => cancelEdit(r.branchId)} className="text-xs text-ink-subtle underline">
               ביטול
             </button>
           </div>
@@ -235,7 +235,7 @@ export function QuotasScreen() {
       render: (r) => {
         // מכסה שלא הוגדרה בכלל (null) שונה ממכסה שאושרה כ-0 (מסלול לגיטימי - סניף שעדיין
         // לא אושר לקלוט אף תלמיד) - בדיקת truthy הייתה מתייחסת לשתיהן אותו דבר.
-        if (r.approvedQuota == null) return <span className="text-slate-400">—</span>;
+        if (r.approvedQuota == null) return <span className="text-ink-subtle">—</span>;
         const over = r.eligibleCount > r.approvedQuota;
         const pct = r.approvedQuota === 0 ? (r.eligibleCount > 0 ? Infinity : 0) : Math.round((r.eligibleCount / r.approvedQuota) * 100);
         const label = pct === Infinity ? `חריגה (מכסה 0)` : `${pct}%${over ? " (חריגה)" : ""}`;

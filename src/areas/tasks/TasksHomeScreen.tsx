@@ -40,21 +40,21 @@ interface TaskListSectionProps {
 function TaskListSection({ title, tasks, onOpen, emptyText, accentClass }: TaskListSectionProps) {
   return (
     <div className={`card border-t-4 p-4 ${accentClass}`}>
-      <h2 className="mb-3 text-sm font-semibold text-slate-800">
-        {title} <span className="text-slate-400">({tasks.length})</span>
+      <h2 className="mb-3 text-sm font-semibold text-ink">
+        {title} <span className="text-ink-subtle">({tasks.length})</span>
       </h2>
       {tasks.length === 0 ? (
-        <p className="text-xs text-slate-400">{emptyText}</p>
+        <p className="text-xs text-ink-subtle">{emptyText}</p>
       ) : (
         <ul className="space-y-1.5">
           {tasks.map((t) => (
             <li key={t.id}>
               <button
                 onClick={() => onOpen(t.id)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-100 p-2 text-right text-sm hover:bg-slate-50"
+                className="flex w-full items-center justify-between gap-2 rounded-control border border-line p-2 text-right text-sm hover:bg-surface-muted"
               >
                 <span className="truncate">{t.title}</span>
-                <span className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
+                <span className="flex shrink-0 items-center gap-2 text-xs text-ink-subtle">
                   {t.due_date && <span className="tabular">{t.due_date}</span>}
                   <PriorityBadge priority={t.priority} />
                   <StatusBadge severity={STATUS_SEVERITY[t.status]} label={STATUS_LABEL[t.status]} />
@@ -126,14 +126,14 @@ export function TasksHomeScreen() {
       />
 
       {dueReminders.length > 0 && (
-        <div className="card mb-4 border-amber-200 bg-tasks-light p-4">
+        <div className="card mb-4 border-tasks/30 bg-tasks-light p-4">
           <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-tasks">
             <BellRing className="h-4 w-4" aria-hidden="true" />
             תזכורות שהגיע זמנן ({dueReminders.length})
           </h2>
           <ul className="space-y-1.5">
             {dueReminders.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-2 rounded-lg bg-white p-2 text-sm">
+              <li key={r.id} className="flex items-center justify-between gap-2 rounded-control bg-surface p-2 text-sm">
                 <button onClick={() => openTask(r.task_id)} className="link-action truncate text-right">
                   {r.task_title}
                 </button>
@@ -143,7 +143,7 @@ export function TasksHomeScreen() {
                       await snoozeReminder(r.id, tomorrowIso());
                       refreshReminders();
                     }}
-                    className="text-slate-500 underline hover:text-slate-700"
+                    className="text-ink-subtle underline hover:text-ink-muted"
                   >
                     דחייה למחר
                   </button>
@@ -152,7 +152,7 @@ export function TasksHomeScreen() {
                       await dismissReminder(r.id);
                       refreshReminders();
                     }}
-                    className="text-slate-500 underline hover:text-slate-700"
+                    className="text-ink-subtle underline hover:text-ink-muted"
                   >
                     סגירה
                   </button>
@@ -167,9 +167,9 @@ export function TasksHomeScreen() {
         <EmptyState title="אין לך משימות פתוחות כרגע" icon={CheckSquare} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          <TaskListSection title="באיחור" tasks={overdue} onOpen={openTask} emptyText="אין משימות באיחור." accentClass="border-t-rose-400" />
+          <TaskListSection title="באיחור" tasks={overdue} onOpen={openTask} emptyText="אין משימות באיחור." accentClass="border-t-danger" />
           <TaskListSection title="להיום" tasks={today} onOpen={openTask} emptyText="אין משימות להיום." accentClass="border-t-tasks" />
-          <TaskListSection title="קרובות" tasks={upcoming} onOpen={openTask} emptyText="אין משימות קרובות." accentClass="border-t-sky-400" />
+          <TaskListSection title="קרובות" tasks={upcoming} onOpen={openTask} emptyText="אין משימות קרובות." accentClass="border-t-info" />
           <TaskListSection
             title="ממתינות או חסומות"
             tasks={waitingOrBlocked}
@@ -183,7 +183,7 @@ export function TasksHomeScreen() {
       {canSeeWhatsApp && pendingWhatsAppCount > 0 && (
         <Link
           to="/tasks/whatsapp"
-          className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700 hover:bg-slate-50"
+          className="mt-4 flex items-center gap-2 rounded-control border border-line bg-surface p-3 text-sm text-ink-muted hover:bg-surface-muted"
         >
           <MessageSquare className="h-4 w-4 text-tasks" aria-hidden="true" />
           {pendingWhatsAppCount} הודעות WhatsApp ממתינות לסיווג

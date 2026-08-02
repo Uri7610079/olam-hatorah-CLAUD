@@ -279,7 +279,7 @@ export function BranchesGroupsScreen() {
             קבוצות
           </button>
           {canManageBranches && r.status === "active" && (
-            <button onClick={() => closeBranch(r.id)} className="text-xs text-red-600 underline hover:text-red-800">
+            <button onClick={() => closeBranch(r.id)} className="text-xs text-danger underline hover:text-danger-ink">
               סגירה
             </button>
           )}
@@ -311,7 +311,7 @@ export function BranchesGroupsScreen() {
             >
               {leaderChangeSubmitting ? "שומרת…" : "אישור"}
             </button>
-            <button onClick={() => setChangingLeaderGroupId(null)} className="text-xs text-slate-500 underline">
+            <button onClick={() => setChangingLeaderGroupId(null)} className="text-xs text-ink-subtle underline">
               ביטול
             </button>
           </div>
@@ -341,7 +341,7 @@ export function BranchesGroupsScreen() {
       header: "",
       render: (r) =>
         canManageGroups && r.status === "active" ? (
-          <button onClick={() => closeGroup(r.id)} className="text-xs text-red-600 underline hover:text-red-800">
+          <button onClick={() => closeGroup(r.id)} className="text-xs text-danger underline hover:text-danger-ink">
             סגירה
           </button>
         ) : null,
@@ -360,7 +360,7 @@ export function BranchesGroupsScreen() {
             <button onClick={() => navigate("/ops/import-center")} className="btn-secondary">
               יבוא מאקסל
             </button>
-            <span className="mt-0.5 text-xs text-slate-500">יבוא עמותות/סניפים/קבוצות - כולל סניפים וקבוצות</span>
+            <span className="mt-0.5 text-xs text-ink-subtle">יבוא עמותות/סניפים/קבוצות - כולל סניפים וקבוצות</span>
           </div>
         }
       />
@@ -383,7 +383,7 @@ export function BranchesGroupsScreen() {
         <>
           <div className="mb-6">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-700">סניפים</h3>
+              <h3 className="text-sm font-semibold text-ink-muted">סניפים</h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleExportBranches}
@@ -467,7 +467,7 @@ export function BranchesGroupsScreen() {
           {selectedBranchId && (
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-700">קבוצות — {selectedBranch?.internal_name}</h3>
+                <h3 className="text-sm font-semibold text-ink-muted">קבוצות — {selectedBranch?.internal_name}</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleExportGroups}
@@ -544,7 +544,7 @@ export function BranchesGroupsScreen() {
                   </div>
 
                   {showAddLeader && (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="rounded-control border border-line bg-surface-muted p-3">
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <input
                           placeholder="שם ראש קבוצה"

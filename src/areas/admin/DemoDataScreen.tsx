@@ -187,8 +187,8 @@ export function DemoDataScreen() {
       {tab === "demo" && (
         <>
           <div className="card mb-6 max-w-xl space-y-3 p-4">
-            <h2 className="text-sm font-semibold text-slate-700">יצירת חבילת דמו חדשה</h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="text-sm font-semibold text-ink-muted">יצירת חבילת דמו חדשה</h2>
+            <p className="text-xs text-ink-subtle">
               יוצרת שרשרת נתונים סינתטית שלמה תחת עמותת "DEMO" נפרדת: סניף, 2 קבוצות, 3 תלמידים, זכאות ועמלה, תרומה וחלוקה, מס"ב, התאמת בנק והחזרה פתוחה - לצורך הדגמה בלבד. לא מתערבב בנתוני אמת של אף עמותה אחרת.
             </p>
             <div>
@@ -215,14 +215,14 @@ export function DemoDataScreen() {
 
           {previewBatchId && previewLabel && (
             <div className="card mt-4 max-w-xl space-y-3 p-4">
-              <h2 className="text-sm font-semibold text-slate-700">מחיקת חבילת דמו: {previewLabel}</h2>
+              <h2 className="text-sm font-semibold text-ink-muted">מחיקת חבילת דמו: {previewLabel}</h2>
 
               {previewLoading && <LoadingState rows={3} />}
 
               {deleteResult ? (
                 <>
-                  <p className="text-sm text-emerald-700">החבילה נמחקה בהצלחה.</p>
-                  <ul className="space-y-1 text-xs text-slate-600">
+                  <p className="text-sm text-ok-ink">החבילה נמחקה בהצלחה.</p>
+                  <ul className="space-y-1 text-xs text-ink-muted">
                     {deleteResult
                       .filter((r) => r.row_count > 0)
                       .map((r) => (
@@ -238,8 +238,8 @@ export function DemoDataScreen() {
               ) : (
                 previewRows && (
                   <>
-                    <p className="text-xs text-slate-500">השורות הבאות יימחקו לצמיתות - פעולה בלתי הפיכה:</p>
-                    <ul className="space-y-1 text-xs text-slate-600">
+                    <p className="text-xs text-ink-subtle">השורות הבאות יימחקו לצמיתות - פעולה בלתי הפיכה:</p>
+                    <ul className="space-y-1 text-xs text-ink-muted">
                       {previewRows
                         .filter((r) => r.row_count > 0)
                         .map((r) => (
@@ -254,11 +254,11 @@ export function DemoDataScreen() {
                       <button
                         onClick={confirmDelete}
                         disabled={confirmText.trim() !== previewLabel || deleting}
-                        className="text-xs text-red-600 underline hover:text-red-800 disabled:text-slate-300 disabled:no-underline"
+                        className="text-xs text-danger underline hover:text-danger-ink disabled:text-ink-subtle disabled:no-underline"
                       >
                         {deleting ? "מוחקת…" : "אישור מחיקה סופית"}
                       </button>
-                      <button onClick={closePreview} className="text-xs text-slate-500 underline">
+                      <button onClick={closePreview} className="text-xs text-ink-subtle underline">
                         ביטול
                       </button>
                     </div>

@@ -330,7 +330,7 @@ export function PhoneListsScreen() {
             />
           ) : (
             <>
-              <p className="text-xs text-slate-500">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
+              <p className="text-xs text-ink-subtle">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
               <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
               {analyzing && <LoadingState rows={2} />}
               {duplicateFileId && (
@@ -341,7 +341,7 @@ export function PhoneListsScreen() {
                   </button>
                 </div>
               )}
-              {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+              {legacyWarning && <p className="text-xs text-warn-ink">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
               {error && <ErrorState message={error} />}
               {localRows && !duplicateFileId && (
                 <>
@@ -374,7 +374,7 @@ export function PhoneListsScreen() {
 
       {orgId && (
         <>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">היסטוריית ייבוא</h2>
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">היסטוריית ייבוא</h2>
           <DataTable
             columns={[
               { key: "file", header: "קובץ", render: (i: ImportSummary) => i.file_name },
@@ -396,7 +396,7 @@ export function PhoneListsScreen() {
       {selectedImport && (
         <div className="card mt-4 max-w-4xl space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">{selectedImport.file_name}</h2>
+            <h2 className="text-sm font-semibold text-ink-muted">{selectedImport.file_name}</h2>
             <div className="flex items-center gap-2">
               <StatusBadge severity={selectedImport.status === "committed" ? "ok" : "medium"} label={IMPORT_STATUS_LABEL[selectedImport.status]} />
               <button
@@ -432,8 +432,8 @@ export function PhoneListsScreen() {
           />
           <DataTable
             columns={[
-              { key: "raw", header: "טלפון גולמי", render: (r: EntryRow) => r.raw_phone ?? "—" },
-              { key: "norm", header: "מנורמל", className: "tabular", render: (r: EntryRow) => r.normalized_phone ?? "—" },
+              { key: "raw", header: "טלפון גולמי", className: "ltr-num", render: (r: EntryRow) => r.raw_phone ?? "—" },
+              { key: "norm", header: "מנורמל", className: "tabular ltr-num", render: (r: EntryRow) => r.normalized_phone ?? "—" },
               { key: "status", header: "סטטוס", render: (r: EntryRow) => <StatusBadge severity={r.status === "matched" ? "ok" : r.status === "extra" ? "medium" : "neutral"} label={ENTRY_STATUS_LABEL[r.status]} /> },
               { key: "student", header: "תלמיד תואם", render: (r: EntryRow) => (r.matched_student ? `${r.matched_student.full_name} (${r.matched_student.external_id})` : "—") },
             ]}
@@ -444,16 +444,16 @@ export function PhoneListsScreen() {
           />
 
           {selectedImport.status === "committed" && (
-            <div className="space-y-2 border-t border-slate-200 pt-4">
+            <div className="space-y-2 border-t border-line pt-4">
               <button onClick={() => setShowMissing((v) => !v)} className="link-action text-xs">
                 {showMissing ? "הסתרת תלמידים חסרים ברשימה" : "הצגת תלמידים פעילים שלא הופיעו ברשימה (חסר)"}
               </button>
               {showMissing && (
                 <DataTable
                   columns={[
-                    { key: "id", header: "מזהה", className: "tabular", render: (s: MissingStudent) => s.external_id },
+                    { key: "id", header: "מזהה", className: "tabular ltr-num", render: (s: MissingStudent) => s.external_id },
                     { key: "name", header: "שם", render: (s: MissingStudent) => s.full_name },
-                    { key: "phone", header: "טלפון במערכת", className: "tabular", render: (s: MissingStudent) => s.phone_normalized },
+                    { key: "phone", header: "טלפון במערכת", className: "tabular ltr-num", render: (s: MissingStudent) => s.phone_normalized },
                   ]}
                   rows={missingQuery.data ?? []}
                   rowKey={(s: MissingStudent) => s.student_id}

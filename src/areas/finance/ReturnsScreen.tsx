@@ -346,7 +346,7 @@ export function ReturnsScreen() {
       {selectedReturn && canManage && (
         <div className="card mt-4 max-w-2xl space-y-3 p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">
+            <h2 className="text-sm font-semibold text-ink-muted">
               טיפול בהחזרה · {selectedReturn.masav_line.student.full_name} ({selectedReturn.masav_line.student.external_id})
             </h2>
             <StatusBadge severity={selectedReturn.status === "resolved" ? "ok" : "medium"} label={RETURN_STATUS_LABEL[selectedReturn.status]} />
@@ -354,7 +354,7 @@ export function ReturnsScreen() {
 
           {selectedReturn.status !== "resolved" && (
             <>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-ink-subtle">
                 לא ניתן לקשר תשלום חוזר בלי חשבון בנק חדש שאומת בפועל. סגירת ההחזרה (״טופל״) מותרת רק לאחר שהתשלום החוזר הותאם ואושר בפועל מול הבנק (התאמות בנק, שלב 12).
               </p>
               {accountsQuery.isLoading || retryLinesQuery.isLoading ? (
@@ -371,7 +371,7 @@ export function ReturnsScreen() {
                         </option>
                       ))}
                     </select>
-                    {(accountsQuery.data ?? []).length === 0 && <p className="mt-1 text-xs text-amber-600">אין לתלמיד זה חשבון בנק מאומת ופעיל.</p>}
+                    {(accountsQuery.data ?? []).length === 0 && <p className="mt-1 text-xs text-warn">אין לתלמיד זה חשבון בנק מאומת ופעיל.</p>}
                   </div>
                   <div>
                     <label className="field-label">שורת תשלום חוזר (מס״ב)</label>

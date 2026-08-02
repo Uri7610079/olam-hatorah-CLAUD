@@ -59,18 +59,19 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
 
   if (!canManage) {
     return (
-      <div className="card max-w-xl space-y-2 p-5 text-sm text-slate-600">
+      <div className="card max-w-xl space-y-2 p-5 text-sm text-ink-muted">
         <p>
-          <span className="font-medium text-slate-800">מזהה:</span> {ID_TYPE_LABEL[student.id_type]} {student.external_id}
+          <span className="font-medium text-ink">מזהה:</span> {ID_TYPE_LABEL[student.id_type]}{" "}
+          <span className="ltr-num">{student.external_id}</span>
         </p>
         <p>
-          <span className="font-medium text-slate-800">שם מלא:</span> {student.full_name}
+          <span className="font-medium text-ink">שם מלא:</span> {student.full_name}
         </p>
         <p>
-          <span className="font-medium text-slate-800">טלפון:</span> {student.phone_raw ?? "—"}
+          <span className="font-medium text-ink">טלפון:</span> <span className="ltr-num">{student.phone_raw ?? "—"}</span>
         </p>
         <p>
-          <span className="font-medium text-slate-800">כתובת:</span> {formatStudentAddress(student)}
+          <span className="font-medium text-ink">כתובת:</span> {formatStudentAddress(student)}
         </p>
       </div>
     );
@@ -141,7 +142,7 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           <input value={values.study_code} onChange={(e) => setValues((v) => ({ ...v, study_code: e.target.value }))} className="input-field tabular" />
         </div>
       </div>
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-ink-subtle">
         סוג תלמיד וקוד לימוד הם טקסט חופשי כרגע — יהפכו לרשימות סגורות משלב 5 (הגדרות מערכת וקודי לימוד).
       </p>
       {error && <ErrorState message={error} />}

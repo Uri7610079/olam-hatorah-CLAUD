@@ -43,7 +43,7 @@ export function BankImportPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">יבוא תנועות בנק לחשבון עמותה. סיווג תנועה הוא הצעה/קטגוריה בלבד.</p>
+      <p className="text-sm text-ink-muted">יבוא תנועות בנק לחשבון עמותה. סיווג תנועה הוא הצעה/קטגוריה בלבד.</p>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-2xl">
         <div>
@@ -77,7 +77,7 @@ export function BankImportPanel() {
         </div>
       </div>
 
-      {!accountId && <p className="text-sm text-slate-500">בחרי עמותה וחשבון כדי להציג נתונים.</p>}
+      {!accountId && <p className="text-sm text-ink-subtle">בחרי עמותה וחשבון כדי להציג נתונים.</p>}
       {accountId && <BankTransactionsPanel accountId={accountId} />}
     </div>
   );

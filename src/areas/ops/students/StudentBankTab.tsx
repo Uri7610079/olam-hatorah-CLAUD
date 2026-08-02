@@ -103,6 +103,7 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
     {
       key: "account_number",
       header: "מספר חשבון",
+      className: "ltr-num",
       render: (r) => (
         <SensitiveValue
           masked={r.account_number_masked ?? "—"}
@@ -148,7 +149,7 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
             <button onClick={() => setVerification(r.id, "verified")} className="link-action text-xs">
               אימות
             </button>
-            <button onClick={() => setVerification(r.id, "rejected")} className="text-xs text-red-600 underline hover:text-red-800">
+            <button onClick={() => setVerification(r.id, "rejected")} className="text-xs text-danger underline hover:text-danger-ink">
               דחייה
             </button>
           </div>

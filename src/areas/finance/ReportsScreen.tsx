@@ -388,7 +388,14 @@ export function ReportsScreen() {
 
   const columns: DataTableColumn<ReportRow>[] =
     rows && rows.length > 0
-      ? Object.keys(rows[0]).map((k) => ({ key: k, header: k, render: (r: ReportRow) => (r[k] != null ? String(r[k]) : "—") }))
+      ? Object.keys(rows[0]).map((k) => ({
+          key: k,
+          header: k,
+          // עמודות הדוח נבנות דינמית מהתוצאה, ולכן גם היישור: עמודה שערכיה מספריים
+          // (סכומים, ספירות) מקבלת ספרות ברוחב אחיד כדי שתיקרא כטור מיושר.
+          className: rows.some((r) => typeof r[k] === "number") ? "tabular" : undefined,
+          render: (r: ReportRow) => (r[k] != null ? String(r[k]) : "—"),
+        }))
       : [];
 
   return (

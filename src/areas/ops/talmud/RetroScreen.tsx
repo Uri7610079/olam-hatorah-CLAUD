@@ -176,7 +176,7 @@ export function RetroScreen() {
       key: "diff",
       header: "הפרש",
       className: "tabular",
-      render: (r) => (r.difference != null ? <span className={r.difference < 0 ? "text-red-600" : "text-green-700"}>{r.difference.toLocaleString("he-IL")}</span> : "—"),
+      render: (r) => (r.difference != null ? <span className={r.difference < 0 ? "text-danger" : "text-ok-ink"}>{r.difference.toLocaleString("he-IL")}</span> : "—"),
     },
     { key: "offset", header: "קיזוז נוכחי", className: "tabular", render: (r) => r.current_period_offset?.toLocaleString("he-IL") ?? "—" },
     { key: "cumulative", header: "קיזוז מצטבר", className: "tabular", render: (r) => r.cumulative_offset?.toLocaleString("he-IL") ?? "—" },
@@ -210,7 +210,7 @@ export function RetroScreen() {
         </select>
       </div>
 
-      <div className="mb-4 flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+      <div className="mb-4 flex items-start gap-2 rounded-md border border-line bg-surface-muted p-3 text-sm text-ink-muted">
         <span>
           רטרו נשמר כנתון היסטורי בלבד ואינו מעדכן את יתרת הקבוצה אוטומטית. אם הרטרו אמור להשפיע בפועל על היתרה, יש
           להזין תנועת תיקון ידנית במסך "יתרות קבוצות". אין נוסחת ניקוד קבועה: אם התקבל ניקוד במקור, יש להזין אותו

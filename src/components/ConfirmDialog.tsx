@@ -29,13 +29,13 @@ export function ConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4"
     >
-      <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-lg">
-        <h2 id="confirm-dialog-title" className="text-base font-semibold text-slate-900">
+      <div className="w-full max-w-sm rounded-card bg-surface p-5 shadow-lg">
+        <h2 id="confirm-dialog-title" className="text-base font-semibold text-ink">
           {title}
         </h2>
-        {description && <div className="mt-2 text-sm text-slate-600">{description}</div>}
+        {description && <div className="mt-2 text-sm text-ink-muted">{description}</div>}
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onCancel} className="btn-secondary px-3 py-1.5 text-sm">
             {cancelLabel}

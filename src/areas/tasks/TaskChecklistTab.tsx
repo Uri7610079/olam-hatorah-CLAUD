@@ -32,7 +32,7 @@ export function TaskChecklistTab({ taskId, canEdit }: TaskChecklistTabProps) {
     <div className="space-y-2">
       {items.length === 0 && <EmptyState title="אין פעולות משנה עדיין" />}
       {items.map((item) => (
-        <div key={item.id} className="flex items-center gap-2 rounded-lg border border-slate-100 p-2">
+        <div key={item.id} className="flex items-center gap-2 rounded-control border border-line p-2">
           <input
             type="checkbox"
             checked={item.is_done}
@@ -42,7 +42,7 @@ export function TaskChecklistTab({ taskId, canEdit }: TaskChecklistTabProps) {
               refresh();
             }}
           />
-          <span className={`flex-1 text-sm ${item.is_done ? "text-slate-400 line-through" : "text-slate-700"}`}>{item.text}</span>
+          <span className={`flex-1 text-sm ${item.is_done ? "text-ink-subtle line-through" : "text-ink-muted"}`}>{item.text}</span>
           {canEdit && (
             <button
               onClick={async () => {
@@ -50,7 +50,7 @@ export function TaskChecklistTab({ taskId, canEdit }: TaskChecklistTabProps) {
                 refresh();
               }}
               aria-label="מחיקת פריט"
-              className="text-xs text-red-600 underline hover:text-red-800"
+              className="text-xs text-danger underline hover:text-danger-ink"
             >
               מחיקה
             </button>

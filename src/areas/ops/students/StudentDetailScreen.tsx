@@ -171,13 +171,13 @@ export function StudentDetailScreen() {
             );
           })()}
           {(student.status === "ready_for_talmud" || student.status === "sent_to_talmud") && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-subtle">
               {student.status === "ready_for_talmud"
                 ? 'ההמשך (יצוא לתלמוד) נעשה ממסך "יצוא לתלמוד" - לא כפעולה כאן.'
                 : "התלמיד נשלח לתלמוד. הסטטוס יתעדכן אוטומטית ל\"פעיל\"/\"פעיל עם שגיאה\" ביבוא דוח הזכאות/שגויים הבא."}
             </p>
           )}
-          <button onClick={() => setShowExit(true)} className="text-xs text-red-600 underline hover:text-red-800">
+          <button onClick={() => setShowExit(true)} className="text-xs text-danger underline hover:text-danger-ink">
             יציאת תלמיד
           </button>
         </div>

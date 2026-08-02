@@ -221,7 +221,7 @@ function BankCatalogImportPanel({ profileKey, commitRpc, columnsHint, onCommitte
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -234,7 +234,7 @@ function BankCatalogImportPanel({ profileKey, commitRpc, columnsHint, onCommitte
   return (
     <div className="card max-w-3xl space-y-3 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="max-w-lg text-xs text-slate-500">{columnsHint}</p>
+        <p className="max-w-lg text-xs text-ink-subtle">{columnsHint}</p>
         <button onClick={() => (showImport ? closeImport() : setShowImport(true))} className="btn-secondary flex items-center gap-2 text-xs">
           <Upload className="h-3.5 w-3.5" aria-hidden="true" />
           {showImport ? "סגירה" : "יבוא מאקסל"}
@@ -242,7 +242,7 @@ function BankCatalogImportPanel({ profileKey, commitRpc, columnsHint, onCommitte
       </div>
 
       {showImport && !reviewBatchId && (
-        <div className="space-y-3 border-t border-slate-200 pt-3">
+        <div className="space-y-3 border-t border-line pt-3">
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
           {analyzing && <LoadingState rows={2} />}
           {duplicateId && (
@@ -254,7 +254,7 @@ function BankCatalogImportPanel({ profileKey, commitRpc, columnsHint, onCommitte
             </div>
           )}
           {legacyWarning && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-control border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</span>
             </div>
@@ -286,20 +286,20 @@ function BankCatalogImportPanel({ profileKey, commitRpc, columnsHint, onCommitte
       )}
 
       {reviewBatchId && (
-        <div className="space-y-3 border-t border-slate-200 pt-3">
+        <div className="space-y-3 border-t border-line pt-3">
           {reviewBatchQuery.isLoading || reviewRowsQuery.isLoading ? (
             <LoadingState rows={3} />
           ) : reviewBatchQuery.data ? (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-900">{reviewBatchQuery.data.file_name}</p>
+                <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
                   label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
                 />
               </div>
 
-              {reviewIsOpen && <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הקובץ (שורות "שגוי" יידחו - ר' הודעת השגיאה לכל שורה).</p>}
+              {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הקובץ (שורות "שגוי" יידחו - ר' הודעת השגיאה לכל שורה).</p>}
 
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
@@ -315,7 +315,7 @@ function BankCatalogImportPanel({ profileKey, commitRpc, columnsHint, onCommitte
                   {committing ? "קולטת…" : "קליטת הקובץ"}
                 </button>
               )}
-              <button onClick={closeImport} className="text-xs text-slate-500 underline">
+              <button onClick={closeImport} className="text-xs text-ink-subtle underline">
                 סגירה
               </button>
             </>
@@ -326,7 +326,7 @@ function BankCatalogImportPanel({ profileKey, commitRpc, columnsHint, onCommitte
       )}
 
       {commitResult && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+        <div className="rounded-control bg-ok-soft p-3 text-sm text-ok-ink">
           נקלטו {commitResult.created} רשומות.
           {commitResult.invalid > 0 && ` ${commitResult.invalid} שורות נדחו - ר' הודעת שגיאה לכל שורה בתצוגה המקדימה למעלה.`}
         </div>
@@ -395,7 +395,7 @@ function TransactionTypesPanel() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-2xl text-sm text-slate-600">
+        <p className="max-w-2xl text-sm text-ink-muted">
           קטלוג סוגי התנועה לצורך סיווג. 13 הסוגים הבסיסיים לפי האפיון כבר קיימים - הוספה כאן היא להרחבה עתידית בלבד.
         </p>
         <div className="flex items-center gap-2">
@@ -620,7 +620,14 @@ function RecognitionRulesPanel() {
     {
       key: "scope",
       header: "חשבון",
-      render: (r) => (r.account ? `${r.account.bank_name ?? "בנק"} · ${r.account.account_number_masked}` : "כל החשבונות"),
+      render: (r) =>
+        r.account ? (
+          <>
+            {r.account.bank_name ?? "בנק"} · <span className="ltr-num">{r.account.account_number_masked}</span>
+          </>
+        ) : (
+          "כל החשבונות"
+        ),
     },
     {
       key: "criteria",
@@ -656,7 +663,7 @@ function RecognitionRulesPanel() {
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-2xl text-sm text-slate-600">
+        <p className="max-w-2xl text-sm text-ink-muted">
           הצעת סיווג בלבד - לעולם לא אישור אוטומטי. כשכמה כללים תואמים לאותה תנועה, מנצחת העדיפות הגבוהה ביותר.
         </p>
         <div className="flex items-center gap-2">

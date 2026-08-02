@@ -34,10 +34,10 @@ export function MatchSplitView<TSource, TTarget>({
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="card">
-        <h3 className="border-b border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">
+        <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-ink-muted">
           {sourceTitle}
         </h3>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-line">
           {sources.map((item) => {
             const key = sourceKey(item);
             const selected = key === selectedSourceKey;
@@ -47,7 +47,7 @@ export function MatchSplitView<TSource, TTarget>({
                   onClick={() => onSelectSource?.(item)}
                   aria-pressed={selected}
                   className={`w-full px-4 py-2.5 text-right text-sm transition ${
-                    selected ? "bg-brand-50" : "hover:bg-slate-50"
+                    selected ? "bg-brand-50" : "hover:bg-surface-muted"
                   }`}
                 >
                   {renderSource(item)}
@@ -58,10 +58,10 @@ export function MatchSplitView<TSource, TTarget>({
         </ul>
       </div>
       <div className="card">
-        <h3 className="border-b border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700">
+        <h3 className="border-b border-line px-4 py-2.5 text-sm font-semibold text-ink-muted">
           {targetTitle}
         </h3>
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-line">
           {targets.map((item) => {
             const key = targetKey(item);
             const selected = selectedTargetKeys.includes(key);
@@ -71,7 +71,7 @@ export function MatchSplitView<TSource, TTarget>({
                   onClick={() => onToggleTarget?.(item)}
                   aria-pressed={selected}
                   className={`w-full px-4 py-2.5 text-right text-sm transition ${
-                    selected ? "bg-brand-50" : "hover:bg-slate-50"
+                    selected ? "bg-brand-50" : "hover:bg-surface-muted"
                   }`}
                 >
                   {renderTarget(item)}

@@ -26,16 +26,16 @@ export function AuditTrailDrawer({ open, onClose, title = "יומן פעילות
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <button aria-label="סגור" className="flex-1 bg-slate-900/40" onClick={onClose} />
+      <button aria-label="סגור" className="flex-1 bg-ink/40" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="h-full w-full max-w-sm overflow-y-auto bg-white p-5 shadow-xl"
+        className="h-full w-full max-w-sm overflow-y-auto bg-surface p-5 shadow-xl"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} aria-label="סגור" className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100">
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
+          <button onClick={onClose} aria-label="סגור" className="rounded-control p-1.5 text-ink-subtle transition hover:bg-surface-muted">
             ✕
           </button>
         </div>
@@ -46,12 +46,12 @@ export function AuditTrailDrawer({ open, onClose, title = "יומן פעילות
         ) : (
           <ol className="space-y-3">
             {entries.map((entry) => (
-              <li key={entry.id} className="border-b border-slate-100 pb-3 text-sm">
-                <p className="tabular text-xs text-slate-400">{entry.timestamp}</p>
-                <p className="mt-0.5 text-slate-800">
+              <li key={entry.id} className="border-b border-line pb-3 text-sm">
+                <p className="tabular text-xs text-ink-subtle">{entry.timestamp}</p>
+                <p className="mt-0.5 text-ink">
                   <span className="font-medium">{entry.actor}</span> — {entry.action}
                 </p>
-                {entry.detail && <div className="mt-1 text-slate-500">{entry.detail}</div>}
+                {entry.detail && <div className="mt-1 text-ink-subtle">{entry.detail}</div>}
               </li>
             ))}
           </ol>

@@ -231,7 +231,7 @@ export function CommissionRulesImportPanel({ orgId }: CommissionRulesImportPanel
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -243,11 +243,11 @@ export function CommissionRulesImportPanel({ orgId }: CommissionRulesImportPanel
 
   return (
     <div className="card max-w-3xl space-y-4 p-5">
-      <p className="text-sm text-slate-600">יבוא כללי עמלה בכמות מקובץ אקסל/CSV.</p>
+      <p className="text-sm text-ink-muted">יבוא כללי עמלה בכמות מקובץ אקסל/CSV.</p>
 
       {!reviewBatchId && (
         <div className="space-y-4">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-subtle">
             עמודות צפויות בקובץ: שם קבוצה (לא חובה), קוד לימוד (לא חובה), מזהה תלמיד חיצוני (לא חובה), סוג חישוב (אחוז/קבוע/משולב), אחוז, סכום קבוע, כלל עיגול (לא חובה), עדיפות (לא חובה), תקף מתאריך, תקף עד תאריך (לא חובה), הערות.
           </p>
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
@@ -262,7 +262,7 @@ export function CommissionRulesImportPanel({ orgId }: CommissionRulesImportPanel
             </div>
           )}
           {legacyWarning && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</span>
             </div>
@@ -302,7 +302,7 @@ export function CommissionRulesImportPanel({ orgId }: CommissionRulesImportPanel
           ) : reviewBatchQuery.data ? (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-900">{reviewBatchQuery.data.file_name}</p>
+                <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
                   label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
@@ -310,7 +310,7 @@ export function CommissionRulesImportPanel({ orgId }: CommissionRulesImportPanel
               </div>
 
               {reviewIsOpen && (
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-ink-muted">
                   ניתן לפתור שורות "דורש החלטה" ידנית, או לקלוט את הקובץ ישירות - שורות שסומנו ככפילות אפשרית ייקלטו כרגיל.
                 </p>
               )}
@@ -329,7 +329,7 @@ export function CommissionRulesImportPanel({ orgId }: CommissionRulesImportPanel
                   {committing ? "קולטת…" : "קליטת כללי העמלה"}
                 </button>
               )}
-              <button onClick={closeReview} className="text-xs text-slate-500 underline">
+              <button onClick={closeReview} className="text-xs text-ink-subtle underline">
                 חזרה / יבוא נוסף
               </button>
             </>
@@ -340,14 +340,19 @@ export function CommissionRulesImportPanel({ orgId }: CommissionRulesImportPanel
       )}
 
       {commitResult && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
-          נוצרו {commitResult.created} כללי עמלה. {commitResult.invalid > 0 && `${commitResult.invalid} שורות היו שגויות ולא נקלטו.`}
+        <div className="rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
+          נוצרו <span className="tabular">{commitResult.created}</span> כללי עמלה.{" "}
+          {commitResult.invalid > 0 && (
+            <>
+              <span className="tabular">{commitResult.invalid}</span> שורות היו שגויות ולא נקלטו.
+            </>
+          )}
         </div>
       )}
 
       {!reviewBatchId && (
         <>
-          <h3 className="mb-2 mt-2 text-sm font-semibold text-slate-700">היסטוריית יבוא כללי עמלה</h3>
+          <h3 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא כללי עמלה</h3>
           <DataTable
             columns={[
               { key: "file", header: "קובץ", render: (b: CommissionRulesBatchSummary) => b.file_name },

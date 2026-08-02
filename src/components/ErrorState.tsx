@@ -5,12 +5,12 @@ interface ErrorStateProps {
 
 export function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
-    <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-center">
-      <p className="text-sm font-medium text-red-700">{message}</p>
+    <div role="alert" className="rounded-card border border-danger bg-danger-soft px-5 py-4 text-center">
+      <p className="text-sm font-medium text-danger-ink">{message}</p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm text-red-700 shadow-sm transition hover:bg-red-50"
+          className="mt-3 rounded-control border border-danger bg-surface px-3 py-1.5 text-sm text-danger-ink shadow-sm transition hover:bg-danger-soft"
         >
           נסה שוב
         </button>

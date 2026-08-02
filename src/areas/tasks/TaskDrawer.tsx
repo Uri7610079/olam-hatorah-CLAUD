@@ -254,11 +254,11 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <button aria-label="סגור" className="flex-1 bg-slate-900/40" onClick={close} />
-      <div role="dialog" aria-modal="true" aria-label={isCreate ? "משימה חדשה" : "כרטיס משימה"} className="h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-xl">
+      <button aria-label="סגור" className="flex-1 bg-ink/40" onClick={close} />
+      <div role="dialog" aria-modal="true" aria-label={isCreate ? "משימה חדשה" : "כרטיס משימה"} className="h-full w-full max-w-xl overflow-y-auto bg-surface p-5 shadow-xl">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">{isCreate ? "משימה חדשה" : task?.title ?? "כרטיס משימה"}</h2>
-          <button onClick={close} aria-label="סגור" title="סגירת החלון" className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100">
+          <h2 className="text-base font-semibold text-ink">{isCreate ? "משימה חדשה" : task?.title ?? "כרטיס משימה"}</h2>
+          <button onClick={close} aria-label="סגור" title="סגירת החלון" className="rounded-control p-1.5 text-ink-subtle transition hover:bg-surface-muted">
             ✕
           </button>
         </div>
@@ -361,7 +361,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
             )}
             <div>
               <label className="field-label">אחראים</label>
-              <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2">
+              <div className="max-h-32 space-y-1 overflow-y-auto rounded-control border border-line p-2">
                 {(usersQuery.data ?? []).map((u) => (
                   <label key={u.id} className="flex items-center gap-2 text-sm">
                     <input
@@ -378,7 +378,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
             </div>
             <div>
               <label className="field-label">צוותים</label>
-              <div className="space-y-1 rounded-lg border border-slate-200 p-2">
+              <div className="space-y-1 rounded-control border border-line p-2">
                 {(teamsQuery.data ?? []).map((t) => (
                   <label key={t.id} className="flex items-center gap-2 text-sm">
                     <input
@@ -515,10 +515,10 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                     {(teamsQuery.data ?? [])
                       .filter((t) => teamIds.has(t.id))
                       .map((t) => (
-                        <span key={t.id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                        <span key={t.id} className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-xs text-ink-muted">
                           {t.label_he}
                           {canAssignTeams && (
-                            <button onClick={() => toggleTeam(t.id, true)} aria-label={`הסר את ${t.label_he}`} title={`הסרת צוות ${t.label_he}`} className="text-slate-500 hover:text-slate-800">
+                            <button onClick={() => toggleTeam(t.id, true)} aria-label={`הסר את ${t.label_he}`} title={`הסרת צוות ${t.label_he}`} className="text-ink-subtle hover:text-ink">
                               ✕
                             </button>
                           )}

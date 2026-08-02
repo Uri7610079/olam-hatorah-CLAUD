@@ -13,16 +13,16 @@ export function SensitiveValue({ masked, canReveal, onReveal }: SensitiveValuePr
   const [loading, setLoading] = useState(false);
 
   if (!canReveal) {
-    return <span className="tabular text-slate-500">{masked}</span>;
+    return <span className="tabular ltr-num text-ink-subtle">{masked}</span>;
   }
 
   if (revealed) {
-    return <span className="tabular font-medium">{revealed}</span>;
+    return <span className="tabular ltr-num font-medium">{revealed}</span>;
   }
 
   return (
     <span className="inline-flex items-center gap-2">
-      <span className="tabular text-slate-500">{masked}</span>
+      <span className="tabular ltr-num text-ink-subtle">{masked}</span>
       <button
         type="button"
         disabled={loading}

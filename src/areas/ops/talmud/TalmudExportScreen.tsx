@@ -250,12 +250,12 @@ export function TalmudExportScreen() {
         selectable.some((c) => c.id === s.id) ? (
           <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} />
         ) : (
-          <span className="text-xs text-slate-400" title="כבר יוצא / לא במצב מוכן לתלמוד">
+          <span className="text-xs text-ink-subtle" title="כבר יוצא / לא במצב מוכן לתלמוד">
             —
           </span>
         ),
     },
-    { key: "id", header: "מזהה", className: "tabular", render: (s) => s.external_id },
+    { key: "id", header: "מזהה", className: "tabular ltr-num", render: (s) => s.external_id },
     { key: "name", header: "שם", render: (s) => s.full_name },
     { key: "status", header: "סטטוס נוכחי", render: (s) => s.status },
   ];
@@ -264,7 +264,7 @@ export function TalmudExportScreen() {
     <div>
       <PageHeader title="יצוא תלמידים לתלמוד" description="בחירת תלמידים ליצוא. פורמט הקובץ הוא טיוטה - התבנית המאושרת של תלמוד/מרכבה טרם התקבלה." />
 
-      <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 mb-4">
+      <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink mb-4">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <span>עמודות הקובץ (מזהה תלמיד, שם מלא, טלפון) הן הנחה זמנית בלבד, לא הפורמט הרשמי שתלמוד/מרכבה דורשים.</span>
       </div>
@@ -328,7 +328,7 @@ export function TalmudExportScreen() {
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-ink-muted">
           <input type="checkbox" checked={override} onChange={(e) => { setOverride(e.target.checked); setSelected(new Set()); }} />
           יצוא חוזר (כולל תלמידים שכבר יוצאו בעבר)
         </label>
@@ -352,7 +352,7 @@ export function TalmudExportScreen() {
         )}
 
         {error && <ErrorState message={error} />}
-        {resultFileName && <p className="text-sm text-green-700">היצוא הופק בהצלחה: {resultFileName}</p>}
+        {resultFileName && <p className="text-sm text-ok-ink">היצוא הופק בהצלחה: {resultFileName}</p>}
 
         <button
           onClick={runExport}
@@ -366,7 +366,7 @@ export function TalmudExportScreen() {
 
       {orgId && (
         <>
-          <h2 className="mb-2 text-sm font-semibold text-slate-700">היסטוריית יצוא</h2>
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">היסטוריית יצוא</h2>
           <DataTable
             columns={[
               { key: "file", header: "קובץ", render: (b: any) => b.file_name },

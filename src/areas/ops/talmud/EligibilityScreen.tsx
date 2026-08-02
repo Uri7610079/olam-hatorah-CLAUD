@@ -312,7 +312,7 @@ export function EligibilityScreen() {
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -346,7 +346,7 @@ export function EligibilityScreen() {
 
       {orgId && !reviewBatchId && (
         <div className="card mb-6 max-w-2xl space-y-4 p-5">
-          <p className="text-xs text-slate-500">עמודות צפויות בקובץ: מזהה תלמיד, סכום ברוטו, ניקוד/סוג תשלום (לא חובה).</p>
+          <p className="text-xs text-ink-subtle">עמודות צפויות בקובץ: מזהה תלמיד, סכום ברוטו, ניקוד/סוג תשלום (לא חובה).</p>
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
 
           {analyzing && <LoadingState rows={2} />}
@@ -359,7 +359,7 @@ export function EligibilityScreen() {
             </div>
           )}
           {legacyWarning && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</span>
             </div>
@@ -401,8 +401,8 @@ export function EligibilityScreen() {
             <>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">{reviewBatchQuery.data.file_name}</p>
-                  <p className="text-xs text-slate-500">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                  <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
+                  <p className="text-xs text-ink-subtle">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
                 </div>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
@@ -410,7 +410,7 @@ export function EligibilityScreen() {
                 />
               </div>
 
-              {reviewIsOpen && <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הדוח (שורות "שגוי" יישארו מחוץ לזכאות).</p>}
+              {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הדוח (שורות "שגוי" יישארו מחוץ לזכאות).</p>}
 
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
@@ -426,7 +426,7 @@ export function EligibilityScreen() {
                   {committing ? "קולטת…" : "קליטת דוח הזכאות"}
                 </button>
               )}
-              <button onClick={closeReview} className="text-xs text-slate-500 underline">
+              <button onClick={closeReview} className="text-xs text-ink-subtle underline">
                 חזרה לרשימה / יבוא נוסף
               </button>
             </>
@@ -437,7 +437,7 @@ export function EligibilityScreen() {
       )}
 
       {commitResult && (
-        <div className="mb-6 rounded-md bg-green-50 p-3 text-sm text-green-800">
+        <div className="mb-6 rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
           נקלטו {commitResult.matched} רשומות זכאות. {commitResult.unmatched > 0 && `${commitResult.unmatched} שורות לא הותאמו לתלמיד ונשארו לבדיקה.`}
         </div>
       )}
@@ -449,7 +449,7 @@ export function EligibilityScreen() {
           {sectionTab === "month" && (
             <DataTable
               columns={[
-                { key: "id", header: "מזהה", className: "tabular", render: (r: EligibilityRow) => r.student?.external_id ?? "—" },
+                { key: "id", header: "מזהה", className: "tabular ltr-num", render: (r: EligibilityRow) => r.student?.external_id ?? "—" },
                 { key: "name", header: "שם", render: (r: EligibilityRow) => r.student?.full_name ?? "—" },
                 { key: "amount", header: "סכום ברוטו", className: "tabular", render: (r: EligibilityRow) => r.gross_amount.toLocaleString("he-IL") },
                 { key: "score", header: "ניקוד/סוג תשלום", render: (r: EligibilityRow) => r.score_or_payment_type ?? "—" },
@@ -464,7 +464,7 @@ export function EligibilityScreen() {
           {sectionTab === "missing" && (
             <DataTable
               columns={[
-                { key: "id", header: "מזהה", className: "tabular", render: (r: MissingStudent) => r.external_id },
+                { key: "id", header: "מזהה", className: "tabular ltr-num", render: (r: MissingStudent) => r.external_id },
                 { key: "name", header: "שם", render: (r: MissingStudent) => r.full_name },
               ]}
               rows={missingQuery.data ?? []}

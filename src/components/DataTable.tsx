@@ -70,14 +70,14 @@ export function DataTable<T>({
       {columnPicker && (
         <div className="mb-2 flex justify-end">
           <div className="relative">
-            <button onClick={() => setShowPicker((v) => !v)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700">
+            <button onClick={() => setShowPicker((v) => !v)} className="flex items-center gap-1 text-xs text-ink-subtle hover:text-ink-muted">
               <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
               בחירת עמודות
             </button>
             {showPicker && (
-              <div className="absolute left-0 z-10 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+              <div className="absolute left-0 z-10 mt-1 w-56 rounded-control border border-line bg-surface p-2 shadow-lg">
                 {columns.map((c) => (
-                  <label key={c.key} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50">
+                  <label key={c.key} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-surface-muted">
                     <input type="checkbox" checked={!hiddenKeys.has(c.key)} onChange={() => toggleColumn(c.key)} />
                     {c.header}
                   </label>
@@ -100,7 +100,7 @@ export function DataTable<T>({
         // main ב-Layout היה flex item בלי min-w-0 ולכן לא הצטמצם מתחת לרוחב התוכן הטבעי.
         <div className="card max-h-[70vh] overflow-auto">
           <table className="w-full text-right text-sm">
-            <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-slate-600">
+            <thead className="sticky top-0 z-10 border-b border-line bg-surface-muted text-ink-muted">
               <tr>
                 {visibleColumns.map((col) => (
                   <th key={col.key} className="px-4 py-3 font-medium">
@@ -109,7 +109,7 @@ export function DataTable<T>({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {rows.map((row) => (
                 <tr
                   key={rowKey(row)}
@@ -128,7 +128,7 @@ export function DataTable<T>({
                         }
                       : undefined
                   }
-                  className={onRowClick ? "cursor-pointer transition hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""}
+                  className={onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""}
                 >
                   {visibleColumns.map((col) => (
                     <td key={col.key} className={`px-4 py-3 ${col.className ?? ""}`}>
@@ -143,7 +143,7 @@ export function DataTable<T>({
       )}
 
       {pagination && !loading && rows.length > 0 && (
-        <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+        <div className="mt-2 flex items-center justify-between text-xs text-ink-subtle">
           <span>
             סה"כ {pagination.totalCount.toLocaleString("he-IL")} · עמוד {pagination.page + 1} מתוך {totalPages}
           </span>
@@ -151,7 +151,7 @@ export function DataTable<T>({
             <button
               onClick={() => pagination.onPageChange(pagination.page - 1)}
               disabled={pagination.page <= 0}
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-30"
+              className="rounded p-1 hover:bg-surface-muted disabled:opacity-30"
               aria-label="עמוד קודם"
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -159,7 +159,7 @@ export function DataTable<T>({
             <button
               onClick={() => pagination.onPageChange(pagination.page + 1)}
               disabled={pagination.page + 1 >= totalPages}
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-30"
+              className="rounded p-1 hover:bg-surface-muted disabled:opacity-30"
               aria-label="עמוד הבא"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />

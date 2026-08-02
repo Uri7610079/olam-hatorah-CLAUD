@@ -57,7 +57,7 @@ export function TaskRemindersTab({ taskId, canEdit, userId, hasDueDate }: TaskRe
     <div className="space-y-3">
       {reminders.length === 0 && <EmptyState title="אין תזכורות עדיין" />}
       {reminders.map((r) => (
-        <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 p-2 text-sm">
+        <div key={r.id} className="flex items-center justify-between gap-2 rounded-control border border-line p-2 text-sm">
           <span>
             {r.days_before_due !== null
               ? r.days_before_due === 0
@@ -66,8 +66,8 @@ export function TaskRemindersTab({ taskId, canEdit, userId, hasDueDate }: TaskRe
               : r.remind_at && new Date(r.remind_at).toLocaleString("he-IL")}
             {" · "}
             {r.user_id ? (usersById.get(r.user_id) ?? "משתמש") : "כל האחראים"}
-            {r.snoozed_until && <span className="text-amber-600"> · נדחתה ל-{new Date(r.snoozed_until).toLocaleString("he-IL")}</span>}
-            {r.is_dismissed && <span className="text-slate-400"> · נסגרה</span>}
+            {r.snoozed_until && <span className="text-warn"> · נדחתה ל-{new Date(r.snoozed_until).toLocaleString("he-IL")}</span>}
+            {r.is_dismissed && <span className="text-ink-subtle"> · נסגרה</span>}
           </span>
           {canEdit && (
             <button
@@ -75,7 +75,7 @@ export function TaskRemindersTab({ taskId, canEdit, userId, hasDueDate }: TaskRe
                 await deleteReminder(r.id);
                 refresh();
               }}
-              className="shrink-0 text-xs text-red-600 underline hover:text-red-800"
+              className="shrink-0 text-xs text-danger underline hover:text-danger-ink"
             >
               מחיקה
             </button>
@@ -84,7 +84,7 @@ export function TaskRemindersTab({ taskId, canEdit, userId, hasDueDate }: TaskRe
       ))}
 
       {canEdit && (
-        <div className="space-y-2 border-t border-slate-100 pt-3">
+        <div className="space-y-2 border-t border-line pt-3">
           {error && <ErrorState message={error} />}
           <div className="flex gap-3 text-xs">
             <label className="flex items-center gap-1">

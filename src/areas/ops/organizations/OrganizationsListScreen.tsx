@@ -85,7 +85,7 @@ export function OrganizationsListScreen() {
         </Link>
       ),
     },
-    { key: "org_number", header: "מספר עמותה", className: "tabular", render: (o) => o.org_number ?? "—" },
+    { key: "org_number", header: "מספר עמותה", className: "tabular ltr-num", render: (o) => o.org_number ?? "—" },
     {
       key: "status",
       header: "סטטוס",
@@ -93,7 +93,7 @@ export function OrganizationsListScreen() {
         <StatusBadge severity={o.status === "active" ? "ok" : "neutral"} label={o.status === "active" ? "פעילה" : "סגורה"} />
       ),
     },
-    { key: "phone", header: "טלפון", render: (o) => o.contact_phone ?? "—" },
+    { key: "phone", header: "טלפון", className: "ltr-num", render: (o) => o.contact_phone ?? "—" },
   ];
 
   return (
@@ -111,7 +111,7 @@ export function OrganizationsListScreen() {
               <button onClick={() => navigate("/ops/import-center")} className="btn-secondary">
                 יבוא עמותות/סניפים/קבוצות מאקסל
               </button>
-              <span className="mt-0.5 text-xs text-slate-500">כולל גם סניפים וקבוצות</span>
+              <span className="mt-0.5 text-xs text-ink-subtle">כולל גם סניפים וקבוצות</span>
             </div>
             {canManage && (
               <button onClick={() => setShowCreate(true)} className="btn-primary">
@@ -132,9 +132,9 @@ export function OrganizationsListScreen() {
       />
 
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
           <div role="dialog" aria-modal="true" aria-labelledby="new-org-title" className="card w-full max-w-md p-6">
-            <h2 id="new-org-title" className="mb-4 text-base font-semibold text-slate-900">עמותה חדשה</h2>
+            <h2 id="new-org-title" className="mb-4 text-base font-semibold text-ink">עמותה חדשה</h2>
             <OrganizationForm
               initialValues={EMPTY_ORGANIZATION_FORM}
               onSubmit={handleCreate}

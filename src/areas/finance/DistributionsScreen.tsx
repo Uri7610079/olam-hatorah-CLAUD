@@ -449,7 +449,7 @@ export function DistributionsScreen() {
       {groupId && (
         <>
           <div className="card mb-4 max-w-sm p-3">
-            <p className="text-xs text-slate-500">יתרת קבוצה נוכחית</p>
+            <p className="text-xs text-ink-subtle">יתרת קבוצה נוכחית</p>
             <p className="text-lg font-bold tabular">{(balanceQuery.data ?? 0).toLocaleString("he-IL")}</p>
           </div>
 
@@ -514,10 +514,10 @@ export function DistributionsScreen() {
             <div className="card mt-6 max-w-4xl space-y-4 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-slate-700">
+                  <h2 className="text-sm font-semibold text-ink-muted">
                     אצווה {selectedBatch.period_month} · גרסה {selectedBatch.version}
                   </h2>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-ink-subtle">
                     {SOURCE_LABEL[selectedBatch.source_type]} · {METHOD_LABEL[selectedBatch.method]}
                   </p>
                 </div>
@@ -527,7 +527,7 @@ export function DistributionsScreen() {
               {error && <ErrorState message={error} />}
 
               {selectedBatch.status === "draft" && canManage && (
-                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="space-y-3 rounded-control border border-line bg-surface-muted p-3">
                   {selectedBatch.method === "equal" && (
                     <div className="flex items-end gap-2">
                       <div>
@@ -564,7 +564,7 @@ export function DistributionsScreen() {
                         </div>
                       )}
                       {fileWarnings.length > 0 && (
-                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                        <div className="mt-2 rounded-md border border-warn/30 bg-warn-soft p-2 text-xs text-warn-ink">
                           {fileWarnings.length} מזהי תלמיד מהקובץ לא נמצאו בקבוצה זו ולכן לא נכללו: {fileWarnings.join(", ")}
                         </div>
                       )}
@@ -574,9 +574,9 @@ export function DistributionsScreen() {
                   {groupStudentsQuery.isLoading ? (
                     <LoadingState rows={3} />
                   ) : (
-                    <div className="max-h-80 overflow-y-auto rounded-md border border-slate-200 bg-white">
+                    <div className="max-h-80 overflow-y-auto rounded-md border border-line bg-surface">
                       <table className="w-full text-right text-sm">
-                        <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                        <thead className="border-b border-line bg-surface-muted text-ink-muted">
                           <tr>
                             <th className="px-3 py-2"></th>
                             <th className="px-3 py-2">מזהה</th>
@@ -585,7 +585,7 @@ export function DistributionsScreen() {
                             <th className="px-3 py-2">{selectedBatch.method === "percentages" ? "אחוז" : "סכום"}</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-line">
                           {(groupStudentsQuery.data ?? []).map((s) => (
                             <tr key={s.id}>
                               <td className="px-3 py-2">
@@ -625,7 +625,9 @@ export function DistributionsScreen() {
                   )}
 
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-500">סה"כ נוכחי בטופס: {draftTotal.toLocaleString("he-IL")}</p>
+                    <p className="text-xs text-ink-subtle">
+                      סה"כ נוכחי בטופס: <span className="tabular">{draftTotal.toLocaleString("he-IL")}</span>
+                    </p>
                     <button onClick={saveLines} disabled={savingLines} className="btn-secondary flex items-center gap-2 text-xs">
                       <Upload className="h-3.5 w-3.5" aria-hidden="true" />
                       {savingLines ? "שומרת…" : "שמירת שורות"}
@@ -644,7 +646,9 @@ export function DistributionsScreen() {
               <DataTable columns={lineColumns} rows={lines} rowKey={(r) => r.id} loading={linesQuery.isLoading} emptyTitle="אין עדיין שורות באצווה" />
 
               <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-600">סה"כ שורות שמורות: {linesTotal.toLocaleString("he-IL")}</p>
+                <p className="text-sm text-ink-muted">
+                  סה"כ שורות שמורות: <span className="tabular">{linesTotal.toLocaleString("he-IL")}</span>
+                </p>
                 <div className="flex gap-2">
                   {selectedBatch.status === "draft" && canManage && (
                     <button onClick={() => runAction("submit_distribution_for_review", { p_batch_id: selectedBatchId })} disabled={actionBusy} className="btn-primary text-xs">

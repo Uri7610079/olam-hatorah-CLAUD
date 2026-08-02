@@ -38,7 +38,7 @@ export function SignUpForm({ onBackToLogin }: SignUpFormProps) {
   if (done) {
     return (
       <AuthLayout title="הבקשה נשלחה">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-ink-muted">
           הבקשה שלך נקלטה. אם נדרש אימות מייל תקבלי קישור לתיבת הדואר — לאחר מכן החשבון ימתין
           לאישור מנהל מערכת, ורק אז יהיה אפשר להיכנס.
         </p>

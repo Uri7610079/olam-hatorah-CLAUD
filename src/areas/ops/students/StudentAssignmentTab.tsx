@@ -133,7 +133,7 @@ export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
 
       {showReassign && (
         <form onSubmit={handleReassign} className="card mb-4 max-w-xl space-y-3 p-4">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-ink-subtle">
             {currentAssignment
               ? "השיוך הנוכחי ייסגר אוטומטית (עם תאריך וסיבה) והשיוך החדש ייפתח - שום דבר לא נדרס."
               : "יצירת שיוך ראשון לתלמיד."}

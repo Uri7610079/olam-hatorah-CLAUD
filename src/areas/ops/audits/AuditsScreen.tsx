@@ -285,7 +285,7 @@ export function AuditsScreen() {
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -389,7 +389,7 @@ export function AuditsScreen() {
       {selectedAudit && (
         <div className="card mt-4 max-w-4xl space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">
+            <h2 className="text-sm font-semibold text-ink-muted">
               ביקורת · {selectedAudit.audit_date} · {selectedAudit.branch?.internal_name ?? "כל הסניפים"}
             </h2>
             <div className="flex items-center gap-2">
@@ -404,7 +404,7 @@ export function AuditsScreen() {
           </div>
 
           {showImport && !reviewBatchId && (
-            <div className="space-y-3 border-t border-slate-200 pt-4">
+            <div className="space-y-3 border-t border-line pt-4">
               {headerConfirm ? (
                 <HeaderRowConfirm
                   previewRows={headerConfirm.previewRows}
@@ -414,7 +414,7 @@ export function AuditsScreen() {
                 />
               ) : (
                 <>
-                  <p className="text-xs text-slate-500">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
+                  <p className="text-xs text-ink-subtle">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
                   <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
                   {analyzing && <LoadingState rows={2} />}
                   {duplicateId && (
@@ -425,7 +425,7 @@ export function AuditsScreen() {
                       </button>
                     </div>
                   )}
-                  {legacyWarning && <p className="text-xs text-amber-700">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
+                  {legacyWarning && <p className="text-xs text-warn-ink">קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</p>}
                   {error && <ErrorState message={error} />}
                   {parsedRows && !duplicateId && (
                     <>
@@ -447,12 +447,12 @@ export function AuditsScreen() {
           )}
 
           {reviewBatchId && (
-            <div className="space-y-3 border-t border-slate-200 pt-4">
+            <div className="space-y-3 border-t border-line pt-4">
               {reviewRowsQuery.isLoading ? (
                 <LoadingState rows={3} />
               ) : (
                 <>
-                  <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הרשימה.</p>
+                  <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הרשימה.</p>
                   <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                     {(tab) => {
                       const data = tab === "valid" ? storedValid : tab === "needsDecision" ? storedNeeds : storedInvalid;
@@ -464,7 +464,7 @@ export function AuditsScreen() {
                     <button onClick={commit} disabled={committing} className="btn-primary">
                       {committing ? "קולטת…" : "קליטת רשימת החסרים"}
                     </button>
-                    <button onClick={() => setReviewBatchId(null)} className="text-xs text-slate-500 underline">
+                    <button onClick={() => setReviewBatchId(null)} className="text-xs text-ink-subtle underline">
                       חזרה
                     </button>
                   </div>
@@ -474,7 +474,7 @@ export function AuditsScreen() {
           )}
 
           {commitResult && (
-            <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+            <div className="rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
               נקלטו {commitResult.matched} רשומות. {commitResult.unmatched > 0 && `${commitResult.unmatched} שורות עם בעיה לא נכללו.`}
             </div>
           )}
@@ -483,7 +483,7 @@ export function AuditsScreen() {
             <DataTable
               columns={[
                 { key: "recurring", header: "", render: (r: AttendanceRow) => (r.is_recurring ? <StatusBadge severity="high" label="חוזר" /> : null) },
-                { key: "id", header: "מזהה", className: "tabular", render: (r: AttendanceRow) => r.student?.external_id ?? r.external_student_ref ?? "—" },
+                { key: "id", header: "מזהה", className: "tabular ltr-num", render: (r: AttendanceRow) => r.student?.external_id ?? r.external_student_ref ?? "—" },
                 { key: "name", header: "שם", render: (r: AttendanceRow) => r.student?.full_name ?? "(לא הותאם)" },
                 { key: "group", header: "קבוצה", render: (r: AttendanceRow) => r.group?.name ?? "—" },
                 {

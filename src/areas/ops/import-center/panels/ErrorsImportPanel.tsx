@@ -238,7 +238,7 @@ export function ErrorsImportPanel() {
                 <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "valid")} className="link-action text-xs disabled:opacity-50">
                   סמן תקין
                 </button>
-                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-red-600 underline hover:text-red-800 disabled:opacity-50">
+                <button disabled={resolvingRow === r.row_number} onClick={() => resolveRow(r.row_number, "invalid")} className="text-xs text-danger underline hover:text-danger-ink disabled:opacity-50">
                   סמן שגוי
                 </button>
               </div>
@@ -250,7 +250,7 @@ export function ErrorsImportPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">יבוא דוח שגיאות מתלמוד, לפי תלמיד וחודש.</p>
+      <p className="text-sm text-ink-muted">יבוא דוח שגיאות מתלמוד, לפי תלמיד וחודש.</p>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-lg">
         <div>
@@ -272,7 +272,7 @@ export function ErrorsImportPanel() {
 
       {orgId && !reviewBatchId && (
         <div className="card max-w-2xl space-y-4 p-5">
-          <p className="text-xs text-slate-500">עמודות צפויות: מזהה תלמיד, קוד שגיאה, תיאור שגיאה (לא חובה).</p>
+          <p className="text-xs text-ink-subtle">עמודות צפויות: מזהה תלמיד, קוד שגיאה, תיאור שגיאה (לא חובה).</p>
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
           {analyzing && <LoadingState rows={2} />}
           {duplicateId && (
@@ -284,7 +284,7 @@ export function ErrorsImportPanel() {
             </div>
           )}
           {legacyWarning && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>קובץ XLS ישן - מומלץ להמיר ל-XLSX/CSV.</span>
             </div>
@@ -325,8 +325,8 @@ export function ErrorsImportPanel() {
             <>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">{reviewBatchQuery.data.file_name}</p>
-                  <p className="text-xs text-slate-500">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                  <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
+                  <p className="text-xs text-ink-subtle">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
                 </div>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
@@ -334,7 +334,7 @@ export function ErrorsImportPanel() {
                 />
               </div>
 
-              {reviewIsOpen && <p className="text-sm text-slate-600">פתרו שורות "דורש החלטה" ואז קלטו את הדוח.</p>}
+              {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הדוח.</p>}
 
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {
@@ -349,7 +349,7 @@ export function ErrorsImportPanel() {
                     {committing ? "קולטת…" : "קליטת דוח השגויים"}
                   </button>
                 )}
-                <button onClick={closeReview} className="text-xs text-slate-500 underline">
+                <button onClick={closeReview} className="text-xs text-ink-subtle underline">
                   חזרה לרשימה
                 </button>
               </div>
@@ -361,14 +361,14 @@ export function ErrorsImportPanel() {
       )}
 
       {commitResult && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+        <div className="rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
           נקלטו {commitResult.matched} שגיאות. {commitResult.unmatched > 0 && `${commitResult.unmatched} שורות עם בעיה נשארו לבדיקה.`}
         </div>
       )}
 
       {orgId && (
         <>
-          <h2 className="mb-2 mt-2 text-sm font-semibold text-slate-700">היסטוריית יבוא שגויים</h2>
+          <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא שגויים</h2>
           <DataTable
             columns={[
               { key: "file", header: "קובץ", render: (b: ErrorsBatchSummary) => b.file_name },

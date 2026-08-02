@@ -24,33 +24,33 @@ import { getHolidayInfo, hebrewDateLabel } from "./hebrewCalendar";
 const BOARD_STATUSES: TaskStatus[] = ["open", "in_progress", "waiting", "blocked", "completed", "cancelled"];
 
 const COLUMN_CLASSES: Record<TaskStatus, string> = {
-  draft: "border-slate-200 bg-slate-50",
-  open: "border-sky-200 bg-sky-50/60",
-  in_progress: "border-amber-200 bg-amber-50/60",
+  draft: "border-line bg-surface-muted",
+  open: "border-info/30 bg-info-soft/60",
+  in_progress: "border-warn/30 bg-warn-soft/60",
   waiting: "border-violet-200 bg-violet-50/60",
-  blocked: "border-rose-200 bg-rose-50/60",
-  completed: "border-emerald-200 bg-emerald-50/60",
-  cancelled: "border-slate-200 bg-slate-50",
-  archived: "border-slate-200 bg-slate-50",
+  blocked: "border-danger/30 bg-danger-soft/60",
+  completed: "border-ok/30 bg-ok-soft/60",
+  cancelled: "border-line bg-surface-muted",
+  archived: "border-line bg-surface-muted",
 };
 const COLUMN_HEADER_CLASSES: Record<TaskStatus, string> = {
-  draft: "text-slate-600",
-  open: "text-sky-700",
-  in_progress: "text-amber-700",
+  draft: "text-ink-muted",
+  open: "text-info-ink",
+  in_progress: "text-warn-ink",
   waiting: "text-violet-700",
-  blocked: "text-rose-700",
-  completed: "text-emerald-700",
-  cancelled: "text-slate-600",
-  archived: "text-slate-600",
+  blocked: "text-danger-ink",
+  completed: "text-ok-ink",
+  cancelled: "text-ink-muted",
+  archived: "text-ink-muted",
 };
 
 const WEEKDAY_LABELS = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
 const SEVERITY_DOT: Record<string, string> = {
-  critical: "bg-red-500",
-  high: "bg-orange-500",
-  medium: "bg-yellow-500",
-  ok: "bg-green-500",
-  neutral: "bg-slate-400",
+  critical: "bg-status-critical",
+  high: "bg-status-high",
+  medium: "bg-status-medium",
+  ok: "bg-status-ok",
+  neutral: "bg-status-neutral",
 };
 
 function buildMonthGrid(year: number, month: number): Date[] {
@@ -204,13 +204,13 @@ export function TasksAllScreen() {
 
   const teamFilterChips = (teamsQuery.data ?? []).length > 0 && (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <span className="text-xs text-slate-500">סינון לפי צוות:</span>
+      <span className="text-xs text-ink-subtle">סינון לפי צוות:</span>
       {(teamsQuery.data ?? []).map((team) => (
         <button
           key={team.id}
           onClick={() => toggleTeam(team.id)}
           className={`rounded-full px-3 py-1 text-xs transition ${
-            teamFilter.includes(team.id) ? "bg-tasks-light text-tasks font-medium" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            teamFilter.includes(team.id) ? "bg-tasks-light text-tasks font-medium" : "bg-surface-muted text-ink-muted hover:bg-line"
           }`}
         >
           {team.label_he}
@@ -303,10 +303,10 @@ export function TasksAllScreen() {
                   }}
                   onDragLeave={() => setDragOverStatus((s) => (s === status ? null : s))}
                   onDrop={(e) => handleDrop(status, e)}
-                  className={`w-64 shrink-0 rounded-lg border p-2 transition-colors ${dragOverStatus === status ? "border-tasks bg-tasks-light" : COLUMN_CLASSES[status]}`}
+                  className={`w-64 shrink-0 rounded-control border p-2 transition-colors ${dragOverStatus === status ? "border-tasks bg-tasks-light" : COLUMN_CLASSES[status]}`}
                 >
                   <h2 className={`mb-2 flex items-center justify-between px-1 text-xs font-semibold ${COLUMN_HEADER_CLASSES[status]}`}>
-                    {STATUS_LABEL[status]} <span className="text-slate-400">({columnTasks.length})</span>
+                    {STATUS_LABEL[status]} <span className="text-ink-subtle">({columnTasks.length})</span>
                   </h2>
                   <div className="space-y-2">
                     {columnTasks.map((t) => (
@@ -325,8 +325,8 @@ export function TasksAllScreen() {
                         }}
                         className="card cursor-grab p-2.5 text-sm hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       >
-                        <p className="truncate font-medium text-slate-800">{t.title}</p>
-                        <p className="mt-1.5 flex items-center justify-between text-xs text-slate-400">
+                        <p className="truncate font-medium text-ink">{t.title}</p>
+                        <p className="mt-1.5 flex items-center justify-between text-xs text-ink-subtle">
                           <PriorityBadge priority={t.priority} />
                           {t.due_date && <span className="tabular">{t.due_date}</span>}
                         </p>
@@ -354,25 +354,25 @@ export function TasksAllScreen() {
                 className="input-field w-auto text-xs"
               />
               <div className="flex items-center gap-0.5">
-                <button onClick={goPrevYear} aria-label="שנה קודמת" title="שנה קודמת" className="rounded p-1.5 hover:bg-slate-100">
+                <button onClick={goPrevYear} aria-label="שנה קודמת" title="שנה קודמת" className="rounded p-1.5 hover:bg-surface-muted">
                   <ChevronsRight className="h-4 w-4" aria-hidden="true" />
                 </button>
-                <button onClick={goPrevMonth} aria-label="חודש קודם" title="חודש קודם" className="rounded p-1.5 hover:bg-slate-100">
+                <button onClick={goPrevMonth} aria-label="חודש קודם" title="חודש קודם" className="rounded p-1.5 hover:bg-surface-muted">
                   <ChevronRight className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <span className="min-w-[8rem] text-center text-sm font-medium">{monthLabel}</span>
-                <button onClick={goNextMonth} aria-label="חודש הבא" title="חודש הבא" className="rounded p-1.5 hover:bg-slate-100">
+                <button onClick={goNextMonth} aria-label="חודש הבא" title="חודש הבא" className="rounded p-1.5 hover:bg-surface-muted">
                   <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                 </button>
-                <button onClick={goNextYear} aria-label="שנה הבאה" title="שנה הבאה" className="rounded p-1.5 hover:bg-slate-100">
+                <button onClick={goNextYear} aria-label="שנה הבאה" title="שנה הבאה" className="rounded p-1.5 hover:bg-surface-muted">
                   <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-semibold text-slate-500">
+            <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-semibold text-ink-subtle">
               {WEEKDAY_LABELS.map((d, i) => (
-                <div key={d} className={`rounded-md py-1 ${i === 5 || i === 6 ? "bg-tasks-light text-tasks" : ""}`}>
+                <div key={d} className={`rounded-control py-1 ${i === 5 || i === 6 ? "bg-tasks-light text-tasks" : ""}`}>
                   {d}
                 </div>
               ))}
@@ -388,14 +388,14 @@ export function TasksAllScreen() {
                 return (
                   <div
                     key={iso}
-                    className={`group relative min-h-28 rounded-lg border p-1.5 text-xs transition-colors ${
+                    className={`group relative min-h-28 rounded-control border p-1.5 text-xs transition-colors ${
                       !inMonth
-                        ? "border-slate-100 bg-slate-50 text-slate-300"
+                        ? "border-line bg-surface-muted text-ink-subtle"
                         : holiday
                           ? "border-amber-300 bg-amber-50/70"
                           : isWeekend
                             ? "border-tasks-light bg-tasks-light/40"
-                            : "border-slate-200 bg-white"
+                            : "border-line bg-surface"
                     } ${isToday ? "ring-2 ring-tasks border-tasks" : ""}`}
                   >
                     <div className="mb-0.5 flex items-center justify-between">
@@ -405,13 +405,13 @@ export function TasksAllScreen() {
                           onClick={() => openNewTaskForDay(iso)}
                           aria-label={`משימה חדשה ליום ${iso}`}
                           title="משימה חדשה ליום הזה"
-                          className="rounded p-0.5 text-slate-300 opacity-0 transition hover:bg-tasks-light hover:text-tasks focus-visible:opacity-100 group-hover:opacity-100"
+                          className="rounded p-0.5 text-ink-subtle opacity-0 transition hover:bg-tasks-light hover:text-tasks focus-visible:opacity-100 group-hover:opacity-100"
                         >
                           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                         </button>
                       )}
                     </div>
-                    <div className="mb-1 truncate text-[10px] leading-tight text-slate-400" dir="rtl" title="תאריך עברי">
+                    <div className="mb-1 truncate text-[10px] leading-tight text-ink-subtle" dir="rtl" title="תאריך עברי">
                       {hebrewDateLabel(day)}
                     </div>
                     {holiday && (
@@ -426,7 +426,7 @@ export function TasksAllScreen() {
                           key={t.id}
                           onClick={() => openTask(t.id)}
                           title={`${t.title} - ${STATUS_LABEL[t.status]}`}
-                          className="flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-right hover:bg-slate-100"
+                          className="flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-right hover:bg-surface-muted"
                         >
                           <span
                             className={`h-1.5 w-1.5 shrink-0 rounded-full ${SEVERITY_DOT[STATUS_SEVERITY[t.status]]}`}
@@ -436,7 +436,7 @@ export function TasksAllScreen() {
                           <span className="truncate">{t.title}</span>
                         </button>
                       ))}
-                      {dayTasks.length > 3 && <p className="text-slate-400">+{dayTasks.length - 3} נוספות</p>}
+                      {dayTasks.length > 3 && <p className="text-ink-subtle">+{dayTasks.length - 3} נוספות</p>}
                     </div>
                   </div>
                 );
