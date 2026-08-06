@@ -33,6 +33,9 @@ interface DataTableProps<T> {
   // שתי יכולות אופציונליות בלבד (שלב 14) - טבלה שלא מבקשת אותן מתנהגת בדיוק כמו קודם.
   columnPicker?: boolean;
   pagination?: DataTablePagination;
+  // הדגשת שורה שלמה לפי תוכנה (למשל שורה עם פער סכומים בבדיקת הזכאות). אופציונלי -
+  // טבלה שלא מעבירה את זה מקבלת בדיוק את אותו className כמו קודם.
+  rowClassName?: (row: T) => string | undefined;
 }
 
 // טבלה בסיסית לפי עקרונות ה-UX באפיון: עמודות מעטות כברירת מחדל, pagination אמיתי
@@ -48,6 +51,7 @@ export function DataTable<T>({
   onRowClick,
   columnPicker = false,
   pagination,
+  rowClassName,
 }: DataTableProps<T>) {
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set(columnPicker ? columns.filter((c) => c.hiddenByDefault).map((c) => c.key) : []));
   const [showPicker, setShowPicker] = useState(false);
@@ -128,7 +132,7 @@ export function DataTable<T>({
                         }
                       : undefined
                   }
-                  className={onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""}
+                  className={`${onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""} ${rowClassName?.(row) ?? ""}`.trim()}
                 >
                   {visibleColumns.map((col) => (
                     <td key={col.key} className={`px-4 py-3 ${col.className ?? ""}`}>

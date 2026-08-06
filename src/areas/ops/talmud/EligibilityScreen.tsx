@@ -23,13 +23,21 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 
-type SectionTabKey = "month" | "missing" | "history";
+type SectionTabKey = "month" | "missing" | "amounts" | "history";
 
 const SECTION_TABS: TabDef<SectionTabKey>[] = [
   { key: "month", label: "זכאות לחודש" },
   { key: "missing", label: "תלמידים פעילים שלא הופיעו בדוח" },
+  { key: "amounts", label: "בדיקת סכומים" },
   { key: "history", label: "היסטוריית יבוא זכאות" },
 ];
+
+function formatNumber(value: number | string | null | undefined, maxDigits: number, minDigits = 0): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString("he-IL", { minimumFractionDigits: minDigits, maximumFractionDigits: maxDigits });
+}
 
 interface OrgOption {
   id: string;
@@ -87,6 +95,35 @@ async function fetchMissingFromReport(orgId: string, month: string): Promise<Mis
   return (assigned ?? [])
     .map((r: any) => r.students)
     .filter((s: any) => !eligibleSet.has(s.id));
+}
+
+// בדיקת סכומים: השוואה בין הסכום שדווח בדוח הזכאות לבין הסכום שנגזר מהניקוד ומשווי
+// הנקודה של אותו חודש. זו בדיקה בלבד - הסכום של משרד החינוך הוא הקובע, והמערכת
+// לעולם לא מתקנת אותו. expected_amount ריק פירושו שחסרה הגדרה (ניקוד או שווי נקודה)
+// ולא שיש פער.
+interface AmountCheckRow {
+  student_id: string;
+  full_name: string | null;
+  study_code: string | null;
+  reported_points: number | string | null;
+  expected_points: number | string | null;
+  point_value: number | string | null;
+  reported_amount: number | string | null;
+  expected_amount: number | string | null;
+  difference: number | string | null;
+}
+
+async function fetchAmountCheck(orgId: string, month: string): Promise<AmountCheckRow[]> {
+  const { data, error } = await supabase.rpc("eligibility_amount_check", { p_organization_id: orgId, p_month: month });
+  if (error) throw error;
+  return (data ?? []) as AmountCheckRow[];
+}
+
+// הסכומים מעוגלים לשתי ספרות במסד, ולכן כל פער אמיתי גדול מחצי אגורה.
+function hasGap(difference: number | string | null): boolean {
+  if (difference === null || difference === undefined || difference === "") return false;
+  const n = Number(difference);
+  return Number.isFinite(n) && Math.abs(n) > 0.005;
 }
 
 type BatchStatus = "uploaded" | "analyzed" | "previewed" | "committed" | "rejected";
@@ -174,6 +211,11 @@ export function EligibilityScreen() {
     queryKey: ["missing-from-report", orgId, month],
     queryFn: () => fetchMissingFromReport(orgId, month),
     enabled: !!orgId && !!month,
+  });
+  const amountCheckQuery = useQuery({
+    queryKey: ["eligibility-amount-check", orgId, month],
+    queryFn: () => fetchAmountCheck(orgId, month),
+    enabled: !!orgId && !!month && sectionTab === "amounts",
   });
 
   const resetForm = () => {
@@ -276,6 +318,7 @@ export function EligibilityScreen() {
     queryClient.invalidateQueries({ queryKey: ["eligibility-batches", orgId] });
     queryClient.invalidateQueries({ queryKey: ["month-eligibility", orgId, month] });
     queryClient.invalidateQueries({ queryKey: ["missing-from-report", orgId, month] });
+    queryClient.invalidateQueries({ queryKey: ["eligibility-amount-check", orgId, month] });
     queryClient.invalidateQueries({ queryKey: ["students"] });
   };
 
@@ -472,6 +515,81 @@ export function EligibilityScreen() {
               loading={missingQuery.isLoading}
               emptyTitle="אין חריגות - כל התלמידים הפעילים הופיעו בדוח"
             />
+          )}
+
+          {sectionTab === "amounts" && (
+            <div className="space-y-3">
+              <div className="max-w-3xl space-y-1">
+                <p className="text-sm text-ink-muted">
+                  בדיקה בלבד - לא תיקון. הסכום שמשרד החינוך שילם הוא הסכום הקובע, וכל פער הוא נושא לבירור מול המשרד ולא משהו שהמערכת מתקנת לבד.
+                </p>
+                <p className="text-xs text-ink-subtle">
+                  הסכום הצפוי מחושב לפי הניקוד ושווי הנקודה שהיו בתוקף באותו חודש (מסך "קודי לימוד וערכי מערכת"). שורה שבה חסרה אחת מההגדרות מסומנת "לא הוגדר ניקוד/שווי" - זו הגדרה חסרה, לא פער.
+                </p>
+              </div>
+
+              {amountCheckQuery.error && <ErrorState message="שגיאה בטעינת בדיקת הסכומים." />}
+
+              <DataTable
+                columns={[
+                  { key: "name", header: "שם", render: (r: AmountCheckRow) => r.full_name ?? "—" },
+                  { key: "code", header: "קוד לימוד", className: "tabular", render: (r: AmountCheckRow) => r.study_code ?? "—" },
+                  {
+                    key: "points",
+                    header: "ניקוד",
+                    className: "tabular",
+                    render: (r: AmountCheckRow) => {
+                      const used = r.reported_points ?? r.expected_points;
+                      if (used === null || used === undefined) return "—";
+                      return (
+                        <span>
+                          {formatNumber(used, 3)}
+                          {r.reported_points === null && <span className="text-xs text-ink-subtle"> (לפי קוד הלימוד)</span>}
+                        </span>
+                      );
+                    },
+                  },
+                  { key: "value", header: "שווי נקודה", className: "tabular", render: (r: AmountCheckRow) => formatNumber(r.point_value, 4, 2) },
+                  { key: "reported", header: "סכום מדווח", className: "tabular", render: (r: AmountCheckRow) => formatNumber(r.reported_amount, 2, 2) },
+                  {
+                    key: "expected",
+                    header: "סכום צפוי",
+                    className: "tabular",
+                    render: (r: AmountCheckRow) =>
+                      r.expected_amount === null || r.expected_amount === undefined ? (
+                        <span className="text-xs text-ink-subtle">לא הוגדר ניקוד/שווי</span>
+                      ) : (
+                        formatNumber(r.expected_amount, 2, 2)
+                      ),
+                  },
+                  {
+                    key: "difference",
+                    header: "הפרש",
+                    className: "tabular",
+                    render: (r: AmountCheckRow) =>
+                      r.difference === null || r.difference === undefined ? "—" : <span className={hasGap(r.difference) ? "font-semibold text-warn-ink" : ""}>{formatNumber(r.difference, 2, 2)}</span>,
+                  },
+                  {
+                    key: "state",
+                    header: "מצב",
+                    // טקסט + צבע ולא צבע בלבד - השורה המודגשת נקראת גם בלי הבחנת צבעים.
+                    render: (r: AmountCheckRow) =>
+                      r.expected_amount === null || r.expected_amount === undefined ? (
+                        <StatusBadge severity="neutral" label="לא ניתן לבדוק" />
+                      ) : hasGap(r.difference) ? (
+                        <StatusBadge severity="high" label="פער לבירור" />
+                      ) : (
+                        <StatusBadge severity="ok" label="תואם" />
+                      ),
+                  },
+                ]}
+                rows={amountCheckQuery.data ?? []}
+                rowKey={(r: AmountCheckRow) => r.student_id}
+                rowClassName={(r: AmountCheckRow) => (hasGap(r.difference) ? "bg-warn-soft text-warn-ink" : undefined)}
+                loading={amountCheckQuery.isLoading}
+                emptyTitle="אין זכאות לחודש זה לבדיקה"
+              />
+            </div>
           )}
 
           {sectionTab === "history" && (
