@@ -3,16 +3,18 @@ import { PageHeader } from "@/components/PageHeader";
 import { Tabs, type TabDef } from "@/components/Tabs";
 import { MasterDataImportWizard } from "@/areas/admin/MasterDataImportWizard";
 import { AutoDetectPanel } from "./panels/AutoDetectPanel";
+import { FolderInboxPanel } from "./panels/FolderInboxPanel";
 import { EligibilityImportPanel } from "./panels/EligibilityImportPanel";
 import { ErrorsImportPanel } from "./panels/ErrorsImportPanel";
 import { AuditsImportPanel } from "./panels/AuditsImportPanel";
 import { PhoneListsImportPanel } from "./panels/PhoneListsImportPanel";
 import { BankImportPanel } from "./panels/BankImportPanel";
 
-type DataTypeKey = "auto" | "master" | "eligibility" | "errors" | "audits" | "phone" | "bank";
+type DataTypeKey = "auto" | "folder" | "master" | "eligibility" | "errors" | "audits" | "phone" | "bank";
 
 const DATA_TYPE_TABS: TabDef<DataTypeKey>[] = [
   { key: "auto", label: "זיהוי אוטומטי" },
+  { key: "folder", label: "קבצים מהתיקייה" },
   { key: "master", label: "עמותות/סניפים/קבוצות" },
   { key: "eligibility", label: "זכאות חודשית" },
   { key: "errors", label: "שגיאות תלמוד" },
@@ -56,6 +58,7 @@ export function ImportCenterScreen() {
       <Tabs tabs={DATA_TYPE_TABS} activeTab={dataType} onChange={changeTab} ariaLabel="סוג נתונים ליבוא" />
 
       {dataType === "auto" && <AutoDetectPanel onRouteToTab={routeToTab} />}
+      {dataType === "folder" && <FolderInboxPanel onRouteToTab={routeToTab} />}
       {dataType === "master" && <MasterDataImportWizard initialFile={handoffFile} />}
       {dataType === "eligibility" && <EligibilityImportPanel initialFile={handoffFile} />}
       {dataType === "errors" && <ErrorsImportPanel initialFile={handoffFile} />}

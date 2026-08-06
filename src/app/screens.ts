@@ -30,6 +30,8 @@ import {
   SlidersHorizontal,
   MessageSquare,
   Palette,
+  FolderCog,
+  CalendarClock,
 } from "lucide-react";
 import type { Area } from "./AreaContext";
 
@@ -263,6 +265,24 @@ export const SCREENS: ScreenDef[] = [
     title: "ניהול נתוני דמו",
     builtInStage: "שלב 15",
     icon: FlaskConical,
+  },
+  {
+    path: "/admin/folders",
+    area: "admin",
+    navLabel: "תיקיות קליטה",
+    title: "תיקיות קליטה",
+    description: "הגדרת תיקיות במחשב שמהן המערכת קולטת קבצי אקסל",
+    builtInStage: "שלב 29",
+    icon: FolderCog,
+  },
+  {
+    path: "/admin/bank-scraper",
+    area: "admin",
+    navLabel: "משיכה אוטומטית מהבנק",
+    title: "משיכה אוטומטית מהבנק",
+    description: "תזמון המשיכה מהבנק ומצב הסקרייפר שבמחשב",
+    builtInStage: "שלב 29",
+    icon: CalendarClock,
   },
   {
     path: "/admin/appearance",

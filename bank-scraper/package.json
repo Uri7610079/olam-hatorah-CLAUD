@@ -1,0 +1,7 @@
+{
+  "name": "bank-scraper-portable",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": { "israeli-bank-scrapers": "^6.7.5" }
+}

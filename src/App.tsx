@@ -37,6 +37,8 @@ import { BankScreen } from "./areas/finance/BankScreen";
 import { BankClassificationScreen } from "./areas/admin/BankClassificationScreen";
 import { DemoDataScreen } from "./areas/admin/DemoDataScreen";
 import { AppearanceScreen } from "./areas/admin/AppearanceScreen";
+import { FoldersScreen } from "./areas/admin/FoldersScreen";
+import { BankScraperScreen } from "./areas/admin/BankScraperScreen";
 import { TasksHomeScreen } from "./areas/tasks/TasksHomeScreen";
 import { TasksAllScreen } from "./areas/tasks/TasksAllScreen";
 import { TasksWhatsAppScreen } from "./areas/tasks/TasksWhatsAppScreen";
@@ -76,6 +78,8 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/admin/bank-classification",
   "/admin/demo-data",
   "/admin/appearance",
+  "/admin/folders",
+  "/admin/bank-scraper",
   "/tasks",
   "/tasks/all",
   "/tasks/whatsapp",
@@ -128,6 +132,8 @@ export default function App() {
             <Route path="/admin/bank-classification" element={<BankClassificationScreen />} />
             <Route path="/admin/demo-data" element={<DemoDataScreen />} />
             <Route path="/admin/appearance" element={<AppearanceScreen />} />
+            <Route path="/admin/folders" element={<FoldersScreen />} />
+            <Route path="/admin/bank-scraper" element={<BankScraperScreen />} />
             <Route path="/tasks" element={<TasksHomeScreen />} />
             <Route path="/tasks/all" element={<TasksAllScreen />} />
             <Route path="/tasks/whatsapp" element={<TasksWhatsAppScreen />} />
