@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
   DONE_DIR,
+  ensureFolderPermission,
   FAILED_DIR,
   FOLDER_LABEL,
   forgetFolder,
@@ -70,6 +71,19 @@ function FolderCard({
     }
   };
 
+  // הדפדפן שוכח את ההרשאה בין הפעלות, והתיקייה עצמה נשארת זכורה. בלי הכפתור הזה
+  // המשתמשת הייתה צריכה לבחור את התיקייה מחדש בכל בוקר, כאילו לא הגדירה כלום.
+  const grant = async () => {
+    setError(null);
+    try {
+      await ensureFolderPermission(folderKey);
+      onChanged();
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setError(e instanceof Error ? e.message : "שגיאה באישור הגישה");
+    }
+  };
+
   const remove = async () => {
     await forgetFolder(folderKey);
     onChanged();
@@ -99,6 +113,13 @@ function FolderCard({
         </p>
       )}
 
+      {status?.permission === "prompt" && (
+        <div className="flex items-start gap-2 rounded-control border border-warn bg-warn-soft p-2.5 text-xs text-warn-ink">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>התיקייה זכורה, אבל הדפדפן שכח את ההרשאה מאז שנסגר. לחיצה על "אישור גישה" ותכף חוזרים לעבוד.</span>
+        </div>
+      )}
+
       {status?.permission === "denied" && (
         <div className="flex items-start gap-2 rounded-control border border-warn bg-warn-soft p-2.5 text-xs text-warn-ink">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -114,7 +135,12 @@ function FolderCard({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={choose} className="btn-primary text-xs">
+        {status?.permission === "prompt" && (
+          <button type="button" onClick={grant} className="btn-primary text-xs">
+            אישור גישה
+          </button>
+        )}
+        <button type="button" onClick={choose} className={status?.permission === "prompt" ? "btn-secondary text-xs" : "btn-primary text-xs"}>
           {isSet ? "בחירת תיקייה אחרת" : "בחירת תיקייה"}
         </button>
         {isSet && (

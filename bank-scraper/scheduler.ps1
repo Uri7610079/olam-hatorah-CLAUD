@@ -195,13 +195,23 @@ $exitCode = -1
 $errorText = $null
 
 try {
+    # ‎$ErrorActionPreference = 'Continue'‎ סביב ההרצה, וזה קריטי ולא קוסמטי:
+    # כשמפנים ‎2>&1‎ של תוכנית חיצונית, PowerShell עוטף כל שורת stderr ב-ErrorRecord,
+    # ותחת 'Stop' זו שגיאה עוצרת. Chromium ו-puppeteer כותבים אזהרות ל-stderr
+    # באופן שגרתי גם בהרצה מוצלחת לחלוטין - כך שכל אזהרה כזו הייתה מסמנת משיכה
+    # שהצליחה כ"נכשלה", ומציגה למשתמשת את שורת האזהרה כאילו היא הסיבה.
+    # ההצלחה נקבעת לפי קוד היציאה בלבד, וה-stderr נשמר ללוג כמו שהוא. (נבדק.)
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $output = & powershell.exe -ExecutionPolicy Bypass -NoProfile -File $Scraper -Days $lookback 2>&1 | Out-String
     $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
     if ($null -eq $exitCode) { $exitCode = 0 }
 } catch {
     $errorText = $_.Exception.Message
     $exitCode = -1
 } finally {
+    $ErrorActionPreference = 'Stop'
     Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
 }
 

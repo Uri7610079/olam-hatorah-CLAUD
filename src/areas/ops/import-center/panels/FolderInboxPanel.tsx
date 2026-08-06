@@ -26,6 +26,7 @@ import {
   type FolderStatus,
 } from "@/lib/folderAccess";
 import { EmptyState } from "@/components/EmptyState";
+import { LoadingState } from "@/components/LoadingState";
 
 interface FolderInboxPanelProps {
   onRouteToTab: (tab: string, file: File) => void;
@@ -207,6 +208,9 @@ export function FolderInboxPanel({ onRouteToTab }: FolderInboxPanelProps) {
   const navigate = useNavigate();
   const supported = isFolderAccessSupported();
   const [statuses, setStatuses] = useState<Record<FolderKey, FolderStatus | null>>({ general: null, bank: null });
+  // בדיקת התיקיות היא אסינכרונית. בלי הדגל הזה הפאנל היה מציג לרגע "עדיין לא
+  // הוגדרה תיקייה" בכל כניסה ללשונית, גם למי שהתיקיות שלה מוגדרות היטב.
+  const [statusesLoaded, setStatusesLoaded] = useState(false);
   const [scans, setScans] = useState<FolderScan[] | null>(null);
   const [scanning, setScanning] = useState(false);
   const [routedHint, setRoutedHint] = useState<string | null>(null);
@@ -214,6 +218,7 @@ export function FolderInboxPanel({ onRouteToTab }: FolderInboxPanelProps) {
   const refreshStatuses = useCallback(async () => {
     const [general, bank] = await Promise.all([getFolderStatus("general"), getFolderStatus("bank")]);
     setStatuses({ general, bank });
+    setStatusesLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -316,6 +321,8 @@ export function FolderInboxPanel({ onRouteToTab }: FolderInboxPanelProps) {
     );
   }
 
+  if (!statusesLoaded) return <LoadingState rows={2} />;
+
   if (configured.length === 0) {
     return (
       <EmptyState
@@ -396,7 +403,7 @@ export function FolderInboxPanel({ onRouteToTab }: FolderInboxPanelProps) {
             </div>
           )}
 
-          {!scan.error && scan.files.length === 0 && scan.archived.length === 0 && (
+          {!scan.error && scan.files.length === 0 && scan.archived.length === 0 && scan.skippedUnsettled.length === 0 && (
             <p className="flex items-center gap-1.5 rounded-control border border-line bg-surface-muted p-2.5 text-sm text-ink-muted">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-ok" aria-hidden="true" />
               אין קבצים חדשים בתיקייה.

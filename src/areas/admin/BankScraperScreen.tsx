@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, Clock, Info, Play, RefreshCw, Save, Settings, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Info, Play, RefreshCw, Save, Settings, ShieldCheck, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EmptyState } from "@/components/EmptyState";
 import {
+  ensureFolderPermission,
   getFolderStatus,
   isFolderAccessSupported,
   readJsonFromFolder,
@@ -212,6 +213,7 @@ export function BankScraperScreen() {
   }
 
   const folderReady = folder?.permission === "granted";
+  const needsPermission = folder?.permission === "prompt" || folder?.permission === "denied";
 
   return (
     <div>
@@ -222,6 +224,28 @@ export function BankScraperScreen() {
 
       {loading ? (
         <p className="text-sm text-ink-muted">טוען...</p>
+      ) : needsPermission ? (
+        // מצב נפרד מ"לא הוגדרה תיקייה", ובכוונה: הדפדפן שוכח את ההרשאה בכל פעם
+        // שהוא נסגר, אז זה המצב הרגיל בבוקר. הודעה של "לא הגדרת תיקייה" הייתה
+        // שולחת את המשתמשת להגדיר מחדש משהו שכבר מוגדר.
+        <EmptyState
+          icon={ShieldCheck}
+          title="צריך לאשר גישה לתיקיית הבנק"
+          description="התיקייה מוגדרת, אבל הדפדפן שוכח את ההרשאה בכל פעם שהוא נסגר. אישור אחד ואפשר להמשיך."
+          action={
+            <button
+              type="button"
+              onClick={async () => {
+                await ensureFolderPermission("bank");
+                void load();
+              }}
+              className="btn-primary inline-flex items-center gap-1.5 text-xs"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              אישור גישה
+            </button>
+          }
+        />
       ) : !folderReady ? (
         <EmptyState
           icon={Settings}
