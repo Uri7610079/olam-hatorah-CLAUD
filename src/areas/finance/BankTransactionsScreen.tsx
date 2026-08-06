@@ -85,26 +85,66 @@ function parseDate(raw: string): string | null {
   return null;
 }
 
-function normalizeBankRow(raw: Record<string, string>): NormalizedBankRow | null {
-  const executionDate = parseDate(raw["תאריך ביצוע"] ?? "");
-  const amountRaw = (raw["סכום"] ?? "").replace(/[^\d.-]/g, "");
-  const amount = Number(amountRaw);
-  const directionRaw = (raw["חובה/זכות"] ?? "").trim();
-  const direction: Direction | null = directionRaw === "חובה" ? "debit" : directionRaw === "זכות" ? "credit" : null;
-  if (!executionDate || !amountRaw || !Number.isFinite(amount) || amount <= 0 || !direction) return null;
+// הערך הראשון מבין הכותרות שקיים בפועל בשורה. דף חשבון אמיתי מהבנק ופורמט הייצוא
+// שלנו משתמשים בשמות שונים לאותו שדה, ולכן כל שדה מחפש את כל החלופות שלו.
+function pickField(raw: Record<string, string>, keys: string[]): string {
+  for (const key of keys) {
+    const value = raw[key];
+    if (value != null && String(value).trim() !== "") return String(value).trim();
+  }
+  return "";
+}
 
-  const balanceRaw = (raw["יתרה"] ?? "").replace(/[^\d.-]/g, "");
+function parseAmount(value: string): number | null {
+  // מפריד אלפים ("10,000.00") מגיע כך מהבנק - מסירים כל מה שאינו ספרה/נקודה/מינוס.
+  const cleaned = value.replace(/[^\d.-]/g, "");
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+// שני פורמטים נתמכים:
+// 1. פורמט הייצוא שלנו - עמודת "סכום" אחת + עמודת "חובה/זכות" שקובעת כיוון.
+// 2. דף חשבון אמיתי מהבנק - שתי עמודות סכום נפרדות, "זכות" ו"חובה", והכיוון נגזר
+//    מאיזו מהן מלאה. זה הפורמט שהסקרייפר מוריד בפועל (אומת מול קובץ אמיתי של
+//    העמותה), ועד לתיקון הזה כל שורה בו נפסלה כ"חסרים שדות חובה".
+function normalizeBankRow(raw: Record<string, string>): NormalizedBankRow | null {
+  const executionDate = parseDate(pickField(raw, ["תאריך ביצוע", "תאריך"]));
+  if (!executionDate) return null;
+
+  let amount: number | null = null;
+  let direction: Direction | null = null;
+
+  const credit = parseAmount(pickField(raw, ["זכות"]));
+  const debit = parseAmount(pickField(raw, ["חובה"]));
+
+  if (credit !== null || debit !== null) {
+    // שורה תקינה בדף חשבון ממלאת בדיוק אחת מהשתיים. שתיהן מלאות = שורה שלא ברור
+    // מה כיוונה, ועדיף לפסול אותה במפורש מאשר לנחש.
+    if (credit !== null && debit !== null) return null;
+    direction = credit !== null ? "credit" : "debit";
+    amount = credit !== null ? credit : debit;
+  } else {
+    amount = parseAmount(pickField(raw, ["סכום"]));
+    const directionRaw = pickField(raw, ["חובה/זכות"]);
+    direction = directionRaw === "חובה" ? "debit" : directionRaw === "זכות" ? "credit" : null;
+  }
+
+  if (amount === null || amount <= 0 || !direction) return null;
+
+  const balance = parseAmount(pickField(raw, ["יתרה"]));
 
   return {
     execution_date: executionDate,
-    value_date: parseDate(raw["תאריך ערך"] ?? ""),
+    value_date: parseDate(pickField(raw, ["תאריך ערך"])),
     direction,
     amount,
-    description: (raw["תיאור"] ?? "").trim() || null,
-    reference: (raw["אסמכתה"] ?? "").trim() || null,
-    operation_type: (raw["סוג פעולה"] ?? "").trim() || null,
-    bank_balance_after: balanceRaw ? Number(balanceRaw) : null,
-    bank_transaction_id: (raw["מזהה בנק"] ?? "").trim() || null,
+    description: pickField(raw, ["תיאור"]) || null,
+    // הבנק כותב "אסמכתא" (עם א), פורמט הייצוא שלנו "אסמכתה" (עם ה).
+    reference: pickField(raw, ["אסמכתה", "אסמכתא"]) || null,
+    operation_type: pickField(raw, ["סוג פעולה"]) || null,
+    bank_balance_after: balance,
+    bank_transaction_id: pickField(raw, ["מזהה בנק"]) || null,
   };
 }
 
@@ -146,7 +186,7 @@ async function analyzeBankFile(file: File, accountId: string, headerRowIndexOver
     }
     const normalized = normalizeBankRow(raw);
     if (!normalized) {
-      rows.push({ rowNumber, raw, normalized: null, fingerprint: null, status: "invalid", errorMessage: "חסרים שדות חובה (תאריך ביצוע / סכום / חובה-זכות)" });
+      rows.push({ rowNumber, raw, normalized: null, fingerprint: null, status: "invalid", errorMessage: "חסרים שדות חובה: תאריך, וסכום עם כיוון (עמודות זכות/חובה, או סכום + חובה-זכות)" });
       continue;
     }
     const fingerprint = await computeFingerprint(accountId, normalized);
