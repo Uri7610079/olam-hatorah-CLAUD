@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -56,10 +56,15 @@ async function fetchAudits(orgId: string): Promise<AuditRow[]> {
   return (data ?? []).map((r: any) => ({ ...r, branch: Array.isArray(r.branch) ? (r.branch[0] ?? null) : r.branch }));
 }
 
+interface AuditsImportPanelProps {
+  // קובץ שהגיע מלשונית "זיהוי אוטומטי" - נבחר שם כבר, ולכן נכנס לניתוח כאילו נבחר כאן.
+  initialFile?: File | null;
+}
+
 // פאנל יבוא רשימת חסרים לביקורת עבור מרכז היבוא - אותה לוגיקה בדיוק כמו AuditsScreen
 // (analyzeFile/createImportBatch/commit_audit_attendance_batch), כולל בורר/יצירת אירוע
 // ביקורת עצמאי כי היבוא תלוי בבחירת ביקורת ספציפית. המסך המקורי נשאר כפי שהוא.
-export function AuditsImportPanel() {
+export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permLoading } = useHasPermission("audits", "import");
   const { hasPermission: canManage } = useHasPermission("audits", "manage");
@@ -145,6 +150,13 @@ export function AuditsImportPanel() {
       setAnalyzing(false);
     }
   };
+
+  // קובץ שהועבר מהזיהוי האוטומטי נכנס לניתוח בדיוק כמו קובץ שנבחר ידנית. הניתוח לא תלוי
+  // בבחירת העמותה/הביקורת, ולכן הוא רץ גם לפניהן - התצוגה המקדימה תופיע ברגע שייבחרו.
+  useEffect(() => {
+    if (initialFile) void handleFileChange(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   const handleHeaderConfirm = async (chosenIndex: number) => {
     if (!headerConfirm) return;
@@ -317,6 +329,12 @@ export function AuditsImportPanel() {
           <button onClick={createAudit} disabled={creating} className="btn-primary">
             {creating ? "יוצרת…" : "יצירת אירוע ביקורת"}
           </button>
+        </div>
+      )}
+
+      {initialFile && !reviewBatchId && !(selectedAudit && selectedAudit.status === "draft") && (
+        <div className="rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
+          הקובץ "{initialFile.name}" מוכן ומחכה. בחרי עמותה ואירוע ביקורת בסטטוס טיוטה כדי להמשיך ביבוא.
         </div>
       )}
 

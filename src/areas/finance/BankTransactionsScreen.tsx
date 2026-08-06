@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeftRight, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -198,7 +198,8 @@ async function fetchTransactions(accountId: string, filter: ClassificationFilter
 
 // accountId מגיע מהמסך המאחד (BankScreen.tsx) - אין כאן יותר בורר עמותה/חשבון עצמאי,
 // כדי שלא יצטרכו לבחור את אותו חשבון פעם נוספת אחרי שכבר נבחר למעלה.
-export function BankTransactionsPanel({ accountId }: { accountId: string }) {
+// initialFile (לא חובה) מגיע מלשונית "זיהוי אוטומטי" במרכז היבוא, דרך BankImportPanel.
+export function BankTransactionsPanel({ accountId, initialFile }: { accountId: string; initialFile?: File | null }) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport } = useHasPermission("bank_import", "perform");
   const { hasPermission: canClassify } = useHasPermission("transaction_classification", "perform");
@@ -262,6 +263,16 @@ export function BankTransactionsPanel({ accountId }: { accountId: string }) {
       setAnalyzing(false);
     }
   };
+
+  // קובץ שהועבר מהזיהוי האוטומטי נכנס לניתוח בדיוק כמו קובץ שנבחר ידנית, כולל פתיחת אזור
+  // היבוא כדי שהתצוגה המקדימה תהיה גלויה. הניתוח כאן דורש חשבון בנק נבחר (ר' handleFileChange),
+  // ולכן אם עוד לא נבחר - הקובץ ממתין ומנותח מיד כשהוא נבחר.
+  useEffect(() => {
+    if (!initialFile || !accountId) return;
+    setShowImport(true);
+    void handleFileChange(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile, accountId]);
 
   const handleHeaderConfirm = async (chosenIndex: number) => {
     if (!headerConfirm || !accountId) return;

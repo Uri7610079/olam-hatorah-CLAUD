@@ -30,11 +30,17 @@ async function fetchOrgBankAccounts(orgId: string): Promise<BankAccountOption[]>
   return data ?? [];
 }
 
+interface BankImportPanelProps {
+  // קובץ שהגיע מלשונית "זיהוי אוטומטי" - מועבר הלאה ל-BankTransactionsPanel, שם נמצא
+  // מנגנון היבוא עצמו.
+  initialFile?: File | null;
+}
+
 // פאנל יבוא תנועות בנק עבור מרכז היבוא - עוטף את BankTransactionsPanel הקיים (מסך הבנק
 // המאוחד, BankScreen.tsx) בבורר עמותה/חשבון עצמאי משלו, בלי לגעת בקובץ המקורי או
 // בלוגיקת ה-fingerprint/commit_bank_import_batch שבתוכו. אין כפילות קוד יבוא - נעשה
 // שימוש חוזר ישיר ברכיב עצמו, כולל היסטוריית יבוא, סיווג תנועות, וכל מה שבפאנל.
-export function BankImportPanel() {
+export function BankImportPanel({ initialFile }: BankImportPanelProps) {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [accountId, setAccountId] = useLastSelected<string>("last-bank-account", "");
@@ -78,7 +84,12 @@ export function BankImportPanel() {
       </div>
 
       {!accountId && <p className="text-sm text-ink-subtle">בחרי עמותה וחשבון כדי להציג נתונים.</p>}
-      {accountId && <BankTransactionsPanel accountId={accountId} />}
+      {initialFile && !accountId && (
+        <div className="rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
+          הקובץ "{initialFile.name}" מוכן ומחכה. בחרי עמותה וחשבון כדי להמשיך ביבוא.
+        </div>
+      )}
+      {accountId && <BankTransactionsPanel accountId={accountId} initialFile={initialFile} />}
     </div>
   );
 }

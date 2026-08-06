@@ -2,15 +2,17 @@ import { useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, type TabDef } from "@/components/Tabs";
 import { MasterDataImportWizard } from "@/areas/admin/MasterDataImportWizard";
+import { AutoDetectPanel } from "./panels/AutoDetectPanel";
 import { EligibilityImportPanel } from "./panels/EligibilityImportPanel";
 import { ErrorsImportPanel } from "./panels/ErrorsImportPanel";
 import { AuditsImportPanel } from "./panels/AuditsImportPanel";
 import { PhoneListsImportPanel } from "./panels/PhoneListsImportPanel";
 import { BankImportPanel } from "./panels/BankImportPanel";
 
-type DataTypeKey = "master" | "eligibility" | "errors" | "audits" | "phone" | "bank";
+type DataTypeKey = "auto" | "master" | "eligibility" | "errors" | "audits" | "phone" | "bank";
 
 const DATA_TYPE_TABS: TabDef<DataTypeKey>[] = [
+  { key: "auto", label: "זיהוי אוטומטי" },
   { key: "master", label: "עמותות/סניפים/קבוצות" },
   { key: "eligibility", label: "זכאות חודשית" },
   { key: "errors", label: "שגיאות תלמוד" },
@@ -24,24 +26,42 @@ const DATA_TYPE_TABS: TabDef<DataTypeKey>[] = [
 // לא הומצאה כאן שום יכולת יבוא חדשה - כל טאב הוא עטיפה סביב מסך שכבר קיים ועובד,
 // שנשאר גם הוא זמין במקומו המקורי (זו נקודת גישה נוספת, לא תחליף). תלמידים/תרומות/
 // חלוקות/מס"ב/כללי עמלה - אין להם היום יבוא אמיתי, ולכן אין להם כאן טאב.
+//
+// לשונית "זיהוי אוטומטי" היא ברירת המחדל: מי שלא יודע לאיזה תחום הקובץ שייך מעלה
+// אותו שם, והמערכת מזהה לפי כותרות העמודות ומעבירה לטאב הנכון עם הקובץ שכבר נבחר.
 export function ImportCenterScreen() {
-  const [dataType, setDataType] = useState<DataTypeKey>("master");
+  const [dataType, setDataType] = useState<DataTypeKey>("auto");
+  // הקובץ עובר מהזיהוי האוטומטי לטאב היעד, כדי שלא יהיה צורך לבחור אותו פעמיים.
+  const [handoffFile, setHandoffFile] = useState<File | null>(null);
+
+  const routeToTab = (tab: string, file: File) => {
+    setHandoffFile(file);
+    setDataType(tab as DataTypeKey);
+  };
+
+  const changeTab = (tab: DataTypeKey) => {
+    // מעבר ידני בין לשוניות מנקה קובץ שהועבר מהזיהוי - אחרת הוא היה "נדבק" לטאב
+    // שהמשתמשת בחרה בעצמה מסיבה אחרת.
+    setHandoffFile(null);
+    setDataType(tab);
+  };
 
   return (
     <div>
       <PageHeader
         title="מרכז יבוא"
-        description="נקודת גישה אחת לכל סוגי היבוא הקיימים במערכת - בחרי סוג נתונים, וכל שאר התהליך (העלאה, תצוגה מקדימה לפי תקין/דורש החלטה/שגוי, וקליטה) זהה למסך המקורי של אותו סוג."
+        description="נקודת גישה אחת לכל סוגי היבוא הקיימים במערכת - אפשר להעלות קובץ בלי לדעת לאיזה תחום הוא שייך, או לבחור סוג ידנית. כל קליטה עוברת תצוגה מקדימה ואישור."
       />
 
-      <Tabs tabs={DATA_TYPE_TABS} activeTab={dataType} onChange={setDataType} ariaLabel="סוג נתונים ליבוא" />
+      <Tabs tabs={DATA_TYPE_TABS} activeTab={dataType} onChange={changeTab} ariaLabel="סוג נתונים ליבוא" />
 
-      {dataType === "master" && <MasterDataImportWizard />}
-      {dataType === "eligibility" && <EligibilityImportPanel />}
-      {dataType === "errors" && <ErrorsImportPanel />}
-      {dataType === "audits" && <AuditsImportPanel />}
-      {dataType === "phone" && <PhoneListsImportPanel />}
-      {dataType === "bank" && <BankImportPanel />}
+      {dataType === "auto" && <AutoDetectPanel onRouteToTab={routeToTab} />}
+      {dataType === "master" && <MasterDataImportWizard initialFile={handoffFile} />}
+      {dataType === "eligibility" && <EligibilityImportPanel initialFile={handoffFile} />}
+      {dataType === "errors" && <ErrorsImportPanel initialFile={handoffFile} />}
+      {dataType === "audits" && <AuditsImportPanel initialFile={handoffFile} />}
+      {dataType === "phone" && <PhoneListsImportPanel initialFile={handoffFile} />}
+      {dataType === "bank" && <BankImportPanel initialFile={handoffFile} />}
     </div>
   );
 }

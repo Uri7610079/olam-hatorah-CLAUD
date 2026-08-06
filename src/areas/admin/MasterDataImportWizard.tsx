@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -37,7 +37,13 @@ function applyMasterDataGapChecks(rows: ClassifiedRow[]): ClassifiedRow[] {
   });
 }
 
-export function MasterDataImportWizard() {
+interface MasterDataImportWizardProps {
+  // קובץ שהגיע מלשונית "זיהוי אוטומטי" במרכז היבוא - נבחר שם כבר, ולכן נכנס לניתוח כאילו
+  // נבחר כאן. לא חובה: האשף מוצג גם במסך הניהול המקורי בלי שום prop.
+  initialFile?: File | null;
+}
+
+export function MasterDataImportWizard({ initialFile }: MasterDataImportWizardProps) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permLoading } = useHasPermission("master_data_import", "perform");
 
@@ -96,6 +102,13 @@ export function MasterDataImportWizard() {
       setAnalyzing(false);
     }
   };
+
+  // קובץ שהועבר מהזיהוי האוטומטי נכנס לניתוח בדיוק כמו קובץ שנבחר ידנית. אין כאן בורר
+  // עמותה, ולכן התצוגה המקדימה מופיעה מיד.
+  useEffect(() => {
+    if (initialFile) void handleFileChange(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   const handleHeaderConfirm = async (chosenIndex: number) => {
     if (!headerConfirm) return;

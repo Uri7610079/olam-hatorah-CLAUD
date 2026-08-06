@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -81,10 +81,15 @@ async function fetchImports(orgId: string): Promise<ImportSummary[]> {
   return data ?? [];
 }
 
+interface PhoneListsImportPanelProps {
+  // קובץ שהגיע מלשונית "זיהוי אוטומטי" - נבחר שם כבר, ולכן נכנס לניתוח כאילו נבחר כאן.
+  initialFile?: File | null;
+}
+
 // פאנל יבוא רשימות טלפוניות עבור מרכז היבוא - אותה לוגיקה בדיוק כמו PhoneListsScreen
 // (parseImportFile + נרמול טלפון מקומי + commit_phone_list_import), בלי טבלת השורות
 // המפורטת/חסרים שאינה חלק מפעולת היבוא. המסך המקורי נשאר כפי שהוא.
-export function PhoneListsImportPanel() {
+export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProps) {
   const queryClient = useQueryClient();
   const { hasPermission: canPerform, isLoading: permLoading } = useHasPermission("phone_lists", "perform");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
@@ -138,6 +143,14 @@ export function PhoneListsImportPanel() {
       setAnalyzing(false);
     }
   };
+
+  // קובץ שהועבר מהזיהוי האוטומטי נכנס לניתוח בדיוק כמו קובץ שנבחר ידנית. כאן הניתוח דורש
+  // עמותה נבחרת (ר' handleFileChange), ולכן אם עוד לא נבחרה - הקובץ ממתין, ומנותח מיד
+  // כשהיא נבחרת. עד אז מוצגת הודעה שהקובץ מחכה, כדי שלא ייעלם בשקט.
+  useEffect(() => {
+    if (initialFile && orgId) void handleFileChange(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile, orgId]);
 
   const handleHeaderConfirm = async (chosenIndex: number) => {
     if (!headerConfirm) return;
@@ -255,6 +268,12 @@ export function PhoneListsImportPanel() {
           ))}
         </select>
       </div>
+
+      {initialFile && !orgId && (
+        <div className="rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
+          הקובץ "{initialFile.name}" מוכן ומחכה. בחרי עמותה למעלה כדי להמשיך ביבוא.
+        </div>
+      )}
 
       {orgId && (
         <div className="card max-w-2xl space-y-4 p-5">

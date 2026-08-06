@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -77,10 +77,15 @@ async function fetchBatchById(id: string): Promise<EligibilityBatchSummary> {
   return data;
 }
 
+interface EligibilityImportPanelProps {
+  // קובץ שהגיע מלשונית "זיהוי אוטומטי" - נבחר שם כבר, ולכן נכנס לניתוח כאילו נבחר כאן.
+  initialFile?: File | null;
+}
+
 // פאנל יבוא זכאות חודשית עבור מרכז היבוא - אותה לוגיקה בדיוק כמו EligibilityScreen
 // (analyzeFile/createImportBatch/commit_eligibility_batch), רק בלי לשוניות התצוגה
 // (זכאות לחודש / חסרים) שאינן יבוא. המסך המקורי נשאר כפי שהוא, זו נקודת גישה נוספת.
-export function EligibilityImportPanel() {
+export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelProps) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permissionLoading } = useHasPermission("talmud", "import");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
@@ -147,6 +152,13 @@ export function EligibilityImportPanel() {
       setAnalyzing(false);
     }
   };
+
+  // קובץ שהועבר מהזיהוי האוטומטי נכנס לניתוח בדיוק כמו קובץ שנבחר ידנית. הניתוח לא תלוי
+  // בבחירת העמותה, ולכן הוא רץ גם לפני שנבחרה - התצוגה המקדימה תופיע ברגע שתיבחר.
+  useEffect(() => {
+    if (initialFile) void handleFileChange(initialFile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
 
   const handleHeaderConfirm = async (chosenIndex: number) => {
     if (!headerConfirm) return;
@@ -276,6 +288,13 @@ export function EligibilityImportPanel() {
           <input type="date" value={month} onChange={(e) => setMonth(e.target.value)} className="input-field" />
         </div>
       </div>
+
+      {initialFile && !orgId && (
+        <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>הקובץ "{initialFile.name}" מוכן ומחכה. בחרי עמותה למעלה כדי להמשיך ביבוא.</span>
+        </div>
+      )}
 
       {orgId && !reviewBatchId && (
         <div className="card max-w-2xl space-y-4 p-5">
