@@ -69,6 +69,20 @@ interface CommitResult {
   invalid: number;
 }
 
+interface RollbackPreviewRow {
+  student_id: string;
+  full_name: string;
+  external_id: string;
+  will_delete: boolean;
+  block_reason: string | null;
+}
+
+async function fetchRollbackPreview(batchId: string): Promise<RollbackPreviewRow[]> {
+  const { data, error } = await supabase.rpc("preview_students_import_rollback", { p_batch_id: batchId });
+  if (error) throw error;
+  return (data ?? []) as RollbackPreviewRow[];
+}
+
 // פאנל יבוא תלמידים מאקסל - אותו דפוס בדיוק כמו EligibilityImportPanel (מרכז היבוא),
 // רק בלי בורר עמותה/חודש (תלמיד אינו קשור לעמותה בשלב היצירה, השיוך קורה בנפרד בכרטיס
 // התלמיד, בדיוק כמו ביצירה ידנית ב-StudentsListScreen). analyzeFile/createImportBatch/
@@ -86,12 +100,24 @@ export function StudentsImportPanel() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ביטול יבוא - מוצג רק לאצווה שכבר נקלטה, ותמיד עם תצוגה מקדימה + הקלדת שם
+  // הקובץ לאישור, כי זו מחיקה בלתי הפיכה של רשומות אמת.
+  const [rollbackBatch, setRollbackBatch] = useState<{ id: string; fileName: string } | null>(null);
+  const [rollbackConfirmText, setRollbackConfirmText] = useState("");
+  const [rollingBack, setRollingBack] = useState(false);
+  const [rollbackResult, setRollbackResult] = useState<{ deleted: number; kept: number } | null>(null);
+
   const [reviewBatchId, setReviewBatchId] = useState<string | null>(null);
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<CommitResult | null>(null);
 
   const batchesQuery = useQuery({ queryKey: ["students-import-batches"], queryFn: fetchStudentsBatches });
+  const rollbackPreviewQuery = useQuery({
+    queryKey: ["students-import-rollback-preview", rollbackBatch?.id],
+    queryFn: () => fetchRollbackPreview(rollbackBatch!.id),
+    enabled: !!rollbackBatch,
+  });
   const reviewBatchQuery = useQuery({ queryKey: ["students-import-batch", reviewBatchId], queryFn: () => fetchBatchById(reviewBatchId!), enabled: !!reviewBatchId });
   const reviewRowsQuery = useQuery({
     queryKey: ["students-import-batch-rows", reviewBatchId],
@@ -198,6 +224,28 @@ export function StudentsImportPanel() {
     setCommitResult({ created: result.created_count, duplicate: result.duplicate_count, invalid: result.invalid_count });
     queryClient.invalidateQueries({ queryKey: ["students-import-batch", reviewBatchId] });
     queryClient.invalidateQueries({ queryKey: ["students-import-batch-rows", reviewBatchId] });
+    queryClient.invalidateQueries({ queryKey: ["students-import-batches"] });
+    queryClient.invalidateQueries({ queryKey: ["students"] });
+  };
+
+  const closeRollback = () => {
+    setRollbackBatch(null);
+    setRollbackConfirmText("");
+  };
+
+  const runRollback = async () => {
+    if (!rollbackBatch || rollbackConfirmText.trim() !== rollbackBatch.fileName) return;
+    setRollingBack(true);
+    setError(null);
+    const { data, error: err } = await supabase.rpc("rollback_students_import_batch", { p_batch_id: rollbackBatch.id }).single();
+    setRollingBack(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    const result = data as { deleted_count: number; kept_count: number };
+    setRollbackResult({ deleted: result.deleted_count, kept: result.kept_count });
+    closeRollback();
     queryClient.invalidateQueries({ queryKey: ["students-import-batches"] });
     queryClient.invalidateQueries({ queryKey: ["students"] });
   };
@@ -346,6 +394,94 @@ export function StudentsImportPanel() {
         </div>
       )}
 
+      {rollbackResult && (
+        <div className="rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
+          היבוא בוטל. נמחקו {rollbackResult.deleted} תלמידים.
+          {rollbackResult.kept > 0 && ` ${rollbackResult.kept} תלמידים נשארו כי כבר נעשה בהם שימוש.`}
+        </div>
+      )}
+
+      {rollbackBatch && (
+        <div className="card space-y-3 border-danger bg-danger-soft p-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold text-ink">ביטול היבוא: {rollbackBatch.fileName}</p>
+              <p className="mt-1 text-sm text-ink-muted">
+                התלמידים שנוצרו ביבוא הזה יימחקו לצמיתות - פעולה בלתי הפיכה. תלמיד שכבר נעשה בו שימוש (שיוך, חשבון בנק,
+                זכאות, תשלום וכו') לא יימחק, ויוצג כאן עם הסיבה.
+              </p>
+            </div>
+          </div>
+
+          {rollbackPreviewQuery.isLoading ? (
+            <LoadingState rows={3} />
+          ) : rollbackPreviewQuery.error ? (
+            <ErrorState message="שגיאה בטעינת התצוגה המקדימה." />
+          ) : (
+            (() => {
+              const rows = rollbackPreviewQuery.data ?? [];
+              const toDelete = rows.filter((r) => r.will_delete);
+              const kept = rows.filter((r) => !r.will_delete);
+              return (
+                <>
+                  <p className="text-sm text-ink">
+                    <span className="font-semibold">{toDelete.length}</span> תלמידים יימחקו
+                    {kept.length > 0 && (
+                      <>
+                        , <span className="font-semibold">{kept.length}</span> יישארו
+                      </>
+                    )}
+                    .
+                  </p>
+
+                  {kept.length > 0 && (
+                    <div className="max-h-40 overflow-auto rounded border border-line bg-surface p-2">
+                      <p className="mb-1 text-xs font-medium text-ink-muted">לא יימחקו:</p>
+                      <ul className="space-y-0.5 text-xs text-ink-muted">
+                        {kept.map((r) => (
+                          <li key={r.student_id}>
+                            {r.full_name} <span className="ltr-num">{r.external_id}</span> — {r.block_reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {toDelete.length > 0 && (
+                    <div>
+                      <label className="field-label" htmlFor="rollback-confirm">
+                        כדי לאשר, הקלידי את שם הקובץ בדיוק: {rollbackBatch.fileName}
+                      </label>
+                      <input
+                        id="rollback-confirm"
+                        value={rollbackConfirmText}
+                        onChange={(e) => setRollbackConfirmText(e.target.value)}
+                        className="input-field"
+                        autoComplete="off"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={runRollback}
+                      disabled={rollingBack || toDelete.length === 0 || rollbackConfirmText.trim() !== rollbackBatch.fileName}
+                      className="btn-danger text-xs"
+                    >
+                      {rollingBack ? "מוחקת…" : "אישור מחיקה סופית"}
+                    </button>
+                    <button onClick={closeRollback} className="text-xs text-ink-subtle underline">
+                      ביטול
+                    </button>
+                  </div>
+                </>
+              );
+            })()
+          )}
+        </div>
+      )}
+
       <div>
         <h3 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא תלמידים</h3>
         <DataTable
@@ -365,6 +501,24 @@ export function StudentsImportPanel() {
               ),
             },
             { key: "date", header: "תאריך", className: "tabular", render: (b: StudentsBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+            {
+              key: "rollback",
+              header: "",
+              render: (b: StudentsBatchSummary) =>
+                b.status === "committed" ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRollbackResult(null);
+                      setRollbackConfirmText("");
+                      setRollbackBatch({ id: b.id, fileName: b.file_name });
+                    }}
+                    className="text-xs text-danger underline hover:text-danger-ink"
+                  >
+                    ביטול יבוא
+                  </button>
+                ) : null,
+            },
           ]}
           rows={batchesQuery.data ?? []}
           rowKey={(b: StudentsBatchSummary) => b.id}
