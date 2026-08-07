@@ -33,7 +33,7 @@
 param(
     # תיקיית הפלט. ברירת המחדל: out\report לצד הקובץ הזה.
     [string] $OutDir,
-    # בנק בודד (hapoalim / leumi / mizrahi / discount / mercantile / beinleumi).
+    # בנק בודד (hapoalim / leumi / mizrahi / discount / pagi / mercantile / beinleumi).
     [string] $Bank,
     # כמה ימים אחורה למשוך. ברירת המחדל: 45.
     [ValidateRange(1, 3650)]
@@ -330,6 +330,11 @@ const BANKS = {
   leumi:      { enabled: true,  company: CompanyTypes.leumi,      display: 'Bank Leumi',          fields: ['username', 'password'] },
   mizrahi:    { enabled: true,  company: CompanyTypes.mizrahi,    display: 'Mizrahi-Tefahot',     fields: ['username', 'password'] },
   discount:   { enabled: true,  company: CompanyTypes.discount,   display: 'Israel Discount',     fields: ['id', 'password', 'num'] },
+  // PAGI (בנק 52, online.pagi.co.il). ערך נפרד ולא חלק מ-beinleumi, למרות
+  // שפאג"י שייך לקבוצת הבינלאומי: לספרייה יש סקרייפר ייעודי משלו, עם כתובת
+  // כניסה אחרת (MatafLoginServlet?bankId=PAGIPORTAL). כניסה דרך beinleumi
+  // פשוט לא תגיע לחשבון הזה.
+  pagi:       { enabled: true,  company: CompanyTypes.pagi,       display: 'PAGI (bank 52)',      fields: ['username', 'password'] },
   mercantile: { enabled: false, company: CompanyTypes.mercantile, display: 'Mercantile Discount', fields: ['id', 'password', 'num'] },
   beinleumi:  { enabled: false, company: CompanyTypes.beinleumi,  display: 'First Intl (FIBI)',   fields: ['username', 'password'] },
 };
