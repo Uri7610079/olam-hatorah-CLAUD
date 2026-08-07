@@ -335,7 +335,8 @@ const BANKS = {
   // כניסה אחרת (MatafLoginServlet?bankId=PAGIPORTAL). כניסה דרך beinleumi
   // פשוט לא תגיע לחשבון הזה.
   pagi:       { enabled: true,  company: CompanyTypes.pagi,       display: 'PAGI (bank 52)',      fields: ['username', 'password'] },
-  mercantile: { enabled: false, company: CompanyTypes.mercantile, display: 'Mercantile Discount', fields: ['id', 'password', 'num'] },
+  // מרכנתיל (בנק 17). מופעל כמו פאג"י - ללקוח יש חשבונות בשני הבנקים האלה.
+  mercantile: { enabled: true,  company: CompanyTypes.mercantile, display: 'Mercantile Discount', fields: ['id', 'password', 'num'] },
   beinleumi:  { enabled: false, company: CompanyTypes.beinleumi,  display: 'First Intl (FIBI)',   fields: ['username', 'password'] },
 };
 
