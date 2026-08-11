@@ -103,17 +103,40 @@ function parseAmount(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-// שני פורמטים נתמכים:
+// שלושה פורמטים נתמכים:
 // 1. פורמט הייצוא שלנו - עמודת "סכום" אחת + עמודת "חובה/זכות" שקובעת כיוון.
 // 2. דף חשבון אמיתי מהבנק - שתי עמודות סכום נפרדות, "זכות" ו"חובה", והכיוון נגזר
-//    מאיזו מהן מלאה. זה הפורמט שהסקרייפר מוריד בפועל (אומת מול קובץ אמיתי של
-//    העמותה), ועד לתיקון הזה כל שורה בו נפסלה כ"חסרים שדות חובה".
+//    מאיזו מהן מלאה.
+// 3. הפלט של הסקרייפר - עמודות באנגלית, עם עמודת direction מפורשת שכבר מכילה
+//    debit/credit. זה הפורמט שיורד בפועל לתיקיית הבנק בכל משיכה אוטומטית, והוא
+//    לא היה נתמך כלל: הקובץ לא זוהה כתנועות בנק, ואף שורה בו לא נקלטה.
 function normalizeBankRow(raw: Record<string, string>): NormalizedBankRow | null {
-  const executionDate = parseDate(pickField(raw, ["תאריך ביצוע", "תאריך"]));
+  const executionDate = parseDate(pickField(raw, ["תאריך ביצוע", "תאריך", "execution_date"]));
   if (!executionDate) return null;
 
   let amount: number | null = null;
   let direction: Direction | null = null;
+
+  // הסקרייפר נותן כיוון מפורש וסכום חיובי יחיד - הצורה הכי חד-משמעית, ולכן
+  // נבדקת ראשונה ולא מנסה להסיק כיוון משום מקום אחר.
+  const directionRaw = pickField(raw, ["direction"]).toLowerCase();
+  if (directionRaw === "debit" || directionRaw === "credit") {
+    const value = parseAmount(pickField(raw, ["amount"]));
+    if (value === null) return null;
+    return {
+      execution_date: executionDate,
+      value_date: parseDate(pickField(raw, ["value_date"])),
+      direction: directionRaw,
+      // הסקרייפר כותב סכום חיובי, אבל אם בכל זאת יגיע סימן - הכיוון כבר ידוע
+      // מהעמודה שלו, והסימן רק היה מכשיל את הבדיקה amount > 0 שבהמשך.
+      amount: Math.abs(value),
+      description: pickField(raw, ["description"]) || null,
+      reference: pickField(raw, ["reference"]) || null,
+      operation_type: pickField(raw, ["operation_type"]) || null,
+      bank_balance_after: parseAmount(pickField(raw, ["bank_balance_after"])),
+      bank_transaction_id: pickField(raw, ["bank_transaction_id"]) || null,
+    };
+  }
 
   const credit = parseAmount(pickField(raw, ["זכות"]));
   const debit = parseAmount(pickField(raw, ["חובה"]));
@@ -148,8 +171,23 @@ function normalizeBankRow(raw: Record<string, string>): NormalizedBankRow | null
   };
 }
 
+// טביעת האצבע שמונעת קליטה כפולה של אותה תנועה.
+//
+// בעבר, כשהיה מזהה בנק, הוא שימש לבדו כטביעת האצבע - בהנחה שמזהה של הבנק הוא
+// ייחודי. ההנחה הזו שקרית: בקובץ אמיתי של פאג"י (122 תנועות) היו רק 27 מזהים
+// שונים, ומזהה אחד חזר ב-64 תנועות נפרדות בסכומים 345 עד 205,000 ש"ח. כלומר
+// המזהה שפאג"י מחזיר אינו מזהה תנועה אלא משהו אחר. התוצאה הייתה ש-109 מתוך 122
+// התנועות היו נדחות בשקט ככפילויות, וכסף אמיתי היה נעלם מהמערכת.
+//
+// לכן המזהה נכנס לטביעת האצבע יחד עם התאריך, הסכום והכיוון, ולא במקומם:
+//   - אותה תנועה שנמשכת פעמיים -> כל השדות זהים -> מזוהה ככפילות, כרצוי.
+//   - שתי תנועות שונות עם אותו מזהה -> נבדלות בתאריך/סכום -> שתיהן נשמרות.
+// היתרון המקורי נשמר: התיאור לא נכלל, כך שבנק שמשנה ניסוח בין משיכות עדיין
+// מזוהה נכון.
 async function computeFingerprint(accountId: string, row: NormalizedBankRow): Promise<string> {
-  if (row.bank_transaction_id) return `bankid:${row.bank_transaction_id}`;
+  if (row.bank_transaction_id) {
+    return `bankid:${row.bank_transaction_id}|${row.execution_date}|${row.direction}|${row.amount.toFixed(2)}`;
+  }
   const raw = [accountId, row.execution_date, row.value_date ?? "", row.direction, row.amount.toFixed(2), row.reference ?? "", row.description ?? ""].join("|");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
   return Array.from(new Uint8Array(digest))

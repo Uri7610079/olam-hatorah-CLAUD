@@ -34,6 +34,7 @@ $INCLUDE_FILES = @(
     'package.json',
     'package-lock.json',
     'הגדרות.txt',
+    'התחלה מהירה.txt',
     'קרא אותי.txt',
     'משיכת תנועות מהבנק.bat',
     'שינוי תיקיית הפלט.bat',
@@ -66,6 +67,27 @@ foreach ($d in $INCLUDE_DIRS) {
     $src = Join-Path $Root $d
     if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $Destination -Recurse; $copied++ }
     else { $missing += "$d\" }
+}
+
+# תיקיית הפלט של המחשב שלנו חסרת משמעות אצל הלקוח, והשארתה בקובץ הייתה גורמת
+# לתקלה בהרצה הראשונה שם ("תיקיית הפלט לא קיימת"). מחליפים אותה בשורת מקום
+# מסומנת, שהלקוח משנה בשלב 2 של "התחלה מהירה.txt".
+$settingsInPackage = Join-Path $Destination 'הגדרות.txt'
+if (Test-Path -LiteralPath $settingsInPackage) {
+    $lines = Get-Content -LiteralPath $settingsInPackage -Encoding UTF8
+    $rebuilt = New-Object System.Collections.Generic.List[string]
+    $replaced = $false
+    foreach ($line in $lines) {
+        $t = "$line".Replace([string][char]0xFEFF, '').Trim()
+        if ($t -and -not $t.StartsWith('#') -and -not $replaced) {
+            $rebuilt.Add('C:\TorahWorld\בנק')
+            $replaced = $true
+        } else {
+            $rebuilt.Add($line)
+        }
+    }
+    if (-not $replaced) { $rebuilt.Add('C:\TorahWorld\בנק') }
+    [System.IO.File]::WriteAllText($settingsInPackage, (($rebuilt -join "`r`n") + "`r`n"), (New-Object System.Text.UTF8Encoding $true))
 }
 
 # בדיקת ביטחון אחרונה. אם משהו מהשלושה האלה הגיע ליעד - עוצרים ומודיעים, במקום

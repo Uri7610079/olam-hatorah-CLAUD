@@ -156,6 +156,14 @@ export const IMPORT_SIGNATURES: ImportSignature[] = [
         required: ["זכות", "חובה", "תאריך"],
         optional: ["יתרה", "תאריך ערך", "תיאור", "אסמכתא", "סוג פעולה"],
       },
+      {
+        // הפלט של הסקרייפר. זה הפורמט שיורד לתיקיית הבנק בכל משיכה אוטומטית,
+        // ובלי הווריאנט הזה הקובץ לא זוהה כלל ("לא הצלחתי לזהות את סוג הקובץ") -
+        // כלומר כל מסלול הקליטה האוטומטי מהתיקייה לא עבד.
+        name: "פלט הסקרייפר",
+        required: ["execution_date", "direction", "amount"],
+        optional: ["account_number", "value_date", "description", "operation_type", "bank_transaction_id"],
+      },
     ],
   },
   {
