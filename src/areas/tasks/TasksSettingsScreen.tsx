@@ -64,11 +64,14 @@ function CollapsibleSection({ title, subtitle, children }: { title: string; subt
 const PROVIDER_LABEL: Record<string, string> = {
   twilio: "Twilio (WhatsApp Sandbox/API)",
   meta: "Meta WhatsApp Cloud API (ישיר)",
+  hookmyapp: "HookMyApp (ספק ביניים)",
 };
 
 const PROVIDER_HELP: Record<string, string> = {
   twilio: 'מזהה חיצוני = מספר ה-WhatsApp של Twilio, בפורמט whatsapp:+1415... (כולל המילה whatsapp ונקודתיים). ה-Webhook: /api/whatsapp-webhook.',
   meta: 'מזהה חיצוני = ה-Phone Number ID שמטא מציגה (מספר, לא מספר טלפון). ה-Webhook: /api/whatsapp-webhook-meta.',
+  hookmyapp:
+    'מזהה חיצוני = מזהה הערוץ אצל HookMyApp. אם לא ברור מה להזין - שולחים הודעת בדיקה אחת, והמזהה יופיע ביומן הפונקציה ב-Vercel. ה-Webhook: /api/whatsapp-webhook-hookmyapp.',
 };
 
 interface TeamRow extends Team {}
@@ -793,7 +796,9 @@ export function TasksSettingsScreen() {
         <section>
           <h2 className="mb-3 text-sm font-semibold text-ink">חיבור WhatsApp</h2>
           <p className="mb-3 text-xs text-ink-subtle">
-            שני ספקים רשמיים נתמכים - אפשר לבחור לפי מה שהלקוח מעדיף להקים בפועל. שניהם משתמשים באותו "מזהה סוד" (WHATSAPP_WEBHOOK_SECRET) שהוגדר פעם אחת.
+            שלושה ספקים נתמכים - אפשר לבחור לפי מה שהלקוח מעדיף להקים בפועל. כולם משתמשים באותו "מזהה סוד"
+            (WHATSAPP_WEBHOOK_SECRET) שהוגדר פעם אחת. Twilio ו-Meta הם הספקים הרשמיים; HookMyApp הוא ספק ביניים
+            שחוסך את תהליך האישור של Meta, ובתמורה ההודעות עוברות דרך חברה נוספת.
           </p>
           <div className="space-y-2">
             {(whatsAppGroupsQuery.data ?? []).map((group) => (
@@ -817,6 +822,7 @@ export function TasksSettingsScreen() {
               <select value={newGroupProvider} onChange={(e) => setNewGroupProvider(e.target.value)} className="input-field w-auto">
                 <option value="twilio">Twilio</option>
                 <option value="meta">Meta Cloud API (ישיר)</option>
+                <option value="hookmyapp">HookMyApp</option>
               </select>
               <input value={newGroupLabel} onChange={(e) => setNewGroupLabel(e.target.value)} placeholder="שם לתצוגה…" className="input-field w-auto" />
               <input value={newGroupExternalId} onChange={(e) => setNewGroupExternalId(e.target.value)} placeholder="מזהה חיצוני…" className="input-field w-auto" />
