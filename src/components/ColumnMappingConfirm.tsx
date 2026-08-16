@@ -73,6 +73,12 @@ export function ColumnMappingConfirm({ plan, headers, sample, onConfirm, onCance
                   דוגמה מהקובץ: <span className="font-medium text-ink-muted">{sample[value] || "(ריק)"}</span>
                 </p>
               )}
+              {/* ההנמקה מוצגת רק כשההצעה נשענה על מיקום העמודה. שם עמודה דו-משמעי
+                  ("קוד סניף") מקבל משמעות מהשכנות שלו, וכדאי שהמשתמשת תדע שזה מה
+                  שהנחה את ההצעה - כדי שתוכל לחלוק עליה ביודעין. */}
+              {value === q.suggestedHeader && q.contextNote && (
+                <p className="mt-1 text-xs text-ink-subtle">{q.contextNote}</p>
+              )}
             </div>
           );
         })}

@@ -70,6 +70,8 @@ interface CommitResult {
   created: number;
   duplicate: number;
   invalid: number;
+  assigned: number;
+  bankAccounts: number;
 }
 
 interface RollbackPreviewRow {
@@ -276,8 +278,17 @@ export function StudentsImportPanel() {
       setError(commitError.message);
       return;
     }
-    const result = data as { created_count: number; duplicate_count: number; invalid_count: number };
-    setCommitResult({ created: result.created_count, duplicate: result.duplicate_count, invalid: result.invalid_count });
+    const result = data as {
+      created_count: number; duplicate_count: number; invalid_count: number;
+      assigned_count: number; bank_account_count: number;
+    };
+    setCommitResult({
+      created: result.created_count,
+      duplicate: result.duplicate_count,
+      invalid: result.invalid_count,
+      assigned: result.assigned_count ?? 0,
+      bankAccounts: result.bank_account_count ?? 0,
+    });
     queryClient.invalidateQueries({ queryKey: ["students-import-batch", reviewBatchId] });
     queryClient.invalidateQueries({ queryKey: ["students-import-batch-rows", reviewBatchId] });
     queryClient.invalidateQueries({ queryKey: ["students-import-batches"] });
@@ -459,6 +470,10 @@ export function StudentsImportPanel() {
       {commitResult && (
         <div className="rounded-md bg-ok-soft p-3 text-sm text-ok-ink">
           נוצרו {commitResult.created} תלמידים חדשים.
+          {commitResult.assigned > 0 && ` ${commitResult.assigned} שויכו לקבוצה.`}
+          {commitResult.created > commitResult.assigned &&
+            ` ${commitResult.created - commitResult.assigned} נוצרו בלי שיוך (לא נמצאה הקבוצה לפי עמותה+סניף+שם).`}
+          {commitResult.bankAccounts > 0 && ` ${commitResult.bankAccounts} חשבונות בנק נקלטו - כולם ממתינים לאימות.`}
           {commitResult.duplicate > 0 && ` ${commitResult.duplicate} שורות דולגו (תלמיד קיים כבר).`}
           {commitResult.invalid > 0 && ` ${commitResult.invalid} שורות שגויות (חסר שדה חובה).`}
         </div>

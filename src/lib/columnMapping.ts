@@ -15,6 +15,11 @@ export interface TargetField {
   required?: boolean;
   // מילים שמרמזות על השדה. משמשות לניקוד ההצעה בלבד, לא להתאמה אוטומטית.
   hints?: string[];
+  // שיוך נושאי. בעלי קבצים מסדרים עמודות בבלוקים - "קוד בנק / קוד סניף / מספר
+  // חשבון" צמודות זו לזו, ו"מספר סניף / קוד סוג לימודים / סמל מוסד" בבלוק אחר.
+  // הסמיכות הזו מלמדת על המשמעות: "קוד סניף" ליד "מספר חשבון" הוא סניף בנק,
+  // ואותה כותרת בדיוק בבלוק העמותה הייתה סניף עמותה. ר' scoreWithContext.
+  group?: "bank" | "org" | "student";
 }
 
 export function normalizeForMatch(raw: string): string {
@@ -62,6 +67,27 @@ export interface FieldSuggestion {
   // ההצעה הטובה ביותר מבין הכותרות שלא נוצלו, אם יש.
   suggestedHeader: string | null;
   confidence: number;
+  // הוסבר למשתמשת כשההצעה נשענה על מיקום העמודה ולא רק על שמה.
+  contextNote?: string;
+}
+
+const GROUP_LABEL: Record<string, string> = {
+  bank: "עמודות הבנק",
+  org: "עמודות העמותה",
+  student: "פרטי התלמיד",
+};
+
+// בונוס סמיכות: כותרת ששכנתה כבר שויכה בוודאות לשדה מאותו נושא מקבלת חיזוק.
+// חלון של שתי עמודות לכל צד - מספיק כדי לתפוס בלוק, וצר מספיק כדי לא לקשר בין
+// בלוקים שכנים.
+function adjacencyBonus(headerIndex: number, field: TargetField, anchors: Map<number, string>): number {
+  if (!field.group) return 0;
+  for (let d = 1; d <= 2; d++) {
+    for (const idx of [headerIndex - d, headerIndex + d]) {
+      if (anchors.get(idx) === field.group) return d === 1 ? 25 : 12;
+    }
+  }
+  return 0;
 }
 
 export interface MappingPlan {
@@ -82,11 +108,15 @@ export function buildMappingPlan(headers: string[], fields: TargetField[]): Mapp
   // סיבוב ראשון: התאמות מדויקות. הן תופסות את הכותרת שלהן לפני שמישהו אחר יציע
   // עליה, אחרת שדה אחר היה עלול "לגנוב" כותרת ששייכת בבירור למישהו.
   const exact = new Map<string, string>();
+  // עוגנים: אינדקס העמודה -> הנושא שלה. נבנים מהתאמות המדויקות בלבד, כי רק הן
+  // ודאיות מספיק כדי לשמש בסיס להסקה על השכנות.
+  const anchors = new Map<number, string>();
   for (const field of fields) {
     const hit = normalizedHeaders.get(normalizeForMatch(field.label));
     if (hit) {
       exact.set(field.key, hit);
       taken.add(hit);
+      if (field.group) anchors.set(headers.indexOf(hit), field.group);
     }
   }
 
@@ -96,12 +126,18 @@ export function buildMappingPlan(headers: string[], fields: TargetField[]): Mapp
 
     let suggestedHeader: string | null = null;
     let confidence = 0;
-    for (const header of headers) {
+    let contextNote: string | undefined;
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i];
       if (!header || taken.has(header)) continue;
-      const s = score(header, field);
+      const base = score(header, field);
+      if (base === 0) continue;
+      const bonus = adjacencyBonus(i, field, anchors);
+      const s = Math.min(99, base + bonus);
       if (s > confidence) {
         confidence = s;
         suggestedHeader = header;
+        contextNote = bonus > 0 && field.group ? `לפי הסמיכות ל${GROUP_LABEL[field.group]}` : undefined;
       }
     }
 
@@ -114,7 +150,7 @@ export function buildMappingPlan(headers: string[], fields: TargetField[]): Mapp
     }
 
     if (suggestedHeader || field.required) {
-      questions.push({ field, exactHeader: null, suggestedHeader, confidence });
+      questions.push({ field, exactHeader: null, suggestedHeader, confidence, contextNote });
       if (suggestedHeader) taken.add(suggestedHeader);
     }
     if (field.required && !suggestedHeader) missingRequired.push(field);
@@ -147,13 +183,26 @@ export function applyColumnMapping(
 // שדות היעד של יבוא תלמידים, לפי מה שפונקציית הקליטה קוראת בפועל
 // (commit_students_import_batch, מיגרציות 076 ו-086).
 export const STUDENT_IMPORT_FIELDS: TargetField[] = [
-  { key: "מזהה חיצוני", label: "מזהה חיצוני", required: true, hints: ["תעודת זהות", "ת.ז", "תז", "ת.ז/דרכון", "מספר זהות", "דרכון"] },
-  { key: "שם מלא", label: "שם מלא", required: true, hints: ["שם", "שם התלמיד", "שם תלמיד", "שם ושם משפחה"] },
-  { key: "סוג מזהה", label: "סוג מזהה", hints: ["מזהה תלמיד", "סוג תעודה", "סוג זיהוי"] },
-  { key: "טלפון", label: "טלפון", hints: ["פלאפון", "פאלפון", "נייד", "טלפון נייד"] },
-  { key: "קוד לימוד", label: "קוד לימוד", hints: ["קוד סוג לימוד", "קוד סוג לימודים", "סוג לימודים", "קוד לימודים"] },
-  { key: "תאריך לידה", label: "תאריך לידה", hints: ["ת. לידה", "תאריך הלידה"] },
-  { key: "כתובת", label: "כתובת", hints: ["רחוב", "כתובת מגורים"] },
-  { key: "מס בית", label: "מס בית", hints: ["מספר בית", "בית"] },
-  { key: "עיר", label: "עיר", hints: ["ישוב מגורים", "יישוב", "ישוב"] },
+  { key: "מזהה חיצוני", label: "מזהה חיצוני", group: "student", required: true, hints: ["תעודת זהות", "ת.ז", "תז", "ת.ז/דרכון", "מספר זהות", "דרכון"] },
+  { key: "שם מלא", label: "שם מלא", group: "student", required: true, hints: ["שם", "שם התלמיד", "שם תלמיד", "שם ושם משפחה"] },
+  { key: "סוג מזהה", label: "סוג מזהה", group: "student", hints: ["מזהה תלמיד", "סוג תעודה", "סוג זיהוי"] },
+  { key: "טלפון", label: "טלפון", group: "student", hints: ["פלאפון", "פאלפון", "נייד", "טלפון נייד"] },
+  { key: "קוד לימוד", label: "קוד לימוד", group: "student", hints: ["קוד סוג לימוד", "קוד סוג לימודים", "סוג לימודים", "קוד לימודים"] },
+  { key: "תאריך לידה", label: "תאריך לידה", group: "student", hints: ["ת. לידה", "תאריך הלידה"] },
+  { key: "כתובת", label: "כתובת", group: "student", hints: ["רחוב", "כתובת מגורים"] },
+  { key: "מס בית", label: "מס בית", group: "student", hints: ["מספר בית", "בית"] },
+  { key: "עיר", label: "עיר", group: "student", hints: ["ישוב מגורים", "יישוב", "ישוב"] },
+
+  // שיוך לקבוצה. שלושת השדות עובדים יחד - הקבוצה מזוהה דרך השרשרת עמותה -> סניף
+  // -> קבוצה, כי אותו שם קבוצה חוזר בכמה סניפים ובכמה עמותות.
+  { key: "שם קבוצה", label: "שם קבוצה", group: "org", hints: ["קבוצה", "שם הקבוצה"] },
+  { key: "סמל מוסד", label: "סמל מוסד", group: "org", hints: ["מספר עמותה", "סמל המוסד", "מספר מוסד"] },
+  { key: "מספר סניף", label: "מספר סניף", group: "org", hints: ["סניף עמותה", "מספר הסניף"] },
+
+  // חשבון בנק. "סניף בנק" נפרד מ"מספר סניף" בכוונה ובשם מפורש: בקובץ של הלקוח
+  // מופיעות שתי עמודות שנקראות כמעט אותו דבר - "מספר סניף" הוא סניף העמותה
+  // ו"קוד סניף" הוא סניף הבנק. ערבוב ביניהן היה שולח כסף לסניף בנק שגוי.
+  { key: "בנק", label: "בנק", group: "bank", hints: ["קוד בנק", "שם בנק", "מספר בנק"] },
+  { key: "סניף בנק", label: "סניף בנק", group: "bank", hints: ["קוד סניף", "מספר סניף בנק"] },
+  { key: "מספר חשבון", label: "מספר חשבון", group: "bank", hints: ["חשבון", "מס חשבון", "מספר החשבון"] },
 ];
