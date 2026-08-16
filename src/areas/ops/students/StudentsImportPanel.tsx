@@ -18,6 +18,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { ColumnMappingConfirm } from "@/components/ColumnMappingConfirm";
+import { PassportCountryStep, type PassportRow } from "@/components/PassportCountryStep";
+import { buildMappingPlan, applyColumnMapping, STUDENT_IMPORT_FIELDS, type MappingPlan } from "@/lib/columnMapping";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 
 type BatchStatus = "uploaded" | "analyzed" | "previewed" | "committed" | "rejected";
@@ -96,6 +99,10 @@ export function StudentsImportPanel() {
   const [legacyWarning, setLegacyWarning] = useState(false);
   const [duplicateId, setDuplicateId] = useState<string | null>(null);
   const [headerConfirm, setHeaderConfirm] = useState<{ file: File; previewRows: string[][]; detectedIndex: number } | null>(null);
+  // התאמת עמודות - מוצגת כשכותרות הקובץ אינן זהות לשמות השדות אבל נראות מוכרות.
+  const [mappingConfirm, setMappingConfirm] = useState<{ plan: MappingPlan; headers: string[]; sample: Record<string, string>; rows: ClassifiedRow[] } | null>(null);
+  // מדינת דרכון - נשאלת אחרי התאמת העמודות, כי רק אז ידוע איזו עמודה היא "סוג מזהה".
+  const [passportStep, setPassportStep] = useState<{ rows: ClassifiedRow[]; passports: PassportRow[] } | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +138,8 @@ export function StudentsImportPanel() {
     setLegacyWarning(false);
     setDuplicateId(null);
     setHeaderConfirm(null);
+    setMappingConfirm(null);
+    setPassportStep(null);
     setError(null);
   };
 
@@ -138,6 +147,53 @@ export function StudentsImportPanel() {
     setReviewBatchId(null);
     setCommitResult(null);
     queryClient.invalidateQueries({ queryKey: ["students-import-batches"] });
+  };
+
+
+  // בין הניתוח להצגה: אם הכותרות לא תואמות לשמות השדות, שואלים לפני שממשיכים -
+  // במקום להציג 1583 שורות שגויות בהודעה שלא מסבירה מה לתקן.
+  const applyOrAsk = (rows: ClassifiedRow[]) => {
+    const headers = rows.length > 0 ? Object.keys(rows[0].raw) : [];
+    const plan = buildMappingPlan(headers, STUDENT_IMPORT_FIELDS);
+    if (plan.questions.length === 0) {
+      askPassportOrFinish(rows);
+      return;
+    }
+    setMappingConfirm({ plan, headers, sample: rows[0]?.raw ?? {}, rows });
+  };
+
+  const handleMappingConfirm = (mapping: Record<string, string>) => {
+    if (!mappingConfirm) return;
+    const mapped = mappingConfirm.rows.map((r) => ({ ...r, raw: applyColumnMapping(r.raw, mapping) }));
+    setMappingConfirm(null);
+    askPassportOrFinish(mapped);
+  };
+
+  // מספר דרכון אינו ייחודי בעולם, ולכן בלי מדינה הוא אינו מזהה. נשאל רק כשיש
+  // בפועל שורות דרכון בקובץ - קובץ של תעודות זהות בלבד ממשיך ישר.
+  const askPassportOrFinish = (rows: ClassifiedRow[]) => {
+    const passports: PassportRow[] = rows
+      .filter((r) => (r.raw["סוג מזהה"] ?? "").trim() === "דרכון" || (r.raw["סוג מזהה"] ?? "").trim() === "passport")
+      .map((r) => ({
+        rowNumber: r.rowNumber,
+        name: (r.raw["שם מלא"] ?? "").trim(),
+        passportNumber: (r.raw["מזהה חיצוני"] ?? "").trim(),
+      }));
+    if (passports.length === 0) {
+      setParsedRows(rows);
+      return;
+    }
+    setPassportStep({ rows, passports });
+  };
+
+  const handlePassportConfirm = (countryByRow: Record<number, string>) => {
+    if (!passportStep) return;
+    setParsedRows(
+      passportStep.rows.map((r) =>
+        countryByRow[r.rowNumber] ? { ...r, raw: { ...r.raw, "מדינת דרכון": countryByRow[r.rowNumber] } } : r,
+      ),
+    );
+    setPassportStep(null);
   };
 
   const handleFileChange = async (selected: File | null) => {
@@ -157,7 +213,7 @@ export function StudentsImportPanel() {
         setHeaderConfirm({ file: selected, previewRows: result.previewRows, detectedIndex: result.headerRowIndex });
         return;
       }
-      setParsedRows(result.rows);
+      applyOrAsk(result.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
@@ -171,7 +227,7 @@ export function StudentsImportPanel() {
     setAnalyzing(true);
     try {
       const result = await analyzeFile(chosenFile, chosenIndex);
-      setParsedRows(result.rows);
+      applyOrAsk(result.rows);
       setHeaderConfirm(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
@@ -327,6 +383,20 @@ export function StudentsImportPanel() {
               onConfirm={handleHeaderConfirm}
               onCancel={handleHeaderCancel}
             />
+          )}
+
+          {mappingConfirm && (
+            <ColumnMappingConfirm
+              plan={mappingConfirm.plan}
+              headers={mappingConfirm.headers}
+              sample={mappingConfirm.sample}
+              onConfirm={handleMappingConfirm}
+              onCancel={resetForm}
+            />
+          )}
+
+          {passportStep && (
+            <PassportCountryStep rows={passportStep.passports} onConfirm={handlePassportConfirm} onCancel={resetForm} />
           )}
 
           {parsedRows && !duplicateId && (
