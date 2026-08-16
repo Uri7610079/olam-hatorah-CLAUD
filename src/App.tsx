@@ -26,6 +26,7 @@ import { PhoneListsScreen } from "./areas/ops/phone-lists/PhoneListsScreen";
 import { DocumentsScreen } from "./areas/ops/documents/DocumentsScreen";
 import { ExceptionsCenterScreen } from "./areas/shared/ExceptionsCenterScreen";
 import { ReportsScreen } from "./areas/finance/ReportsScreen";
+import { GroupLeadersScreen } from "./areas/finance/GroupLeadersScreen";
 import { FinancialPeriodsScreen } from "./areas/finance/FinancialPeriodsScreen";
 import { CommissionRulesScreen } from "./areas/finance/CommissionRulesScreen";
 import { GroupBalancesScreen } from "./areas/finance/GroupBalancesScreen";
@@ -75,6 +76,7 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/finance/bank-matching",
   "/finance/bank-auto-sync",
   "/finance/documents",
+  "/finance/group-leaders",
   "/admin/bank-classification",
   "/admin/demo-data",
   "/admin/appearance",
@@ -116,6 +118,7 @@ export default function App() {
             <Route path="/ops/exceptions" element={<ExceptionsCenterScreen />} />
             <Route path="/finance/exceptions" element={<ExceptionsCenterScreen />} />
             <Route path="/finance/reports" element={<ReportsScreen />} />
+            <Route path="/finance/group-leaders" element={<GroupLeadersScreen />} />
             <Route path="/finance/months" element={<FinancialPeriodsScreen />} />
             <Route path="/finance/commission-rules" element={<CommissionRulesScreen />} />
             <Route path="/finance/group-balances" element={<GroupBalancesScreen />} />

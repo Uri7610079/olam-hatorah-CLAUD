@@ -32,6 +32,7 @@ import {
   Palette,
   FolderCog,
   CalendarClock,
+  UserSquare2,
 } from "lucide-react";
 import type { Area } from "./AreaContext";
 
@@ -207,6 +208,15 @@ export const SCREENS: ScreenDef[] = [
     description: "תנועות בנק, התאמות, ומשיכה אוטומטית - הכל עבור אותו חשבון, בטאבים",
     builtInStage: "שלב 11",
     icon: ArrowLeftRight,
+  },
+  {
+    path: "/finance/group-leaders",
+    area: "finance",
+    navLabel: "קבוצות לפי ראש קבוצה",
+    title: "קבוצות לפי ראש קבוצה",
+    description: "הקבוצה כפי שהיא מתנהלת בפועל - כל הסניפים יחד, בחלוקה לפי עמותה",
+    builtInStage: "שלב 30",
+    icon: UserSquare2,
   },
   {
     path: "/finance/reports",

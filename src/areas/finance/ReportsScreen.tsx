@@ -178,6 +178,30 @@ const REPORTS: ReportDef[] = [
     },
   },
   {
+    // הדוח הזה מציג את הקבוצה כפי שהיא מתנהלת בפועל: כל הסניפים של אותו ראש קבוצה
+    // ברצף אחד. הוא מסונן לעמותה הנבחרת ככל שאר הדוחות כאן, ולכן קבוצה שמתנהלת
+    // בשתי עמותות תופיע בדוח של כל עמותה בנפרד - וזו בדיוק החלוקה שנדרשה, לא מגבלה.
+    key: "group_leader_rows",
+    label: "קבוצות לפי ראש קבוצה",
+    fetch: async ({ orgId }) => {
+      const { data } = await supabase
+        .from("group_leader_group_rows")
+        .select("group_leader_id, group_name, branch_name, talmud_branch_code, balance")
+        .eq("organization_id", orgId);
+      const { data: leaders } = await supabase.from("group_leaders").select("id, full_name");
+      const nameById = new Map((leaders ?? []).map((l) => [l.id, l.full_name]));
+      return (data ?? [])
+        .map((r) => ({
+          "ראש קבוצה": nameById.get(r.group_leader_id) ?? "—",
+          "קבוצה": r.group_name,
+          "סניף": r.branch_name,
+          "קוד סניף": r.talmud_branch_code,
+          "יתרה": r.balance,
+        }))
+        .sort((a, b) => a["ראש קבוצה"].localeCompare(b["ראש קבוצה"], "he") || a["סניף"].localeCompare(b["סניף"], "he"));
+    },
+  },
+  {
     key: "group_ledger",
     label: "ספר תנועות קבוצות",
     fetch: async ({ orgId, month }) => {
