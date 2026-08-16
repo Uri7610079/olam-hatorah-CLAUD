@@ -93,6 +93,14 @@ export const IMPORT_SIGNATURES: ImportSignature[] = [
     target: { kind: "import-center-tab", tab: "master" },
     variants: [
       {
+        // הכותרות בעברית, כפי שהקבצים מגיעים בפועל מהלקוח ומהמשרד. בלי הווריאנט
+        // הזה קובץ כזה חוזר מהזיהוי כ"לא זוהה", והמשתמשת נשלחת לבחור לשונית ידנית
+        // למרות שהקובץ מוכר לגמרי.
+        name: "כותרות בעברית",
+        required: ["שם עמותה"],
+        optional: ["סמל מוסד", "מספר סניף", "שם סניף", "שם קבוצה", "ראש קבוצה", "טלפון ראש קבוצה"],
+      },
+      {
         required: ["legal_name"],
         optional: [
           "org_number",

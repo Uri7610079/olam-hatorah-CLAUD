@@ -4,6 +4,7 @@ import { Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import type { ClassifiedRow } from "@/lib/importParsing";
+import { translateMasterDataRow } from "@/lib/masterDataHeaderAliases";
 import { analyzeFile, checkDuplicateFile, legacyXlsWarning, createImportBatch, fetchImportBatchRows, resolveImportRow, type StoredImportRow } from "@/lib/importBatches";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
@@ -23,6 +24,11 @@ interface CommitResult {
 // מסמנים "דורש החלטה" כדי שהמשתמש יראה את הפער ויחליט במודע לפני קליטה (לא אחריה).
 function applyMasterDataGapChecks(rows: ClassifiedRow[]): ClassifiedRow[] {
   return rows.map((r) => {
+    // תרגום כותרות עברית לשמות השדות, לפני כל בדיקה. חייב לקרות כאן ולא מאוחר
+    // יותר: ה-raw הזה הוא מה שנשמר ב-import_rows ומה שפונקציית הקליטה בשרת
+    // קוראת, כך שהתרגום תקף לכל השרשרת ובלי לגעת ב-SQL.
+    const raw = translateMasterDataRow(r.raw);
+    r = { ...r, raw };
     if (r.status !== "valid") return r;
     const legalName = (r.raw.legal_name ?? "").trim();
     const branchCode = (r.raw.talmud_branch_code ?? "").trim();
@@ -214,7 +220,10 @@ export function MasterDataImportWizard({ initialFile }: MasterDataImportWizardPr
         יבוא קובץ אב ליצירת עמותות/סניפים/קבוצות/ראשי קבוצה אמיתיים. עמותה/סניף/קבוצה/ראש קבוצה קיימים (לפי מספר עמותה או שם מדויק, קוד סניף, שם קבוצה) לא ייווצרו כפול - רק יושלם מה שחסר. הנתונים הנוצרים כאן אינם מסומנים כדמו לעולם, ולא יכולים להתערבב עם חבילת דמו.
       </p>
       <p className="text-xs text-ink-subtle">
-        עמודות מצופות בקובץ: <span className="tabular">legal_name</span> (חובה), <span className="tabular">org_number</span>,{" "}
+        אפשר כותרות בעברית: <span className="font-medium">שם עמותה</span> (חובה), סמל מוסד, מספר סניף, שם סניף, שם קבוצה, ראש
+        קבוצה, טלפון ראש קבוצה. כותרת שאינה מזוהה מוצגת כשדה חסר ולא נקלטת לשדה אחר.
+        <br />
+        לחלופין, שמות השדות באנגלית: <span className="tabular">legal_name</span> (חובה), <span className="tabular">org_number</span>,{" "}
         <span className="tabular">contact_phone</span>, <span className="tabular">contact_email</span>, <span className="tabular">contact_address</span>,{" "}
         <span className="tabular">talmud_branch_code</span>, <span className="tabular">branch_internal_name</span>, <span className="tabular">branch_address</span>,{" "}
         <span className="tabular">group_name</span>, <span className="tabular">group_leader_name</span>, <span className="tabular">group_leader_phone</span>.
