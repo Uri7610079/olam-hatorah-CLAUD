@@ -575,7 +575,10 @@ export function StudentsImportPanel() {
             {
               key: "counts",
               header: "תקין / דורש החלטה / שגוי",
-              className: "tabular",
+              // ltr-num ולא רק tabular: "1583 / 0 / 0" הוא רצף של תווים ניטרליים,
+              // ובהקשר RTL הוא נקרא הפוך - כלומר אצווה עם 1583 תקינות הוצגה כאילו
+              // יש בה 1583 שגויות, וההפך. נתפס מול צילום מסך אמיתי של ההיסטוריה.
+              className: "tabular ltr-num",
               render: (b: StudentsBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
             },
             {
