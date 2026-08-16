@@ -45,7 +45,27 @@ const ALIASES: Record<string, string> = {
   "מנהל קבוצה": "group_leader_name",
   "טלפון ראש קבוצה": "group_leader_phone",
   "טלפון מנהל קבוצה": "group_leader_phone",
+  "פלאפון": "group_leader_phone",
+  "פאלפון": "group_leader_phone",
+  "מייל": "group_leader_email",
+  "מייל ראש קבוצה": "group_leader_email",
+  "אימייל ראש קבוצה": "group_leader_email",
+  'דוא"ל ראש קבוצה': "group_leader_email",
 };
+
+// קוד סניף מנורמל למספר בן שתי ספרות. הלקוח ביקש ש"1" ו-"01" ייחשבו לאותו סניף,
+// והם לא היו: הקוד נשמר כטקסט (בכוונה, כדי לשמר אפסים מובילים כמו "00"), וההתאמה
+// בקליטה היא השוואת מחרוזות - כך ש"4" ו-"04" היו יוצרים שני סניפים נפרדים באותה
+// עמותה. בקובץ אמיתי של הלקוח שני הכתיבים מופיעים זה לצד זה.
+//
+// שתי ספרות ולא הסרת אפסים: זה הפורמט שכבר קיים בנתונים ("00", "01", "02"), וגם
+// הפורמט שבו הקודים מגיעים ממשרד החינוך. קוד ארוך יותר ("100") נשאר כמות שהוא,
+// וקוד שאינו מספרי כלל לא נוגעים בו - לא מנחשים על נתון שלא הבנו.
+export function normalizeBranchCode(raw: string): string {
+  const value = String(raw ?? "").trim();
+  if (!/^\d+$/.test(value)) return value;
+  return value.padStart(2, "0");
+}
 
 const NORMALIZED: Record<string, string> = Object.fromEntries(
   Object.entries(ALIASES).map(([he, en]) => [normalizeHeader(he), en]),
@@ -83,6 +103,10 @@ export function translateMasterDataRow(raw: Record<string, string>): Record<stri
   for (const [field, value] of Object.entries(fromHebrew)) {
     if (out[field] === undefined || out[field] === "") out[field] = value;
   }
+
+  // הנרמול נעשה כאן ולא בקליטה בשרת, כדי שהתצוגה המקדימה כבר תראה את הקוד כפי
+  // שייווצר בפועל. אחרת המשתמשת הייתה מאשרת "4" ומקבלת סניף "04".
+  if (out.talmud_branch_code) out.talmud_branch_code = normalizeBranchCode(out.talmud_branch_code);
   return out;
 }
 

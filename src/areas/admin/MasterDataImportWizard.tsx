@@ -221,7 +221,11 @@ export function MasterDataImportWizard({ initialFile }: MasterDataImportWizardPr
       </p>
       <p className="text-xs text-ink-subtle">
         אפשר כותרות בעברית: <span className="font-medium">שם עמותה</span> (חובה), סמל מוסד, מספר סניף, שם סניף, שם קבוצה, ראש
-        קבוצה, טלפון ראש קבוצה. כותרת שאינה מזוהה מוצגת כשדה חסר ולא נקלטת לשדה אחר.
+        קבוצה, טלפון ראש קבוצה, מייל. כותרת שאינה מזוהה מוצגת כשדה חסר ולא נקלטת לשדה אחר - למשל "סניף" לבדו, שיכול להיות
+        קוד או שם; צריך "מספר סניף".
+        <br />
+        קוד סניף מושלם לשתי ספרות, כך ש-<span className="tabular">1</span> ו-<span className="tabular">01</span> הם אותו סניף.
+        ראש קבוצה מזוהה לפי הטלפון, כך שסדר השם בקובץ לא משנה.
         <br />
         לחלופין, שמות השדות באנגלית: <span className="tabular">legal_name</span> (חובה), <span className="tabular">org_number</span>,{" "}
         <span className="tabular">contact_phone</span>, <span className="tabular">contact_email</span>, <span className="tabular">contact_address</span>,{" "}
