@@ -17,6 +17,7 @@ interface CommitResult {
   created_branches: number;
   created_groups: number;
   created_group_leaders: number;
+  created_bank_accounts: number;
 }
 
 // בדיקות פערים ספציפיות לדומיין, מעל הסיווג הגנרי (classifyRows, שלב 5): שם עמותה
@@ -221,7 +222,7 @@ export function MasterDataImportWizard({ initialFile }: MasterDataImportWizardPr
       </p>
       <p className="text-xs text-ink-subtle">
         אפשר כותרות בעברית: <span className="font-medium">שם עמותה</span> (חובה), סמל מוסד, מספר סניף, שם סניף, שם קבוצה, ראש
-        קבוצה, טלפון ראש קבוצה, מייל. כותרת שאינה מזוהה מוצגת כשדה חסר ולא נקלטת לשדה אחר - למשל "סניף" לבדו, שיכול להיות
+        קבוצה, טלפון ראש קבוצה, מייל, בנק עמותה, סניף בנק עמותה, חשבון עמותה. כותרת שאינה מזוהה מוצגת כשדה חסר ולא נקלטת לשדה אחר - למשל "סניף" לבדו, שיכול להיות
         קוד או שם; צריך "מספר סניף".
         <br />
         קוד סניף מושלם לשתי ספרות, כך ש-<span className="tabular">1</span> ו-<span className="tabular">01</span> הם אותו סניף.
@@ -243,6 +244,7 @@ export function MasterDataImportWizard({ initialFile }: MasterDataImportWizardPr
             <li>סניפים חדשים: {commitResult.created_branches}</li>
             <li>קבוצות חדשות: {commitResult.created_groups}</li>
             <li>ראשי קבוצה חדשים: {commitResult.created_group_leaders}</li>
+            <li>חשבונות בנק לעמותה: {commitResult.created_bank_accounts ?? 0}</li>
           </ul>
           <button onClick={startOver} className="link-action text-xs">
             יבוא קובץ נוסף
