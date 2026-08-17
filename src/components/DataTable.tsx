@@ -107,10 +107,17 @@ export function DataTable<T>({
             <thead className="sticky top-0 z-10 border-b border-line bg-surface-muted text-ink-muted">
               <tr>
                 {visibleColumns.map((col) => (
-                  <th key={col.key} className="px-4 py-3 font-medium">
+                  <th key={col.key} className="whitespace-nowrap px-4 py-3 font-medium">
                     {col.header}
                   </th>
                 ))}
+                {/* עמודת סרק שסופגת את הרוחב העודף.
+                    בלי זה הדפדפן מחלק את הרוחב הפנוי *יחסית* בין העמודות: נמדד
+                    בפועל שעמודת "קוד" קיבלה 507 פיקסל לתוכן שצריך 120, והסטטוס
+                    ישב 800 פיקסל משמאל לקוד שלו. העין לא מצליחה לקשר בין שני
+                    קצוות של שורה, וזה מה שגרם למסך להיראות מפוזר.
+                    כשהטבלה רחבה מהמכל, הסרק מקבל 0 ושום דבר לא משתנה. */}
+                <th className="w-full" aria-hidden="true" />
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -139,6 +146,7 @@ export function DataTable<T>({
                       {col.render(row)}
                     </td>
                   ))}
+                  <td aria-hidden="true" />
                 </tr>
               ))}
             </tbody>
