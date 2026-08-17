@@ -25,7 +25,22 @@ async function fetchBankAccounts(organizationId: string): Promise<OrganizationBa
   return data ?? [];
 }
 
-const EMPTY_FORM = { bank_name: "", bank_branch_code: "", account_number: "", account_holder_name: "", opened_at: "" };
+interface BankOption {
+  code: string;
+  name: string;
+}
+
+// רשימת הבנקים מטבלת banks (מיגרציה 092) - אותה טבלה שממנה היבוא משלים קוד בנק
+// משם. בחירה מרשימה ולא הקלדה חופשית, לבקשת המשתמשת: "בנק הפועלים" מול "הפועלים"
+// מול "פועלים" הם אותו בנק, אבל כטקסט חופשי הם שלוש רשומות שונות - ואז ההתאמה
+// לקוד נכשלת, וקובץ מס"ב יוצא בלי קוד בנק.
+async function fetchBanks(): Promise<BankOption[]> {
+  const { data, error } = await supabase.from("banks").select("code, name").eq("is_active", true).order("code");
+  if (error) throw error;
+  return data ?? [];
+}
+
+const EMPTY_FORM = { bank_code: "", bank_name: "", bank_branch_code: "", account_number: "", account_holder_name: "", opened_at: "" };
 
 export function OrganizationBankAccountsTab({ organizationId }: OrganizationBankAccountsTabProps) {
   const queryClient = useQueryClient();
@@ -35,6 +50,7 @@ export function OrganizationBankAccountsTab({ organizationId }: OrganizationBank
     queryKey: ["organization-bank-accounts", organizationId],
     queryFn: () => fetchBankAccounts(organizationId),
   });
+  const banksQuery = useQuery({ queryKey: ["banks"], queryFn: fetchBanks });
 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -51,7 +67,9 @@ export function OrganizationBankAccountsTab({ organizationId }: OrganizationBank
     setError(null);
     const { error } = await supabase.from("organization_bank_accounts").insert({
       organization_id: organizationId,
+      // שם הבנק נגזר מהרשימה ולא מהקלדה, כך שהוא תמיד תואם לקוד.
       bank_name: form.bank_name || null,
+      bank_code: form.bank_code || null,
       bank_branch_code: form.bank_branch_code || null,
       account_number: form.account_number || null,
       account_holder_name: form.account_holder_name || null,
@@ -130,8 +148,24 @@ export function OrganizationBankAccountsTab({ organizationId }: OrganizationBank
         <form onSubmit={handleAdd} className="card mb-4 max-w-xl space-y-3 p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">בנק</label>
-              <input value={form.bank_name} onChange={(e) => setForm((f) => ({ ...f, bank_name: e.target.value }))} className="input-field" />
+              <label className="field-label" htmlFor="bank-select">בנק</label>
+              <select
+                id="bank-select"
+                value={form.bank_code}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const bank = (banksQuery.data ?? []).find((b) => b.code === code);
+                  setForm((f) => ({ ...f, bank_code: code, bank_name: bank?.name ?? "" }));
+                }}
+                className="input-field"
+              >
+                <option value="">— בחרי בנק —</option>
+                {(banksQuery.data ?? []).map((b) => (
+                  <option key={b.code} value={b.code}>
+                    {b.code} · {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="field-label">סניף</label>
