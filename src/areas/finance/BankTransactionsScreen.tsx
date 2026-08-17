@@ -527,7 +527,14 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
       {showImport && accountId && !reviewBatchId && (
         <div className="card mb-6 max-w-2xl space-y-4 p-5">
           <p className="text-xs text-ink-subtle">
-            עמודות צפויות (הנחה זמנית עד קבלת פורמט מאושר מהבנק): תאריך ביצוע, תאריך ערך, חובה/זכות, סכום, תיאור, אסמכתה, סוג פעולה, יתרה, מזהה בנק (לא חובה).
+            שלושה פורמטים נתמכים, והמערכת מזהה לבד באיזה מהם מדובר:
+            <br />
+            <span className="font-medium">פלט הסקרייפר</span> - הקובץ שיורד לתיקיית הבנק, עם עמודות באנגלית
+            (execution_date, direction, amount…). לא צריך לגעת בו.
+            <br />
+            <span className="font-medium">דף חשבון מהבנק</span> - תאריך, זכות, חובה, יתרה.
+            <br />
+            <span className="font-medium">פורמט הייצוא של המערכת</span> - תאריך ביצוע, סכום, חובה/זכות, תיאור, אסמכתה.
           </p>
           <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
           {analyzing && <LoadingState rows={2} />}
@@ -644,7 +651,12 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
             rows={transactionsQuery.data ?? []}
             rowKey={(r) => r.id}
             loading={transactionsQuery.isLoading}
-            emptyTitle="אין תנועות"
+            emptyTitle="אין עדיין תנועות בחשבון הזה"
+            emptyDescription={
+              canImport
+                ? 'כדי לקלוט תנועות: לחצי על "יבוא תנועות" בראש המסך, ובחרי את הקובץ שירד מהבנק.'
+                : undefined
+            }
             emptyIcon={ArrowLeftRight}
           />
         </>
