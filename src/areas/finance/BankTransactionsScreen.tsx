@@ -196,6 +196,9 @@ async function computeFingerprint(accountId: string, row: NormalizedBankRow): Pr
 }
 
 interface AnalyzeBankFileResult {
+  // מספרי החשבון שמופיעים בקובץ עצמו. הסקרייפר כותב account_number בכל שורה,
+  // וזה מה שמאפשר לתפוס קובץ שנקלט לחשבון הלא נכון.
+  fileAccountNumbers: string[];
   rows: ClassifiedBankRow[];
   headerRowIndex: number;
   headerConfidence: "high" | "low";
@@ -209,6 +212,9 @@ interface AnalyzeBankFileResult {
 // הייתה גורמת לכל השורות לצאת שגויות בשקט.
 async function analyzeBankFile(file: File, accountId: string, headerRowIndexOverride?: number): Promise<AnalyzeBankFileResult> {
   const parsed = await parseImportFile(file, headerRowIndexOverride);
+  const fileAccountNumbers = [
+    ...new Set(parsed.rows.map((r) => (r["account_number"] ?? "").toString().trim()).filter(Boolean)),
+  ];
   const { data: existing } = await supabase.from("bank_transactions").select("fingerprint").eq("organization_bank_account_id", accountId);
   const existingSet = new Set((existing ?? []).map((r) => r.fingerprint));
   const seen = new Set<string>();
@@ -235,7 +241,24 @@ async function analyzeBankFile(file: File, accountId: string, headerRowIndexOver
       rows.push({ rowNumber, raw, normalized, fingerprint, status: "valid", errorMessage: null });
     }
   }
-  return { rows, headerRowIndex: parsed.headerRowIndex, headerConfidence: parsed.headerConfidence, previewRows: parsed.previewRows };
+  return { rows, fileAccountNumbers, headerRowIndex: parsed.headerRowIndex, headerConfidence: parsed.headerConfidence, previewRows: parsed.previewRows };
+}
+
+// ארבע הספרות האחרונות של מספר חשבון. זו כל ההשוואה שאפשר לעשות בלי לחשוף את
+// המספר המלא (mask_account_number משאירה בדיוק אותן), וזה מספיק כדי לתפוס קובץ
+// של בנק אחד שנקלט לחשבון של בנק אחר.
+function lastFour(value: string | null | undefined): string {
+  const digits = String(value ?? "").replace(/D/g, "");
+  return digits.slice(-4);
+}
+
+async function fetchSelectedAccount(accountId: string): Promise<{ bank_name: string | null; account_number_masked: string | null } | null> {
+  const { data } = await supabase
+    .from("organization_bank_accounts_view")
+    .select("bank_name, account_number_masked")
+    .eq("id", accountId)
+    .maybeSingle();
+  return data ?? null;
 }
 
 async function fetchTransactionTypes(): Promise<TransactionType[]> {
@@ -284,6 +307,45 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
   const typesQuery = useQuery({ queryKey: ["bank-transaction-types-active"], queryFn: fetchTransactionTypes });
 
   const [showImport, setShowImport] = useState(false);
+  // אזהרת אי-התאמה בין החשבון שנבחר לבין החשבון שבקובץ. אזהרה ולא חסימה: יש
+  // קבצים בלי עמודת חשבון בכלל, ויש מקרים שבהם המספר בקובץ כתוב אחרת (עם/בלי
+  // ספרת ביקורת). ההחלטה נשארת של המשתמשת - רק שתהיה מודעת.
+  const [accountMismatch, setAccountMismatch] = useState<string[] | null>(null);
+  // ביטול יבוא - תמיד עם תצוגה מקדימה, כי זו מחיקת תנועות אמת. תנועה שכבר
+  // משתתפת בהתאמה בנקאית לא נמחקת, והמסך אומר זאת במפורש.
+  const [rollbackBatch, setRollbackBatch] = useState<{ id: string; fileName: string } | null>(null);
+  const [rollingBack, setRollingBack] = useState(false);
+  const [rollbackResult, setRollbackResult] = useState<{ deleted: number; kept: number } | null>(null);
+  const rollbackPreviewQuery = useQuery({
+    queryKey: ["bank-rollback-preview", rollbackBatch?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("preview_bank_import_rollback", { p_batch_id: rollbackBatch!.id });
+      if (error) throw error;
+      return (data ?? []) as { transaction_id: string; will_delete: boolean; block_reason: string | null }[];
+    },
+    enabled: !!rollbackBatch,
+  });
+
+  const doRollback = async () => {
+    if (!rollbackBatch) return;
+    setRollingBack(true);
+    const { data, error: err } = await supabase.rpc("rollback_bank_import_batch", { p_batch_id: rollbackBatch.id }).single();
+    setRollingBack(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    const r = data as { deleted_count: number; kept_count: number };
+    setRollbackResult({ deleted: r.deleted_count, kept: r.kept_count });
+    setRollbackBatch(null);
+    queryClient.invalidateQueries({ queryKey: ["bank-batches", accountId] });
+    queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
+  };
+  const selectedAccountQuery = useQuery({
+    queryKey: ["bank-selected-account", accountId],
+    queryFn: () => fetchSelectedAccount(accountId),
+    enabled: !!accountId,
+  });
   const [filter, setFilter] = useState<ClassificationFilter>("all");
   const [previewTab, setPreviewTab] = useState<RowStatus>("valid");
 
@@ -314,6 +376,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
     setDuplicateFileId(null);
     setError(null);
     setHeaderConfirm(null);
+    setAccountMismatch(null);
   };
 
   const handleFileChange = async (selected: File | null) => {
@@ -335,6 +398,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
         return;
       }
       setParsedRows(result.rows);
+      setAccountMismatch(checkAccountMismatch(result.fileAccountNumbers));
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
@@ -352,6 +416,15 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFile, accountId]);
 
+  // מחזירה את מספרי החשבון שבקובץ אם אף אחד מהם אינו החשבון הנבחר, אחרת null.
+  // קובץ בלי עמודת חשבון (דף חשבון ידני) מחזיר null - אין על מה להתריע.
+  const checkAccountMismatch = (fileAccounts: string[]): string[] | null => {
+    const selected = lastFour(selectedAccountQuery.data?.account_number_masked);
+    if (!selected || fileAccounts.length === 0) return null;
+    const matches = fileAccounts.some((a) => lastFour(a) === selected);
+    return matches ? null : fileAccounts;
+  };
+
   const handleHeaderConfirm = async (chosenIndex: number) => {
     if (!headerConfirm || !accountId) return;
     const chosenFile = headerConfirm.file;
@@ -360,6 +433,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
     try {
       const result = await analyzeBankFile(chosenFile, accountId, chosenIndex);
       setParsedRows(result.rows);
+      setAccountMismatch(checkAccountMismatch(result.fileAccountNumbers));
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
     } finally {
@@ -546,6 +620,23 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
               </button>
             </div>
           )}
+          {accountMismatch && (
+            <div className="flex items-start gap-2 rounded-control border border-warn bg-warn-soft p-3 text-sm text-warn-ink">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">הקובץ הזה שייך לחשבון אחר</p>
+                <p className="mt-1">
+                  בקובץ מופיע חשבון{" "}
+                  <span className="font-medium ltr-num">{accountMismatch.join(", ")}</span>, והחשבון שנבחר הוא{" "}
+                  <span className="font-medium">
+                    {selectedAccountQuery.data?.bank_name} <span className="ltr-num">{selectedAccountQuery.data?.account_number_masked}</span>
+                  </span>
+                  . קליטה תשייך את התנועות לחשבון שנבחר - בדקי שזה מה שהתכוונת.
+                </p>
+              </div>
+            </div>
+          )}
+
           {legacyWarning && (
             <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -611,14 +702,67 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
 
       {accountId && (
         <>
+          {rollbackResult && (
+            <div className="mb-3 rounded-control border border-line bg-surface-muted p-3 text-sm text-ink-muted">
+              בוטלו {rollbackResult.deleted} תנועות.
+              {rollbackResult.kept > 0 && ` ${rollbackResult.kept} נשמרו כי הן משתתפות בהתאמה בנקאית.`}
+            </div>
+          )}
+
+          {rollbackBatch && (
+            <div className="card mb-3 space-y-3 border-danger bg-danger-soft p-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+                <div className="text-sm text-ink">
+                  <p className="font-semibold">ביטול יבוא: {rollbackBatch.fileName}</p>
+                  <p className="mt-1">
+                    התנועות שנקלטו ביבוא הזה יימחקו. תנועה שכבר משתתפת בהתאמה בנקאית לא תימחק.
+                  </p>
+                  <p className="mt-2 font-semibold">
+                    {(rollbackPreviewQuery.data ?? []).filter((r) => r.will_delete).length} תנועות יימחקו
+                    {(rollbackPreviewQuery.data ?? []).some((r) => !r.will_delete) &&
+                      `, ${(rollbackPreviewQuery.data ?? []).filter((r) => !r.will_delete).length} יישמרו`}
+                    .
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={doRollback} disabled={rollingBack} className="btn-danger text-xs">
+                  {rollingBack ? "מבטל…" : "אישור ביטול"}
+                </button>
+                <button onClick={() => setRollbackBatch(null)} className="btn-secondary text-xs">
+                  ביטול
+                </button>
+              </div>
+            </div>
+          )}
+
           <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא</h2>
           <DataTable
             columns={[
               { key: "file", header: "קובץ", render: (b: BatchSummary) => b.file_name },
               { key: "count", header: "שורות", className: "tabular", render: (b: BatchSummary) => b.row_count },
-              { key: "valid", header: "תקין / כפילות / שגוי", className: "tabular", render: (b: BatchSummary) => `${b.valid_count} / ${b.duplicate_count} / ${b.invalid_count}` },
+              { key: "valid", header: "תקין / כפילות / שגוי", className: "tabular ltr-num", render: (b: BatchSummary) => `${b.valid_count} / ${b.duplicate_count} / ${b.invalid_count}` },
               { key: "status", header: "סטטוס", render: (b: BatchSummary) => <StatusBadge severity={b.status === "committed" ? "ok" : "medium"} label={BATCH_STATUS_LABEL[b.status]} /> },
               { key: "date", header: "תאריך", className: "tabular", render: (b: BatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+              {
+                key: "rollback",
+                header: "",
+                render: (b: BatchSummary) =>
+                  b.status === "committed" && canImport ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRollbackBatch({ id: b.id, fileName: b.file_name });
+                      }}
+                      className="text-xs text-danger underline"
+                    >
+                      ביטול יבוא
+                    </button>
+                  ) : (
+                    <span className="text-ink-subtle">—</span>
+                  ),
+              },
             ]}
             rows={batchesQuery.data ?? []}
             rowKey={(b: BatchSummary) => b.id}
