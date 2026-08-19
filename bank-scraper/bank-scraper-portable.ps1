@@ -404,6 +404,9 @@ function applyBusinessPortal(scraper, args) {
     // של ודאות. הדפסת השדות היא לא נחמדות - היא מה שיאפשר לקבע את המזהים
     // הנכונים אחרי ההרצה הראשונה, במקום סבב ניחושים.
     const page = this.page;
+    // מתחברים כאן ולא בתחילת ההרצה: זו הנקודה המוקדמת ביותר שבה הדף כבר קיים.
+    // כך נלכדות גם הקריאות שהדשבורד מבצע מיד אחרי הכניסה, ולא רק אלה שבהמתנה.
+    attachApiRecorder(page);
 
     // ממתינים לשדה סיסמה כלשהו במקום ל-#tzId. ‎input[type=password]‎ הוא הדבר
     // היחיד שאפשר להיות בטוחים לגביו בכל עמוד כניסה שהוא.
@@ -484,26 +487,33 @@ function applyBusinessPortal(scraper, args) {
   // אין דרך לנחש את הכתובת הנכונה, ולכן לא מנחשים: מקליטים אילו קריאות הדף
   // עצמו מבצע. הדף העסקי הוא Angular, וכל טעינת מסך בו היא קריאת API - כך
   // שהכתובת האמיתית עוברת מול העיניים ורק צריך לרשום אותה.
+  // ההאזנה מתחברת בהמשך, ולא כאן. ‎scraper.page‎ עדיין אינו קיים ברגע הזה - הדפדפן
+  // נוצר רק בתוך scrape(), ולכן הניסיון להתחבר כאן נכשל ב-"Cannot read properties
+  // of undefined (reading 'on')" והרשימה חזרה ריקה. נתפס בהרצה מול חשבון אמיתי.
   const seenApi = new Map();
-  const page = scraper.page;
-  try {
-    page.on('response', (res) => {
-      try {
-        const url = res.url();
-        if (url.indexOf('telebank.co.il') === -1) return;
-        // רק תשובות JSON: אלה קריאות ה-API. קבצי עיצוב, גופנים ותמונות אינן מעניינות.
-        const ct = String((res.headers() || {})['content-type'] || '');
-        if (!/json/i.test(ct)) return;
-        // רצף ספרות ארוך בכתובת הוא כמעט תמיד מספר חשבון. הפלט הזה נשלח בדואר,
-        // ולצורך זיהוי הכתובת די בצורתה - הערך עצמו מיותר.
-        const shape = url.split('?')[0].replace(/\d{6,}/g, '<מספר>');
-        if (!seenApi.has(shape)) seenApi.set(shape, res.status());
-      } catch (e) { /* תשובה שלא ניתן לקרוא ממנה כותרות - מדלגים */ }
-    });
-  } catch (e) { console.log('  [עסקי] לא ניתן להאזין לקריאות הרשת: ' + e.message); }
+  function attachApiRecorder(page) {
+    if (!page || page.__apiRecorderAttached) return;
+    page.__apiRecorderAttached = true;
+    try {
+      page.on('response', (res) => {
+        try {
+          const url = res.url();
+          if (url.indexOf('telebank.co.il') === -1) return;
+          // רק תשובות JSON: אלה קריאות ה-API. קבצי עיצוב, גופנים ותמונות אינן מעניינות.
+          const ct = String((res.headers() || {})['content-type'] || '');
+          if (!/json/i.test(ct)) return;
+          // רצף ספרות ארוך בכתובת הוא כמעט תמיד מספר חשבון. הפלט הזה נשלח בדואר,
+          // ולצורך זיהוי הכתובת די בצורתה - הערך עצמו מיותר.
+          const shape = url.split('?')[0].replace(/\d{6,}/g, '<מספר>');
+          if (!seenApi.has(shape)) seenApi.set(shape, res.status());
+        } catch (e) { /* תשובה שלא ניתן לקרוא ממנה כותרות - מדלגים */ }
+      });
+    } catch (e) { console.log('  [עסקי] לא ניתן להאזין לקריאות הרשת: ' + e.message); }
+  }
 
   const origFetchData = scraper.fetchData;
   scraper.fetchData = async function () {
+    attachApiRecorder(this.page);
     if (args.show && !businessProbeDone) {
       businessProbeDone = true;
       console.log('');
