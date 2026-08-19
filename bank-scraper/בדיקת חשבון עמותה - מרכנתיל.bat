@@ -5,17 +5,18 @@ REM
 REM  This file must stay pure ASCII, with no "chcp" line - cmd.exe reads a
 REM  batch file by BYTE POSITION, and changing the codepage mid-file breaks
 REM  that bookkeeping on multi-byte characters. All Hebrew is printed by the
-REM  PowerShell script instead.
+REM  PowerShell script instead, which is also why the .ps1 it calls has an
+REM  English filename.
 REM
-REM  What it does:
-REM    1. runs ONLY the mercantile-business connection, with a visible browser
-REM    2. saves the complete output to  business-test-output.txt  next to it
+REM  The logic lives in run-business-test.ps1, not in a long -Command string
+REM  here: an end-of-run marker has to be written INSIDE the transcript, and
+REM  that is easy to get wrong when it is squeezed into one cmd line.
 REM
-REM  The saved file is the whole point: it is what gets sent back for
-REM  diagnosis. Nothing needs to be copied off the screen by hand.
+REM  Output: business-test-output.txt next to this file. That file is what
+REM  gets sent back for diagnosis - nothing needs copying off the screen.
 REM ============================================================================
 
-powershell -ExecutionPolicy Bypass -NoProfile -Command "$ErrorActionPreference='Continue'; Start-Transcript -Path '%~dp0business-test-output.txt' -Force | Out-Null; try { & '%~dp0bank-scraper-portable.ps1' -Bank mercantile-business -Show } catch { Write-Host ('FAILED: ' + $_.Exception.Message) } finally { Stop-Transcript | Out-Null }; Write-Host ''; Write-Host 'the full output was saved to:' -ForegroundColor Cyan; Write-Host '%~dp0business-test-output.txt' -ForegroundColor Cyan"
+powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0run-business-test.ps1"
 
 echo.
 pause
