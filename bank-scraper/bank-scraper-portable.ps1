@@ -26,6 +26,14 @@
   WHERE LOGIN DETAILS GO
      On first run it creates  .\secrets\<bank>.json  with the exact fields each
      bank needs. Fill them in and run again. (See the fields list below.)
+
+  TWO ORGANISATIONS AT THE SAME BANK
+     Every file in .\secrets is ONE login. To add a second login to the same
+     bank, copy the file and add "__" plus any label:
+        secrets\mercantile.json            -> first organisation
+        secrets\mercantile__org-b.json     -> second organisation
+     Each login gets its own password file, its own browser profile and its own
+     output file, so the two never mix. Nothing else needs changing.
 ================================================================================
 #>
 
@@ -33,7 +41,9 @@
 param(
     # תיקיית הפלט. ברירת המחדל: out\report לצד הקובץ הזה.
     [string] $OutDir,
-    # בנק בודד (hapoalim / leumi / mizrahi / discount / pagi / mercantile / beinleumi).
+    # בנק בודד (hapoalim / leumi / mizrahi / discount / pagi / mercantile / beinleumi),
+    # או מפתח של כניסה מסוימת כשיש לאותו בנק כמה - למשל mercantile__עמותה ב.
+    # שם בנק בוחר את *כל* הכניסות שלו.
     [string] $Bank,
     # כמה ימים אחורה למשוך. ברירת המחדל: 45.
     [ValidateRange(1, 3650)]
@@ -389,16 +399,66 @@ function parseArgs(argv) {
   return a;
 }
 
-function loadCreds(key, cfg) {
+// ===== חיבורים: כניסה אחת לכל קובץ סיסמאות =====
+// היחידה האמיתית אינה "בנק" אלא "כניסה". לעמותה יש כניסה משלה, ושתי עמותות
+// באותו בנק הן שתי כניסות נפרדות לגמרי - סיסמה נפרדת, פרופיל דפדפן נפרד וקובץ
+// פלט נפרד.
+//
+// המפתח נקבע משם הקובץ ב-secrets, ולא מרשימה בקוד:
+//     mercantile.json              -> מרכנתיל
+//     mercantile__עמותה ב.json     -> מרכנתיל, כניסה שנייה
+// מה שלפני '__' הוא שם הבנק, ומה שאחריו הוא תווית חופשית להבדלה.
+//
+// למה לפי שם קובץ ולא קובץ הגדרות: קובץ הגדרות הוא עוד קובץ שאפשר לשבור בו
+// תחביר, ותקלה אחת בו מפילה את כל החיבורים. שגיאה בשם קובץ מפילה חיבור אחד,
+// עם הודעה שאומרת בדיוק מה לא זוהה. הוספת עמותה = העתקת קובץ ושינוי שמו.
+const CONNECTION_SEPARATOR = '__';
+
+// פרופיל דפדפן נפרד לכל כניסה הוא חובה ולא נוחות: שתי כניסות לאותו בנק שחולקות
+// פרופיל אחד פירושן שהבנק רואה את העוגיות של משתמש א' בזמן שמשתמש ב' מתחבר -
+// וזה בדיוק מה שמוביל את הבנק להקשיח אימות ולדרוש SMS. הפרופיל נגזר מהמפתח,
+// ולכן מפתח נפרד פותר את זה מעצמו (ר' scrapeOne).
+
+// תבנית ריקה לכל בנק מופעל, כדי שתיקיית secrets תראה מה זמין. נפרד מקריאת
+// הפרטים: החיפוש אחר חיבורים סורק קבצים קיימים, וקריאה שיוצרת קבצים תוך כדי
+// סריקה היא בדיוק סוג הדבר שקשה לעקוב אחריו.
+function ensureTemplates() {
   fs.mkdirSync(SECRETS_DIR, { recursive: true });
-  const file = path.join(SECRETS_DIR, key + '.json');
-  if (!fs.existsSync(file)) {
+  for (const [key, cfg] of Object.entries(BANKS)) {
+    if (!cfg.enabled) continue;
+    const file = path.join(SECRETS_DIR, key + '.json');
+    if (fs.existsSync(file)) continue;
     const template = {};
     for (const f of cfg.fields) template[f] = '';
     fs.writeFileSync(file, JSON.stringify(template, null, 2) + '\n', 'utf8');
     console.log('  [setup] created blank ' + file + ' — fill in ' + cfg.fields.join(' + ') + ' and re-run.');
-    return null;
   }
+}
+
+function discoverConnections() {
+  ensureTemplates();
+  const conns = [];
+  for (const file of fs.readdirSync(SECRETS_DIR).sort()) {
+    if (!file.toLowerCase().endsWith('.json')) continue;
+    const key = file.slice(0, -5);
+    const sep = key.indexOf(CONNECTION_SEPARATOR);
+    const bank = sep === -1 ? key : key.slice(0, sep);
+    const label = sep === -1 ? '' : key.slice(sep + CONNECTION_SEPARATOR.length).trim();
+    const cfg = BANKS[bank];
+    if (!cfg) {
+      // הודעה מפורטת ולא "דילגנו": קובץ בשם שגוי הוא עמותה שלא תימשך, וזה חייב
+      // להיראות. השם התקין מוצג במפורש כדי שלא יצטרכו לנחש אותו.
+      console.log("  [skip] " + file + " - '" + bank + "' אינו בנק מוכר. שמות תקינים: " + Object.keys(BANKS).join(', '));
+      console.log("         לכניסה נוספת לאותו בנק: <בנק>" + CONNECTION_SEPARATOR + "<תווית>.json, למשל mercantile" + CONNECTION_SEPARATOR + "עמותה ב.json");
+      continue;
+    }
+    conns.push({ key: key, bank: bank, cfg: cfg, display: label ? cfg.display + ' / ' + label : cfg.display });
+  }
+  return conns;
+}
+
+function loadCreds(key, cfg) {
+  const file = path.join(SECRETS_DIR, key + '.json');
   let creds;
   try {
     // מסירים BOM אם קיים: פנקס רשימות עלול להוסיף אותו בשמירה, ואז JSON.parse נופל
@@ -576,18 +636,29 @@ async function scrapeOne(key, cfg, creds, args) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  if (args.help) { console.log('usage: node scrape-banks.js [--bank <key>] [--show] [--days N] [--out <folder>]'); console.log('banks:', Object.keys(BANKS).join(', ')); return; }
-  if (args.bank && !BANKS[args.bank]) { console.error("unknown bank '" + args.bank + "'. known: " + Object.keys(BANKS).join(', ')); process.exitCode = 1; return; }
-  // --bank גובר במכוון על דגל enabled (נוח להרצה חד-פעמית של בנק כבוי בלי לערוך
-  // את הקובץ) - אבל אומרים זאת בקול רם במקום לרוץ בשקט.
-  if (args.bank && !BANKS[args.bank].enabled) {
-    console.log("note: '" + args.bank + "' is disabled in BANKS, running it anyway because --bank was given explicitly.");
+  if (args.help) { console.log('usage: node scrape-banks.js [--bank <connection>] [--show] [--days N] [--out <folder>]'); console.log('banks:', Object.keys(BANKS).join(', ')); return; }
+
+  const all = discoverConnections();
+  if (!all.length) { console.error('no connections found in ' + SECRETS_DIR + '.'); process.exitCode = 1; return; }
+
+  // --bank מקבל גם שם בנק וגם מפתח חיבור מלא. שם בנק בוחר את *כל* הכניסות של
+  // אותו בנק - כך ש'--bank mercantile' ממשיך להתנהג כמצופה גם כשיש לו שתיים.
+  const targets = args.bank ? all.filter((c) => c.key === args.bank || c.bank === args.bank) : all;
+  if (!targets.length) {
+    console.error("unknown connection '" + args.bank + "'. known: " + all.map((c) => c.key).join(', '));
+    process.exitCode = 1; return;
   }
-  const targets = Object.entries(BANKS).filter(([k, v]) => (args.bank ? k === args.bank : v.enabled));
-  if (!targets.length) { console.error('no banks enabled.'); process.exitCode = 1; return; }
+
+  // הדפסת רשימת החיבורים לפני ההרצה. עמותה שלא נמשכה כי שם הקובץ שלה שגוי היא
+  // תקלה שקטה מדי - הרשימה הזו הופכת אותה לגלויה בלי לחפש אותה בלוג.
+  console.log('נמצאו ' + all.length + ' כניסות ב-' + SECRETS_DIR + ':');
+  for (const c of all) console.log('  - ' + c.display + '  (' + c.key + ')' + (targets.includes(c) ? '' : '   [לא בהרצה הזו]'));
+  console.log('');
+
   const combined = {}; const summary = []; let hadError = false; let createdTemplate = false;
-  for (const [key, cfg] of targets) {
-    console.log('==== ' + cfg.display + ' (' + key + ') ====');
+  for (const conn of targets) {
+    const key = conn.key; const cfg = conn.cfg;
+    console.log('==== ' + conn.display + ' (' + key + ') ====');
     const creds = loadCreds(key, cfg);
     if (!creds) { createdTemplate = true; continue; }
     // סימון "היה מגע עם הבנק". נכתב *לפני* ההתחברות, ולכן עצם קיומו מעיד שניגשנו
@@ -600,12 +671,12 @@ async function main() {
     } catch (e) { /* אם לא ניתן לכתוב - המתזמן ינהג כאילו היה מגע (ברירת מחדל זהירה) */ }
     try {
       const accounts = await scrapeOne(key, cfg, creds, args);
-      const packet = toPacket(cfg.display, accounts);
+      const packet = toPacket(conn.display, accounts);
       const { jpath, cpath } = writeOutputs(args.out, key, packet);
       combined[key] = packet;
-      summary.push([cfg.display, packet.bank_transactions.length, packet.bank_balance, null, packet.dedup, packet.skipped, packet.by_account]);
+      summary.push([conn.display, packet.bank_transactions.length, packet.bank_balance, null, packet.dedup, packet.skipped, packet.by_account]);
       console.log('  -> ' + jpath); console.log('  -> ' + cpath);
-    } catch (e) { hadError = true; summary.push([cfg.display, 0, null, e.message, null, null, null]); console.error('  ERROR: ' + e.message); }
+    } catch (e) { hadError = true; summary.push([conn.display, 0, null, e.message, null, null, null]); console.error('  ERROR: ' + e.message); }
   }
   if (Object.keys(combined).length) {
     fs.mkdirSync(args.out, { recursive: true });
