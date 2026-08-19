@@ -511,31 +511,151 @@ function applyBusinessPortal(scraper, args) {
     } catch (e) { console.log('  [עסקי] לא ניתן להאזין לקריאות הרשת: ' + e.message); }
   }
 
-  const origFetchData = scraper.fetchData;
+  // המשיכה עצמה. הכתובות התגלו בהקלטה מול חשבון אמיתי, ואינן ניחוש:
+  //
+  //   חשבונות   פרטי:  /Titan/gatewayAPI/userAccountsData
+  //             עסקי:  /Titan/gatewayAPI/userAccounts/bsUserAccountsData
+  //   תנועות    פרטי:  /Titan/gatewayAPI/lastTransactions/<חשבון>/Date
+  //             עסקי:  /Titan/gatewayAPI/lastTransactions/transactions/<חשבון>/ByDate
+  //
+  // אותו שרת ואותו בסיס, נתיבים שונים. זו הסיבה שהקריאה הפרטית החזירה את
+  // ה-SPA של עמוד הכניסה עם סטטוס 200: נתיב לא מוכר נופל לנתיב-סל.
   scraper.fetchData = async function () {
-    attachApiRecorder(this.page);
-    if (args.show && !businessProbeDone) {
-      businessProbeDone = true;
-      console.log('');
-      console.log('  [עסקי] ------------------------------------------------------------');
-      console.log('  [עסקי] הכניסה הצליחה. נותרה שאלה אחת: מאיזו כתובת נמשכות התנועות.');
-      console.log('  [עסקי] בחלון הדפדפן שנפתח, לחצו עכשיו:  עו"ש  ->  תנועות אחרונות');
-      console.log('  [עסקי] מקליט 90 שניות. אין צורך לעשות דבר מעבר לזה.');
-      console.log('  [עסקי] ------------------------------------------------------------');
-      await new Promise((resolve) => setTimeout(resolve, 90000));
-      console.log('  [עסקי] ההקלטה הסתיימה.');
-    }
+    const page = this.page;
+    attachApiRecorder(page);
     try {
-      return await origFetchData.call(this);
-    } finally {
-      // מודפס גם בהצלחה וגם בכישלון: בכישלון זו הדרך לתקן, ובהצלחה זה אישור
-      // שהכתובת שבה השתמשנו היא אכן זו שהדף עצמו משתמש בה.
+      const accounts = await fetchBusinessAccounts(page, this.options);
+      return { success: true, accounts: accounts };
+    } catch (e) {
+      // כישלון כאן פירושו שמבנה התשובה שונה ממה שנקרא. במצב גלוי נותנים חלון
+      // הקלטה כדי לאסוף עוד כתובות ומבנים - זה מה שהופך סבב נוסף למועיל במקום
+      // לניחוש. בהרצה אוטומטית לא ממתינים לאיש.
+      console.log('  [עסקי] משיכת הנתונים נכשלה: ' + e.message);
+      if (args.show && !businessProbeDone) {
+        businessProbeDone = true;
+        console.log('  [עסקי] ------------------------------------------------------------');
+        console.log('  [עסקי] בחלון הדפדפן, לחצו עכשיו:  עו"ש  ->  תנועות אחרונות');
+        console.log('  [עסקי] מקליט 90 שניות כדי לאסוף את הכתובות בפועל.');
+        console.log('  [עסקי] ------------------------------------------------------------');
+        await new Promise((resolve) => setTimeout(resolve, 90000));
+        console.log('  [עסקי] ההקלטה הסתיימה.');
+      }
       console.log('  [עסקי] כתובות API שנצפו בסשן (' + seenApi.size + '):');
       const rows = Array.from(seenApi.keys()).sort();
       for (const url of rows) console.log('      ' + seenApi.get(url) + '  ' + url);
       if (!rows.length) console.log('      (לא נצפתה אף קריאת JSON - ייתכן שלא נפתח אף מסך בדפדפן)');
+      throw e;
     }
   };
+}
+
+const BIZ_API = 'https://start.telebank.co.il/Titan/gatewayAPI';
+
+// חיפוש לעומק אחר ערכים תחת שמות שדה מסוימים. במכוון ולא נתיב קשיח: מבנה
+// התשובה של המערכת העסקית אינו מתועד, ושם השדה יציב הרבה יותר מהעץ שסביבו.
+function collectByKey(node, names, out, depth) {
+  if (!node || typeof node !== 'object' || (depth || 0) > 8) return out;
+  if (Array.isArray(node)) {
+    for (const item of node) collectByKey(item, names, out, (depth || 0) + 1);
+    return out;
+  }
+  for (const key of Object.keys(node)) {
+    const value = node[key];
+    if (names.indexOf(key) !== -1 && (typeof value === 'string' || typeof value === 'number')) {
+      const s = String(value).trim();
+      if (s && out.indexOf(s) === -1) out.push(s);
+    }
+    collectByKey(value, names, out, (depth || 0) + 1);
+  }
+  return out;
+}
+
+// המערך הראשון שאיבריו נראים כמו תנועות. מזוהה לפי שמות שדה ולא לפי מיקום.
+function findTransactionArray(node, depth) {
+  if (!node || typeof node !== 'object' || (depth || 0) > 8) return null;
+  if (Array.isArray(node)) {
+    if (node.length && node[0] && typeof node[0] === 'object' &&
+        ('OperationNumber' in node[0] || 'OperationDate' in node[0] || 'OperationAmount' in node[0])) {
+      return node;
+    }
+    for (const item of node) {
+      const hit = findTransactionArray(item, (depth || 0) + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  for (const key of Object.keys(node)) {
+    const hit = findTransactionArray(node[key], (depth || 0) + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function bizToDateString(d) {
+  const p = (n) => (n < 10 ? '0' + n : '' + n);
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+}
+
+// המרה לצורת התנועה של הספרייה, זהה ל-convertTransactions שב-discount.js:
+// כך שאר הצינור (toRows/toPacket) ממשיך לעבוד בלי לדעת שהמקור עסקי.
+function bizConvertTxns(entries, status) {
+  const parse = (v) => {
+    const s = String(v == null ? '' : v);
+    if (!/^\d{8}$/.test(s)) return null;
+    return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8) + 'T00:00:00.000Z';
+  };
+  return (entries || []).map((t) => ({
+    type: 'normal',
+    identifier: t.OperationNumber,
+    date: parse(t.OperationDate),
+    processedDate: parse(t.ValueDate) || parse(t.OperationDate),
+    originalAmount: t.OperationAmount,
+    originalCurrency: 'ILS',
+    chargedAmount: t.OperationAmount,
+    description: t.OperationDescriptionToDisplay || t.OperationDescription,
+    status: status,
+  })).filter((t) => t.date);
+}
+
+async function fetchBusinessAccounts(page, options) {
+  const { fetchGetWithinPage } = require('israeli-bank-scrapers/lib/helpers/fetch');
+
+  const info = await fetchGetWithinPage(page, BIZ_API + '/userAccounts/bsUserAccountsData');
+  const numbers = collectByKey(info, ['AccountID', 'AccountNumber', 'accountNumber'], []);
+  if (!numbers.length) {
+    // לא זורקים "לא נמצאו חשבונות" בלי לומר מה כן חזר. שמות השדות בלבד -
+    // הפלט נשלח בדואר, והערכים הם נתוני חשבון.
+    const keys = info && typeof info === 'object' ? Object.keys(info).join(', ') : String(info);
+    throw new Error('לא זוהו מספרי חשבון בתשובת bsUserAccountsData. שדות עליונים: ' + keys);
+  }
+  console.log('  [עסקי] זוהו ' + numbers.length + ' חשבונות.');
+
+  const defaultStart = new Date();
+  defaultStart.setFullYear(defaultStart.getFullYear() - 1);
+  defaultStart.setDate(defaultStart.getDate() + 2);
+  const start = options && options.startDate && options.startDate > defaultStart ? options.startDate : defaultStart;
+  const fromDate = bizToDateString(start);
+
+  const accounts = [];
+  for (const accountNumber of numbers) {
+    const url = BIZ_API + '/lastTransactions/transactions/' + encodeURIComponent(accountNumber) + '/ByDate'
+      + '?IsCategoryDescCode=True&IsTransactionDetails=True&IsEventNames=True&IsFutureTransactionFlag=True'
+      + '&FromDate=' + fromDate;
+    const res = await fetchGetWithinPage(page, url);
+    const entries = findTransactionArray(res);
+    if (!entries) {
+      const keys = res && typeof res === 'object' ? Object.keys(res).join(', ') : String(res);
+      throw new Error('לא זוהה מערך תנועות בתשובת ByDate. שדות עליונים: ' + keys);
+    }
+    const balances = collectByKey(res, ['AccountBalance', 'CurrentBalance', 'Balance'], []);
+    accounts.push({
+      accountNumber: accountNumber,
+      balance: balances.length ? Number(balances[0]) : null,
+      txns: bizConvertTxns(entries, 'completed'),
+    });
+    console.log('  [עסקי] חשבון ' + accountNumber + ': ' + entries.length + ' תנועות.');
+  }
+  return accounts;
 }
 
 // ===== which banks to scrape (enable/disable here) =====
