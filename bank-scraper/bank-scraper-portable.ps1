@@ -636,16 +636,33 @@ async function fetchBusinessAccounts(page, options) {
   const start = options && options.startDate && options.startDate > defaultStart ? options.startDate : defaultStart;
   const fromDate = bizToDateString(start);
 
+  // חשבון שנכשל מדלג ואינו מפיל את השאר. נתפס בשטח: מתוך ארבעה חשבונות
+  // הראשון החזיר 44 תנועות והשני החזיר Error - ומכיוון שהשגיאה נזרקה, גם 44
+  // התנועות שכבר היו ביד נזרקו איתה. הרשימה מ-bsUserAccountsData כוללת גם
+  // מוצרים שאינם עובר-ושב (פיקדונות, הלוואות, ניירות ערך), ולאלה אין תנועות
+  // עו"ש - כישלון עליהם הוא הצפוי, לא החריג.
   const accounts = [];
+  const skipped = [];
   for (const accountNumber of numbers) {
     const url = BIZ_API + '/lastTransactions/transactions/' + encodeURIComponent(accountNumber) + '/ByDate'
       + '?IsCategoryDescCode=True&IsTransactionDetails=True&IsEventNames=True&IsFutureTransactionFlag=True'
       + '&FromDate=' + fromDate;
-    const res = await fetchGetWithinPage(page, url);
-    const entries = findTransactionArray(res);
+    let entries = null;
+    let res = null;
+    try {
+      res = await fetchGetWithinPage(page, url);
+      entries = findTransactionArray(res);
+    } catch (e) {
+      skipped.push(accountNumber + ' (' + maskNumbers(e.message).slice(0, 120) + ')');
+      continue;
+    }
     if (!entries) {
-      const keys = res && typeof res === 'object' ? Object.keys(res).join(', ') : String(res);
-      throw new Error('לא זוהה מערך תנועות בתשובת ByDate. שדות עליונים: ' + keys);
+      // הודעת הבנק עצמה, אם יש - היא אומרת *למה* לא היו תנועות, וזה שימושי
+      // הרבה יותר מ"נכשל". ממוסך מרצפי ספרות, כמו כל שאר הפלט.
+      const err = res && res.Error;
+      const why = err ? String(err.MsgText || err.ErrorText || err.MsgCode || Object.keys(err).join(',')) : (res && typeof res === 'object' ? 'שדות: ' + Object.keys(res).join(', ') : String(res));
+      skipped.push(accountNumber + ' (' + maskNumbers(why).slice(0, 120) + ')');
+      continue;
     }
     const balances = collectByKey(res, ['AccountBalance', 'CurrentBalance', 'Balance'], []);
     accounts.push({
@@ -655,7 +672,19 @@ async function fetchBusinessAccounts(page, options) {
     });
     console.log('  [עסקי] חשבון ' + accountNumber + ': ' + entries.length + ' תנועות.');
   }
+
+  for (const s of skipped) console.log('  [עסקי] דולג: ' + s);
+
+  // רק כשאף חשבון לא הצליח זו באמת תקלה שצריך לדעת עליה.
+  if (!accounts.length) {
+    throw new Error('אף אחד מ-' + numbers.length + ' החשבונות לא החזיר תנועות. ' + (skipped[0] || ''));
+  }
   return accounts;
+}
+
+// מיסוך רצפי ספרות ארוכים בטקסט חופשי שמגיע מהבנק. הפלט נשלח בדואר.
+function maskNumbers(s) {
+  return String(s == null ? '' : s).replace(/\d{6,}/g, '<מספר>');
 }
 
 // ===== which banks to scrape (enable/disable here) =====
