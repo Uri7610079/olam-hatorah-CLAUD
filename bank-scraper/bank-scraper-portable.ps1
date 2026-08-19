@@ -67,6 +67,14 @@ $ErrorActionPreference = 'Stop'
 # יוצא ג'יבריש בקונסולה. עטוף ב-try כי במארחים מסוימים אין קונסולה אמיתית.
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
+# מספר גרסה, מודפס בכל הרצה.
+#
+# הסיבה שהוא קיים: הסקרייפר מועתק ידנית למחשב הלקוח, וכשההעתקה לא מתבצעת
+# ההרצה נראית בדיוק כמו קודם - אותו פלט, אותן שגיאות. סבב שלם התבזבז על
+# ניתוח הרצה של קוד ישן, בלי שלאיש הייתה דרך לדעת. עכשיו אפשר לראות במבט
+# אחד אם ההעתקה נקלטה.
+$ScraperVersion = '2026-08-19.4  (משיכה מהמערכת העסקית + ניסיון חוזר על ניווט)'
+
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runtime = Join-Path $Root 'runtime'
 New-Item -ItemType Directory -Force -Path $Runtime | Out-Null
@@ -1252,6 +1260,7 @@ try {
 
     Write-Step 'Bank scraper — self-provisioning bootstrap'
     Write-Host "  working folder: $Root"
+    Write-Host "  גרסה: $ScraperVersion" -ForegroundColor Cyan
     New-SettingsFile
     Ensure-Node
     Ensure-Deps
