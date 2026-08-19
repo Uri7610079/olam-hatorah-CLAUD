@@ -492,8 +492,16 @@ const BANKS = {
   // שני שדות בלבד, ולא שלושה כמו בפרטי: בטופס העסקי אין "קוד משתמש" (‎#aidnum‎)
   // אלא "מספר זהות" וסיסמה בלבד. דרישת שדה שלישי הייתה חוסמת את הקליטה עוד
   // לפני שנגענו בבנק, בהודעה שמבקשת ערך שאין לו מקור.
-  'mercantile-business': { enabled: false, company: CompanyTypes.mercantile, display: 'מרכנתיל - עסקי (ניסיוני)',  fields: ['id', 'password'], portal: 'business' },
-  'discount-business':   { enabled: false, company: CompanyTypes.discount,   display: 'דיסקונט - עסקי (ניסיוני)', fields: ['id', 'password'], portal: 'business' },
+  //
+  // ‎enabled: true‎ למרכנתיל העסקי: ההנחיה הקודמת הייתה "להעתיק את mercantile.json
+  // ולשנות שם", וזה ייצר קובץ עסקי עם שדה num מיותר - שדה שאין לו מקור בטופס
+  // העסקי, ושהצריך הסבר למה להתעלם ממנו. תבנית שנוצרת נכון מלכתחילה מוציאה את
+  // כל הבלבול הזה מהתמונה. תבנית ריקה נדלגת בשקט, ולכן היא אינה מפריעה למי
+  // שאינו משתמש בה.
+  'mercantile-business': { enabled: true,  company: CompanyTypes.mercantile, display: 'מרכנתיל - עסקי (ניסיוני)',  fields: ['id', 'password'], portal: 'business',
+                           templateNote: 'המערכת העסקית (חשבון עמותה). id = מספר העמותה. אין כאן קוד משתמש.' },
+  'discount-business':   { enabled: false, company: CompanyTypes.discount,   display: 'דיסקונט - עסקי (ניסיוני)', fields: ['id', 'password'], portal: 'business',
+                           templateNote: 'המערכת העסקית (חשבון עמותה). id = מספר העמותה. אין כאן קוד משתמש.' },
 };
 
 // Login details: one JSON file per bank, created blank on first run.
@@ -575,6 +583,9 @@ function ensureTemplates() {
     const file = path.join(SECRETS_DIR, key + '.json');
     if (fs.existsSync(file)) continue;
     const template = {};
+    // ל-JSON אין הערות, ולכן ההסבר נכנס כשדה. loadCreds קורא רק את מה שרשום
+    // ב-cfg.fields, כך שהשדה הזה נקרא בעין ומתעלמים ממנו בקוד.
+    if (cfg.templateNote) template['_הסבר'] = cfg.templateNote;
     for (const f of cfg.fields) template[f] = '';
     fs.writeFileSync(file, JSON.stringify(template, null, 2) + '\n', 'utf8');
     console.log('  [setup] created blank ' + file + ' — fill in ' + cfg.fields.join(' + ') + ' and re-run.');
