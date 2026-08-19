@@ -24,7 +24,15 @@ param()
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+# הקובץ יושב בתיקיית האבחון; תיקיית הסיסמאות שייכת לסקרייפר, רמה אחת מעל.
+# חשוב שתישאר שם: מחיקת תיקיית האבחון אסור שתיקח איתה את הסיסמאות.
+$ToolsRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent $ToolsRoot
+if (-not (Test-Path -LiteralPath (Join-Path $Root 'bank-scraper-portable.ps1'))) {
+    Write-Host "שגיאה: לא נמצא bank-scraper-portable.ps1 בתיקייה $Root" -ForegroundColor Red
+    Write-Host 'ודאו שתיקיית "כלי אבחון" נמצאת בתוך תיקיית הסקרייפר ולא הועברה החוצה.' -ForegroundColor Red
+    exit 1
+}
 $Secrets = Join-Path $Root 'secrets'
 New-Item -ItemType Directory -Force -Path $Secrets | Out-Null
 

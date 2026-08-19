@@ -27,12 +27,18 @@ param(
 $ErrorActionPreference = 'Continue'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+# הקובץ הזה יושב בתיקיית האבחון, והסקרייפר יושב בתיקייה שמעליה. שתי רמות
+# נפרדות בכוונה: את תיקיית האבחון אפשר למחוק בשלמותה בלי לגעת בכלום מהמנוע.
+$ToolsRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent $ToolsRoot
 $Scraper = Join-Path $Root 'bank-scraper-portable.ps1'
+# הפלט נשמר לצד הסקרייפר ולא בתיקיית האבחון, כדי שמחיקת התיקייה לא תיקח
+# איתה את הקובץ שצריך לשלוח.
 $LogFile = Join-Path $Root 'business-test-output.txt'
 
 if (-not (Test-Path -LiteralPath $Scraper)) {
     Write-Host "שגיאה: לא נמצא bank-scraper-portable.ps1 בתיקייה $Root" -ForegroundColor Red
+    Write-Host 'ודאו שתיקיית "כלי אבחון" נמצאת בתוך תיקיית הסקרייפר ולא הועברה החוצה.' -ForegroundColor Red
     exit 1
 }
 
