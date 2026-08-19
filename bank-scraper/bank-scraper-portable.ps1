@@ -620,8 +620,17 @@ function bizConvertTxns(entries, status) {
 async function fetchBusinessAccounts(page, options) {
   const { fetchGetWithinPage } = require('israeli-bank-scrapers/lib/helpers/fetch');
 
+  // המתנה קצרה לפני הקריאה הראשונה. מיד אחרי הכניסה הדף העסקי עדיין טוען
+  // מסכים ומנווט בעצמו, וקריאה באמצע ניווט נכשלת ב-"Execution context was
+  // destroyed". זול יותר לחכות שנייה מאשר לאבד חשבון.
+  await new Promise((r) => setTimeout(r, 2000));
+
   const info = await fetchGetWithinPage(page, BIZ_API + '/userAccounts/bsUserAccountsData');
-  const numbers = collectByKey(info, ['AccountID', 'AccountNumber', 'accountNumber'], []);
+  // ‎AccountID‎ קודם ולבדו. השמות הרחבים יותר תופסים גם מספרי סניף ומזהי מוצר -
+  // נתפס בשטח, כשלצד שני חשבונות בני עשר ספרות נאספו גם '016938' ו-'040901',
+  // ששניהם החזירו שגיאה מהבנק. נופלים אליהם רק כשהשם המדויק לא החזיר דבר.
+  let numbers = collectByKey(info, ['AccountID'], []);
+  if (!numbers.length) numbers = collectByKey(info, ['AccountNumber', 'accountNumber'], []);
   if (!numbers.length) {
     // לא זורקים "לא נמצאו חשבונות" בלי לומר מה כן חזר. שמות השדות בלבד -
     // הפלט נשלח בדואר, והערכים הם נתוני חשבון.
@@ -649,11 +658,27 @@ async function fetchBusinessAccounts(page, options) {
       + '&FromDate=' + fromDate;
     let entries = null;
     let res = null;
-    try {
-      res = await fetchGetWithinPage(page, url);
-      entries = findTransactionArray(res);
-    } catch (e) {
-      skipped.push(accountNumber + ' (' + maskNumbers(e.message).slice(0, 120) + ')');
+    let lastError = null;
+    // ניסיונות חוזרים על שגיאה חולפת. "Execution context was destroyed" פירושה
+    // שהדף ניווט בזמן שקראנו ממנו - זה קורה כשמישהו לוחץ בחלון הגלוי תוך כדי
+    // הרצה, וגם מעברי מסך שהאתר עושה מעצמו אחרי הכניסה. נתפס בשטח: חשבון עם
+    // 44 תנועות אמיתיות דולג בגלל זה, אף שהנתונים היו זמינים לחלוטין.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        res = await fetchGetWithinPage(page, url);
+        entries = findTransactionArray(res);
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e;
+        const transient = /Execution context was destroyed|detached Frame|Target closed|Session closed|Navigating frame/i.test(e.message || '');
+        if (!transient || attempt === 3) break;
+        console.log('  [עסקי] חשבון ' + accountNumber + ': הדף ניווט תוך כדי קריאה, מנסה שוב (' + attempt + '/3).');
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+    }
+    if (lastError) {
+      skipped.push(accountNumber + ' (' + maskNumbers(lastError.message).slice(0, 120) + ')');
       continue;
     }
     if (!entries) {
