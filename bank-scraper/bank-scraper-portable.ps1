@@ -365,6 +365,10 @@ const { LoginResults } = require('israeli-bank-scrapers/lib/scrapers/base-scrape
 // (נראה בפועל: ‎/apollo/business2/#/OSH_LENTRIES_ALTAMIRA‎).
 const BUSINESS_PORTAL_URL = /^https:\/\/start\.telebank\.co\.il\/apollo\/business\d*(\/|#|$)/i;
 
+// ההמתנה לניווט ידני נעשית פעם אחת בלבד גם כשיש כמה עמותות: המטרה היא לגלות
+// את כתובת ה-API, וכתובת אחת מספיקה. שלוש המתנות היו מוסיפות ארבע דקות לחינם.
+let businessProbeDone = false;
+
 function applyBusinessPortal(scraper, args) {
   const origGetLoginOptions = scraper.getLoginOptions;
   // השמה על המופע מסתירה את מתודת הפרוטוטייפ רק עבור הסקרייפר הזה. ‎super‎ שבתוך
@@ -468,6 +472,59 @@ function applyBusinessPortal(scraper, args) {
     };
 
     return o;
+  };
+
+  // ===== איתור כתובת ה-API של המערכת העסקית =====
+  //
+  // הכניסה עובדת, אבל משיכת הנתונים נכשלת: הספרייה פונה ל-‎/Titan/gatewayAPI/
+  // userAccountsData‎, שהיא הכתובת של המערכת *הפרטית*, ומקבלת חזרה HTML במקום
+  // JSON ("Unexpected token '<', \"<!doctype\""). כלומר הכתובת הזו אינה קיימת
+  // או אינה מורשית בסשן עסקי.
+  //
+  // אין דרך לנחש את הכתובת הנכונה, ולכן לא מנחשים: מקליטים אילו קריאות הדף
+  // עצמו מבצע. הדף העסקי הוא Angular, וכל טעינת מסך בו היא קריאת API - כך
+  // שהכתובת האמיתית עוברת מול העיניים ורק צריך לרשום אותה.
+  const seenApi = new Map();
+  const page = scraper.page;
+  try {
+    page.on('response', (res) => {
+      try {
+        const url = res.url();
+        if (url.indexOf('telebank.co.il') === -1) return;
+        // רק תשובות JSON: אלה קריאות ה-API. קבצי עיצוב, גופנים ותמונות אינן מעניינות.
+        const ct = String((res.headers() || {})['content-type'] || '');
+        if (!/json/i.test(ct)) return;
+        // רצף ספרות ארוך בכתובת הוא כמעט תמיד מספר חשבון. הפלט הזה נשלח בדואר,
+        // ולצורך זיהוי הכתובת די בצורתה - הערך עצמו מיותר.
+        const shape = url.split('?')[0].replace(/\d{6,}/g, '<מספר>');
+        if (!seenApi.has(shape)) seenApi.set(shape, res.status());
+      } catch (e) { /* תשובה שלא ניתן לקרוא ממנה כותרות - מדלגים */ }
+    });
+  } catch (e) { console.log('  [עסקי] לא ניתן להאזין לקריאות הרשת: ' + e.message); }
+
+  const origFetchData = scraper.fetchData;
+  scraper.fetchData = async function () {
+    if (args.show && !businessProbeDone) {
+      businessProbeDone = true;
+      console.log('');
+      console.log('  [עסקי] ------------------------------------------------------------');
+      console.log('  [עסקי] הכניסה הצליחה. נותרה שאלה אחת: מאיזו כתובת נמשכות התנועות.');
+      console.log('  [עסקי] בחלון הדפדפן שנפתח, לחצו עכשיו:  עו"ש  ->  תנועות אחרונות');
+      console.log('  [עסקי] מקליט 90 שניות. אין צורך לעשות דבר מעבר לזה.');
+      console.log('  [עסקי] ------------------------------------------------------------');
+      await new Promise((resolve) => setTimeout(resolve, 90000));
+      console.log('  [עסקי] ההקלטה הסתיימה.');
+    }
+    try {
+      return await origFetchData.call(this);
+    } finally {
+      // מודפס גם בהצלחה וגם בכישלון: בכישלון זו הדרך לתקן, ובהצלחה זה אישור
+      // שהכתובת שבה השתמשנו היא אכן זו שהדף עצמו משתמש בה.
+      console.log('  [עסקי] כתובות API שנצפו בסשן (' + seenApi.size + '):');
+      const rows = Array.from(seenApi.keys()).sort();
+      for (const url of rows) console.log('      ' + seenApi.get(url) + '  ' + url);
+      if (!rows.length) console.log('      (לא נצפתה אף קריאת JSON - ייתכן שלא נפתח אף מסך בדפדפן)');
+    }
   };
 }
 
