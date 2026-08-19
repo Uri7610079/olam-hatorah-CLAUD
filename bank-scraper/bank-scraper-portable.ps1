@@ -41,7 +41,8 @@
 param(
     # תיקיית הפלט. ברירת המחדל: out\report לצד הקובץ הזה.
     [string] $OutDir,
-    # בנק בודד (hapoalim / leumi / mizrahi / discount / pagi / mercantile / beinleumi),
+    # בנק בודד (hapoalim / leumi / mizrahi / discount / pagi / mercantile / beinleumi,
+    # וכן mercantile-business / discount-business למערכת העסקית),
     # או מפתח של כניסה מסוימת כשיש לאותו בנק כמה - למשל mercantile__עמותה ב.
     # שם בנק בוחר את *כל* הכניסות שלו.
     [string] $Bank,
@@ -334,6 +335,98 @@ _nav.waitForRedirect = function (pageOrFrame, timeout, ...rest) {
   return _origWaitForRedirect(pageOrFrame, timeout === undefined ? REDIRECT_WAIT_MS : timeout, ...rest);
 };
 
+// ===== המערכת העסקית של מרכנתיל ודיסקונט (ניסיוני) =====
+//
+// לשני הבנקים האלה יש שתי מערכות נפרדות לחלוטין:
+//    פרטית -  ‎/login/#/LOGIN_PAGE‎      נוחתת על ‎/apollo/retail…‎
+//    עסקית -  ‎/login/#/LOGIN_PAGE_SME‎  נוחתת על ‎/apollo/business…‎
+// חשבון של עמותה יושב במערכת העסקית.
+//
+// israeli-bank-scrapers מכירה את הפרטית בלבד. אומת בקוד הספרייה (6.9.0, הגרסה
+// האחרונה שקיימת): רשימת הכתובות שנחשבות "הכניסה הצליחה" מונה חמש כתובות,
+// כולן ‎/apollo/retail*‎, וההשוואה היא התאמה מלאה של מחרוזת - לא תבנית ולא
+// "מתחיל ב". המילים business ו-SME אינן מופיעות בספרייה כלל.
+//
+// כלומר: גם עם סיסמה נכונה לחלוטין, כניסה עסקית לא תזוהה. ההרצה תמתין עד
+// לפקיעת הזמן ותדווח על כשל שנראה כמו סיסמה שגויה, אף שאינו.
+//
+// מה שנעשה כאן הוא הרחבה ברמת *המופע* בלבד - לא נוגעים בקבצי הספרייה ולא
+// בפרוטוטייפ. חיבור פרטי שרץ באותה הרצה אינו מושפע כלל.
+//
+// זה ניסיוני, ואני אומר זאת במפורש: מה שידוע בוודאות הוא שרשימת הכתובות
+// חוסמת. מה שאינו ידוע הוא (א) אם טופס הכניסה העסקי משתמש באותם שדות,
+// ו-(ב) אם ה-API שמחזיר את התנועות זהה בין המערכות. שתי השאלות ניתנות
+// להכרעה רק מול חשבון אמיתי, ולכן הקוד כאן בנוי לדווח היכן הוא נעצר
+// במקום להיכשל בשקט.
+const { LoginResults } = require('israeli-bank-scrapers/lib/scrapers/base-scraper-with-browser');
+
+// ביטוי רגולרי ולא מחרוזת: getKeyByValue בספרייה תומכת ב-RegExp במפורש, ובניגוד
+// להשוואה מלאה הוא לא יישבר כשהבנק יעבור ל-business3 או ינחת על תת-עמוד אחר
+// (נראה בפועל: ‎/apollo/business2/#/OSH_LENTRIES_ALTAMIRA‎).
+const BUSINESS_PORTAL_URL = /^https:\/\/start\.telebank\.co\.il\/apollo\/business\d*(\/|#|$)/i;
+
+function applyBusinessPortal(scraper, args) {
+  const origGetLoginOptions = scraper.getLoginOptions;
+  // השמה על המופע מסתירה את מתודת הפרוטוטייפ רק עבור הסקרייפר הזה. ‎super‎ שבתוך
+  // המתודה המקורית קשור למחלקה ולא ל-this, ולכן הוא ממשיך לעבוד כרגיל.
+  scraper.getLoginOptions = function (creds) {
+    const o = origGetLoginOptions.call(this, creds);
+
+    // אותו אתר, עוגן אחר. משמרים את מחרוזת השאילתה: ‎?bank=m‎ הוא מה שאומר
+    // "מרכנתיל" ולא "דיסקונט", ומחיקתו הייתה שולחת אותנו לבנק הלא נכון.
+    o.loginUrl = String(o.loginUrl).split('#')[0] + '#/LOGIN_PAGE_SME';
+    console.log('  [עסקי] עמוד כניסה: ' + o.loginUrl);
+
+    // מדפיס את הכתובת שאליה הגענו בפועל ותמיד מחזיר false, כך שאינו משפיע על
+    // ההכרעה. בלי זה כשל מחזיר 'UNKNOWN_ERROR' בלי שום רמז היכן נחתנו - וזו
+    // בדיוק העובדה היחידה שדרושה כדי לתקן.
+    const reportLanding = async (ctx) => {
+      console.log('  [עסקי] הכתובת אחרי הכניסה: ' + (ctx && ctx.value));
+      return false;
+    };
+
+    const success = o.possibleResults[LoginResults.Success] || [];
+    o.possibleResults[LoginResults.Success] = [reportLanding].concat(success, [BUSINESS_PORTAL_URL]);
+
+    // הטופס העסקי עשוי להשתמש בשדות אחרים מהפרטי. בדפדפן גלוי יש אדם שיכול
+    // להשלים ידנית ולכן ממשיכים; בהרצה אוטומטית עוצרים בהודעה שאומרת מה לעשות,
+    // במקום להיתקע בהמתנה סתומה שנראית כמו תקלת רשת.
+    const origReadiness = o.checkReadiness;
+    if (typeof origReadiness === 'function') {
+      o.checkReadiness = async () => {
+        try { return await origReadiness(); }
+        catch (e) {
+          if (!args.show) {
+            throw new Error('שדות טופס הכניסה העסקי אינם כשל המערכת הפרטית (' + e.message + '). הריצו פעם אחת עם -Show והשלימו את הכניסה ידנית.');
+          }
+          console.log('  [עסקי] שדות הטופס שונים מהמערכת הפרטית - השלימו את הכניסה ידנית בחלון.');
+        }
+      };
+    }
+
+    // כפתור השליחה: בדפדפן גלוי מעבירים לצורת פונקציה (הספרייה תומכת בשתיהן),
+    // כדי שהיעדר הכפתור יסתיים בהודעה ולא בקריסה לפני שלאדם יש הזדמנות ללחוץ.
+    if (args.show && typeof o.submitButtonSelector === 'string') {
+      const sel = o.submitButtonSelector;
+      const page = this.page;
+      o.submitButtonSelector = async () => {
+        try { await page.click(sel); }
+        catch (e) { console.log('  [עסקי] כפתור הכניסה (' + sel + ') לא נמצא - לחצו ידנית בחלון.'); }
+      };
+    }
+
+    return o;
+  };
+
+  if (args.show) {
+    const origFill = scraper.fillInputs;
+    scraper.fillInputs = async function (pageOrFrame, fields) {
+      try { return await origFill.call(this, pageOrFrame, fields); }
+      catch (e) { console.log('  [עסקי] מילוי אוטומטי של הטופס נכשל (' + e.message + ') - מלאו ידנית בחלון.'); }
+    };
+  }
+}
+
 // ===== which banks to scrape (enable/disable here) =====
 const BANKS = {
   hapoalim:   { enabled: true,  company: CompanyTypes.hapoalim,   display: 'Bank Hapoalim',       fields: ['userCode', 'password'] },
@@ -348,6 +441,12 @@ const BANKS = {
   // מרכנתיל (בנק 17). מופעל כמו פאג"י - ללקוח יש חשבונות בשני הבנקים האלה.
   mercantile: { enabled: true,  company: CompanyTypes.mercantile, display: 'Mercantile Discount', fields: ['id', 'password', 'num'] },
   beinleumi:  { enabled: false, company: CompanyTypes.beinleumi,  display: 'First Intl (FIBI)',   fields: ['username', 'password'] },
+
+  // המערכת העסקית. ‎enabled: false‎ בכוונה - אין יוצרים תבנית ריקה, כדי שלא
+  // ישבו זה לצד זה שני קבצי מרכנתיל ולא יהיה ברור איזה למלא. מי שצריך את
+  // העסקי מעתיק את mercantile.json ומשנה את שמו (ר' "קרא אותי").
+  'mercantile-business': { enabled: false, company: CompanyTypes.mercantile, display: 'מרכנתיל - עסקי (ניסיוני)',  fields: ['id', 'password', 'num'], portal: 'business' },
+  'discount-business':   { enabled: false, company: CompanyTypes.discount,   display: 'דיסקונט - עסקי (ניסיוני)', fields: ['id', 'password', 'num'], portal: 'business' },
 };
 
 // Login details: one JSON file per bank, created blank on first run.
@@ -629,6 +728,7 @@ async function scrapeOne(key, cfg, creds, args) {
     console.log('  [diag] בכשל יישמר צילום-מסך אל ' + opts.storeFailureScreenShotPath);
   }
   const scraper = createScraper(opts);
+  if (cfg.portal === 'business') applyBusinessPortal(scraper, args);
   const result = await scraper.scrape(creds);
   if (!result.success) { throw new Error(result.errorType + (result.errorMessage ? ' - ' + result.errorMessage : '')); }
   return result.accounts || [];
