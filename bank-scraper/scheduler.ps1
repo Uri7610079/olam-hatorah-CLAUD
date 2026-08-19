@@ -12,9 +12,20 @@
      המערכת כותבת  ->  תזמון-סקרייפר.json   <-  הקובץ הזה קורא
      המערכת קוראת  <-  סטטוס-סקרייפר.json   <-  הקובץ הזה כותב
 
-  מנגנון המשימות המתוזמנות של Windows מריץ את הקובץ הזה כל 15 דקות. ברוב
+  מנגנון המשימות המתוזמנות של Windows מריץ את הקובץ הזה כל 30 דקות. ברוב
   ההרצות הוא רק בודק "האם הגיע הזמן", לא מוצא מה לעשות, ומסיים תוך שבריר
-  שנייה. ההרצה עצמה קורית פעם ביום, בשעה שנקבעה.
+  שנייה - בלי לגעת ברשת ובלי לגעת בבנק.
+
+  כניסה לבנק: פעם אחת ביום בלבד
+  ------------------------------
+  הסקרייפר מסמן קובץ (bank-contact.marker) רגע לפני שהוא ניגש לבנק הראשון.
+  כל עוד הסימון נושא את תאריך היום, המתזמן לא ירוץ שוב - גם אם ההרצה נכשלה.
+  זה מכוון: כישלון *אחרי* שהגענו לבנק פירושו בדרך כלל שההתחברות נדחתה, וניסיון
+  חוזר אחרי דחייה הוא בדיוק מה שמוביל לנעילת חשבון.
+
+  ניסיון חוזר קיים, אבל רק לתקלות שלא נגעו בבנק כלל: מחשב שהיה כבוי, מחשב שעלה
+  לפני שהרשת התחברה, התקנת Node שנפלה. במקרים אלה נעשה ניסיון נוסף אחרי חצי
+  שעה, עד 4 פעמים ביום.
 
   התקנה: לחיצה כפולה על "התקנת תזמון.bat" (פעם אחת).
 ================================================================================
@@ -39,6 +50,15 @@ $CONFIG_NAME = 'תזמון-סקרייפר.json'
 $STATUS_NAME = 'סטטוס-סקרייפר.json'
 $LOCK_NAME = 'סקרייפר-רץ.lock'
 $STALE_LOCK_HOURS = 3
+
+# הסקרייפר כותב את הקובץ הזה רגע לפני שהוא ניגש לבנק הראשון. קיומו עם תאריך היום
+# פירושו "כבר נכנסנו לבנק היום", ואז לא נכנסים שוב - גם אם ההרצה נכשלה.
+$MARKER_NAME = 'bank-contact.marker'
+
+# ניסיון חוזר מותר *רק* כשלא היה מגע עם הבנק בכלל (מחשב שעלה בלי רשת, התקנה
+# שנפלה). המרווח והתקרה מונעים לולאה שמנסה כל היום.
+$RETRY_MINUTES = 30
+$MAX_ATTEMPTS_PER_DAY = 4
 
 function Write-Log($m) { Write-Host ("[{0}] {1}" -f (Get-Date -Format 'HH:mm:ss'), $m) }
 
@@ -74,6 +94,14 @@ function Get-ConfiguredOutDir {
     return $null
 }
 
+# האם כבר ניגשנו לבנק היום. ברירת המחדל בכל מקרה של ספק היא "כן" - עדיף לוותר על
+# משיכה מאשר להיכנס לבנק פעם נוספת ביום אחד.
+function Test-ContactedToday([string] $Path, [datetime] $Now) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    try { return ((Get-Item -LiteralPath $Path).LastWriteTime.Date -eq $Now.Date) }
+    catch { return $true }
+}
+
 function Get-Prop($obj, [string] $name, $default) {
     if ($null -eq $obj) { return $default }
     $p = $obj.PSObject.Properties[$name]
@@ -101,17 +129,25 @@ if (-not (Test-Path -LiteralPath $outDir)) {
 $configPath = Join-Path $outDir $CONFIG_NAME
 $statusPath = Join-Path $outDir $STATUS_NAME
 $lockPath = Join-Path $outDir $LOCK_NAME
+$markerPath = Join-Path $outDir $MARKER_NAME
 
 $now = Get-Date
 $cfg = Read-JsonFile $configPath
 $status = Read-JsonFile $statusPath
 
 $enabled = [bool](Get-Prop $cfg 'enabled' $false)
-$timeText = [string](Get-Prop $cfg 'time' '07:30')
+$timeText = [string](Get-Prop $cfg 'time' '07:00')
 $days = @(Get-Prop $cfg 'days' @(0, 1, 2, 3, 4))
 $lookback = [int](Get-Prop $cfg 'lookbackDays' 45)
 $runNowAt = [string](Get-Prop $cfg 'runNowRequestedAt' '')
 $handledRunNow = [string](Get-Prop $status 'handledRunNowAt' '')
+
+# מונה הניסיונות של היום. נשמר עם התאריך שאליו הוא שייך, כדי שיתאפס מעצמו בחצות
+# בלי שיהיה צורך במחיקה יזומה.
+$todayKey = $now.ToString('yyyy-MM-dd')
+$attemptsDate = [string](Get-Prop $status 'attemptsDate' '')
+$attemptsToday = 0
+if ($attemptsDate -eq $todayKey) { $attemptsToday = [int](Get-Prop $status 'attemptsToday' 0) }
 
 # ---------------------------------------------------- האם הגיע הזמן להריץ ----
 
@@ -139,15 +175,45 @@ if ($Force) {
             Write-Log "שעה לא תקינה בהגדרות: '$timeText'"
         } elseif ($now.TimeOfDay -lt $scheduled.TimeOfDay) {
             Write-Log "עדיין לפני השעה שנקבעה ($timeText)."
+        } elseif (Test-ContactedToday $markerPath $now) {
+            # התקרה הקשיחה: כניסה אחת לבנק ביום, ולא משנה איך היא הסתיימה.
+            #
+            # במפורש גם כשההרצה נכשלה: כישלון *אחרי* שהגענו לבנק פירושו בדרך כלל
+            # שההתחברות נדחתה, וניסיון חוזר אחרי דחייה הוא בדיוק מה שגורם לבנק
+            # לנעול חשבון. עדיף להפסיד משיכה של יום אחד מאשר לסכן את החשבון.
+            Write-Log 'כבר הייתה כניסה לבנק היום. לא נכנסים פעם נוספת.'
         } else {
-            # ריצה אחת ליום: אם כבר רצנו היום אחרי השעה שנקבעה, לא רצים שוב.
+            # לא היה מגע עם הבנק היום: או שעוד לא ניסינו, או שהניסיון נכשל לפני
+            # שהגיע לבנק בכלל - מחשב שעלה לפני שהרשת התחברה, התקנה שנפלה. אלה
+            # תקלות מקומיות, וניסיון חוזר עליהן אינו נוגע בבנק ואינו מסכן כלום.
             $lastRunText = [string](Get-Prop $status 'lastRunAt' '')
+            $lastResultText = [string](Get-Prop $status 'lastResult' '')
             $ranToday = $false
+            $minutesSinceLast = [double]::MaxValue
             if ($lastRunText) {
-                try { $ranToday = ([datetime] $lastRunText).Date -eq $now.Date } catch { $ranToday = $false }
+                try {
+                    $lastRun = [datetime] $lastRunText
+                    if ($lastRun.Date -eq $now.Date) {
+                        $ranToday = $true
+                        $minutesSinceLast = ($now - $lastRun).TotalMinutes
+                    }
+                } catch { }
             }
-            if ($ranToday) { Write-Log 'כבר רץ היום.' }
-            else { $reason = "הגיע הזמן ($timeText)" }
+
+            if ($ranToday -and $lastResultText -eq 'success') {
+                # הרצה שהצליחה אך לא הותירה סימון: כל הבנקים דולגו כי חסרים להם
+                # פרטי התחברות. אין כאן תקלה ואין מה לתקן בניסיון חוזר - בלי
+                # התנאי הזה היינו מריצים אותה ארבע פעמים ביום לחינם.
+                Write-Log 'ההרצה של היום הסתיימה בהצלחה (לא היה מגע עם בנק - כנראה חסרים פרטי התחברות).'
+            } elseif ($attemptsToday -ge $MAX_ATTEMPTS_PER_DAY) {
+                Write-Log "$attemptsToday ניסיונות היום ללא הצלחה להגיע לבנק. מפסיקים עד מחר."
+            } elseif ($minutesSinceLast -lt $RETRY_MINUTES) {
+                Write-Log ("הניסיון הקודם נכשל לפני {0} דקות. ננסה שוב בעוד {1}." -f [int]$minutesSinceLast, [int]($RETRY_MINUTES - $minutesSinceLast))
+            } elseif ($attemptsToday -gt 0) {
+                $reason = "ניסיון חוזר ($($attemptsToday + 1) מתוך $MAX_ATTEMPTS_PER_DAY) - הניסיון הקודם לא הגיע לבנק"
+            } else {
+                $reason = "הגיע הזמן ($timeText)"
+            }
         }
     }
 }
@@ -163,6 +229,9 @@ if (-not $WhatIfOnly) {
         lastOutput       = Get-Prop $status 'lastOutput' $null
         lastExitCode     = Get-Prop $status 'lastExitCode' $null
         handledRunNowAt  = Get-Prop $status 'handledRunNowAt' $null
+        attemptsToday    = $attemptsToday
+        attemptsDate     = $(if ($attemptsDate) { $attemptsDate } else { $null })
+        bankContactedToday = (Test-ContactedToday $markerPath $now)
         scraperFolder    = $Root
         outputFolder     = $outDir
     }
@@ -173,7 +242,7 @@ if (-not $reason) { Write-Log 'אין מה לעשות.'; exit 0 }
 if ($WhatIfOnly) { Write-Log "היה רץ עכשיו: $reason"; exit 0 }
 
 # --------------------------------------------------------------- נעילה -------
-# המשימה מתעוררת כל 15 דקות, ומשיכה מכמה בנקים יכולה להימשך יותר. בלי נעילה
+# המשימה מתעוררת כל 30 דקות, ומשיכה מכמה בנקים יכולה להימשך יותר. בלי נעילה
 # היו נפתחות שתי הרצות במקביל שנכנסות לאותו פרופיל דפדפן ודורסות אותם קבצים.
 if (Test-Path -LiteralPath $lockPath) {
     $lockAge = $now - (Get-Item -LiteralPath $lockPath).LastWriteTime
@@ -235,6 +304,12 @@ $result = [ordered]@{
     lastExitCode    = $exitCode
     lastDurationSec = [int]((Get-Date) - $runStart).TotalSeconds
     handledRunNowAt = $(if ($runNowAt) { $runNowAt } else { $handledRunNow })
+    # המונה נספר על *ניסיונות*, גם מוצלחים. ההצלחה עצמה כבר חסומה על ידי הסימון
+    # (bank-contact.marker), ולכן אין צורך לאפס אותו כאן - ומונה שגם מצליח נספר
+    # בו הוא גם מה שמאפשר להציג במסך כמה פעמים המערכת ניסתה היום.
+    attemptsToday   = $attemptsToday + 1
+    attemptsDate    = $todayKey
+    bankContactedToday = (Test-ContactedToday $markerPath (Get-Date))
     scraperFolder   = $Root
     outputFolder    = $outDir
 }

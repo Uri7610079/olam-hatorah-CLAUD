@@ -590,6 +590,14 @@ async function main() {
     console.log('==== ' + cfg.display + ' (' + key + ') ====');
     const creds = loadCreds(key, cfg);
     if (!creds) { createdTemplate = true; continue; }
+    // סימון "היה מגע עם הבנק". נכתב *לפני* ההתחברות, ולכן עצם קיומו מעיד שניגשנו
+    // לבנק - גם אם ההתחברות נדחתה מיד אחר כך. המתזמן קורא אותו כדי לא לנסות שוב
+    // באותו יום: ניסיונות התחברות חוזרים אחרי דחייה הם בדיוק מה שגורם לבנק לחסום
+    // חשבון. שם הקובץ באנגלית בכוונה - הוא פנימי ולא מיועד לעיני המשתמשת.
+    try {
+      fs.mkdirSync(args.out, { recursive: true });
+      fs.writeFileSync(path.join(args.out, 'bank-contact.marker'), new Date().toISOString(), 'utf8');
+    } catch (e) { /* אם לא ניתן לכתוב - המתזמן ינהג כאילו היה מגע (ברירת מחדל זהירה) */ }
     try {
       const accounts = await scrapeOne(key, cfg, creds, args);
       const packet = toPacket(cfg.display, accounts);

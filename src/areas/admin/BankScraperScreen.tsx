@@ -33,11 +33,15 @@ interface ScraperStatus {
   lastOutput?: string | null;
   lastDurationSec?: number | null;
   outputFolder?: string | null;
+  // האם הייתה כניסה לבנק היום, וכמה ניסיונות נעשו. המתזמן כותב את שניהם כדי
+  // שהמסך יוכל להראות במפורש שהתקרה של כניסה אחת ביום נשמרת.
+  bankContactedToday?: boolean | null;
+  attemptsToday?: number | null;
 }
 
 const DEFAULT_CONFIG: ScraperConfig = {
   enabled: false,
-  time: "07:30",
+  time: "07:00",
   days: [0, 1, 2, 3, 4],
   lookbackDays: 45,
   runNowRequestedAt: null,
@@ -53,13 +57,17 @@ function formatDateTime(value: string | null | undefined): string {
   return d.toLocaleString("he-IL");
 }
 
-// "חי" = המתזמן נבדק לאחרונה לפני פחות מחצי שעה. המשימה ב-Windows מתעוררת כל
-// רבע שעה, אז פער גדול מזה אומר שהיא לא מותקנת, כבויה, או שהמחשב היה כבוי.
+// "חי" = המתזמן נבדק לאחרונה לפני פחות משעה ורבע.
+//
+// הסף חייב להיות גדול ממחזור התעוררות אחד, לא שווה לו: המשימה ב-Windows מתעוררת
+// כל 30 דקות, ולכן סף של 30 דקות בדיוק היה מסמן "לא מגיב" בכל פעם שהמסך נפתח
+// רגע לפני ההתעוררות הבאה. שני מחזורים ועוד מרווח נותנים תשובה יציבה.
+const SCHEDULER_WAKE_MINUTES = 30;
 function isSchedulerAlive(lastCheckAt: string | null | undefined): boolean {
   if (!lastCheckAt) return false;
   const t = new Date(lastCheckAt).getTime();
   if (Number.isNaN(t)) return false;
-  return Date.now() - t < 30 * 60 * 1000;
+  return Date.now() - t < (SCHEDULER_WAKE_MINUTES * 2 + 15) * 60 * 1000;
 }
 
 function StatusPanel({ status, onRefresh }: { status: ScraperStatus | null; onRefresh: () => void }) {
@@ -92,7 +100,7 @@ function StatusPanel({ status, onRefresh }: { status: ScraperStatus | null; onRe
 
           {!alive && (
             <p className="text-xs text-ink-muted">
-              המתזמן אמור להיבדק כל רבע שעה. אם עבר יותר מזה - ייתכן שהמחשב היה כבוי, או שהמשימה לא הותקנה.
+              המתזמן אמור להיבדק כל חצי שעה. אם עבר יותר מזה - ייתכן שהמחשב היה כבוי, או שהמשימה לא הותקנה.
             </p>
           )}
 
@@ -119,6 +127,21 @@ function StatusPanel({ status, onRefresh }: { status: ScraperStatus | null; onRe
                 {!status.lastResult && <span className="text-ink-subtle">עוד לא רצה</span>}
               </dd>
             </div>
+            {/* השורה הזו קיימת כדי לענות על שאלה אחת ומדויקת: כמה פעמים המערכת
+                נכנסה היום לחשבון הבנק. התקרה היא אחת, ומי שחושש מחסימה צריך
+                לראות את זה במספר ולא להסתמך על הבטחה בטקסט. */}
+            <div className="flex justify-between gap-2 sm:block">
+              <dt className="text-ink-subtle">כניסה לבנק היום</dt>
+              <dd className="text-ink">
+                {status.bankContactedToday ? "בוצעה (אחת - זו התקרה)" : "טרם"}
+              </dd>
+            </div>
+            {(status.attemptsToday ?? 0) > 1 && (
+              <div className="flex justify-between gap-2 sm:block">
+                <dt className="text-ink-subtle">ניסיונות היום</dt>
+                <dd className="text-ink ltr-num">{status.attemptsToday}</dd>
+              </div>
+            )}
           </dl>
 
           {status.lastError && (
@@ -187,7 +210,7 @@ export function BankScraperScreen() {
     try {
       await writeJsonToFolder("bank", SCRAPER_CONFIG_FILE, next);
       setConfig(next);
-      setMessage({ kind: "ok", text: overrides?.runNowRequestedAt ? "הבקשה נשלחה. המשיכה תתחיל תוך רבע שעה." : "התזמון נשמר." });
+      setMessage({ kind: "ok", text: overrides?.runNowRequestedAt ? "הבקשה נשלחה. המשיכה תתחיל תוך חצי שעה." : "התזמון נשמר." });
     } catch (e) {
       setMessage({ kind: "error", text: e instanceof Error ? e.message : "שגיאה בשמירה" });
     } finally {
@@ -219,7 +242,7 @@ export function BankScraperScreen() {
     <div>
       <PageHeader
         title="משיכה אוטומטית מהבנק"
-        description="קביעת השעה והימים שבהם הסקרייפר שבמחשב ימשוך תנועות מהבנק. הקבצים יורדים לתיקיית הבנק ונקלטים משם דרך מרכז היבוא."
+        description="קביעת השעה והימים שבהם הסקרייפר שבמחשב ימשוך תנועות מהבנק. הכניסה לחשבון הבנק מוגבלת לפעם אחת ביום - גם אם המשיכה נכשלה. הקבצים יורדים לתיקיית הבנק ונקלטים משם דרך מרכז היבוא."
       />
 
       {loading ? (
@@ -363,7 +386,8 @@ export function BankScraperScreen() {
               </div>
               <p className="flex items-start gap-1.5 text-xs text-ink-subtle">
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                "משיכה עכשיו" אינה מיידית: המתזמן במחשב מתעורר כל רבע שעה, ויתחיל למשוך בפעם הקרובה שיתעורר.
+                "משיכה עכשיו" אינה מיידית: המתזמן במחשב מתעורר כל חצי שעה, ויתחיל למשוך בפעם הקרובה שיתעורר. כל
+                לחיצה היא כניסה אמיתית לחשבון הבנק - לא לוחצים שוב ושוב.
               </p>
             </div>
 
