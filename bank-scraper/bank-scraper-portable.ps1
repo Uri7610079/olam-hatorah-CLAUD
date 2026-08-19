@@ -391,40 +391,84 @@ function applyBusinessPortal(scraper, args) {
     // הטופס העסקי עשוי להשתמש בשדות אחרים מהפרטי. בדפדפן גלוי יש אדם שיכול
     // להשלים ידנית ולכן ממשיכים; בהרצה אוטומטית עוצרים בהודעה שאומרת מה לעשות,
     // במקום להיתקע בהמתנה סתומה שנראית כמו תקלת רשת.
-    const origReadiness = o.checkReadiness;
-    if (typeof origReadiness === 'function') {
-      o.checkReadiness = async () => {
-        try { return await origReadiness(); }
-        catch (e) {
-          if (!args.show) {
-            throw new Error('שדות טופס הכניסה העסקי אינם כשל המערכת הפרטית (' + e.message + '). הריצו פעם אחת עם -Show והשלימו את הכניסה ידנית.');
-          }
-          console.log('  [עסקי] שדות הטופס שונים מהמערכת הפרטית - השלימו את הכניסה ידנית בחלון.');
-        }
-      };
-    }
+    // הטופס העסקי אינו הטופס הפרטי. נראה בפועל (צילום מסך מהלקוח): שני שדות
+    // בלבד - "מספר זהות" ו"סיסמה" - בעוד שהפרטי דורש שלושה (#tzId, #tzPassword,
+    // #aidnum). לכן ‎#aidnum‎ פשוט אינו קיים שם, והמילוי של הספרייה היה נכשל.
+    //
+    // מכיוון שהמזהים הטכניים של השדות בעמוד העסקי אינם ידועים, לא מנחשים אותם:
+    // מדפיסים את כל שדות הטופס שנמצאו בפועל, ואז ממלאים לפי מועמדים בסדר יורד
+    // של ודאות. הדפסת השדות היא לא נחמדות - היא מה שיאפשר לקבע את המזהים
+    // הנכונים אחרי ההרצה הראשונה, במקום סבב ניחושים.
+    const page = this.page;
 
-    // כפתור השליחה: בדפדפן גלוי מעבירים לצורת פונקציה (הספרייה תומכת בשתיהן),
-    // כדי שהיעדר הכפתור יסתיים בהודעה ולא בקריסה לפני שלאדם יש הזדמנות ללחוץ.
-    if (args.show && typeof o.submitButtonSelector === 'string') {
-      const sel = o.submitButtonSelector;
-      const page = this.page;
-      o.submitButtonSelector = async () => {
-        try { await page.click(sel); }
-        catch (e) { console.log('  [עסקי] כפתור הכניסה (' + sel + ') לא נמצא - לחצו ידנית בחלון.'); }
+    // ממתינים לשדה סיסמה כלשהו במקום ל-#tzId. ‎input[type=password]‎ הוא הדבר
+    // היחיד שאפשר להיות בטוחים לגביו בכל עמוד כניסה שהוא.
+    o.checkReadiness = async () => {
+      try { await page.waitForSelector('input[type=password]', { timeout: args.show ? 300000 : 60000 }); }
+      catch (e) {
+        if (!args.show) throw new Error('לא נמצא שדה סיסמה בעמוד הכניסה העסקי. הריצו את "בדיקת חשבון עמותה - מרכנתיל.bat" והשלימו ידנית.');
+        console.log('  [עסקי] לא נמצא שדה סיסמה - השלימו את הכניסה ידנית בחלון.');
+      }
+    };
+
+    // הספרייה לא תמלא כלום: הרשימה מרוקנת, והמילוי נעשה כאן לפי מה שקיים בעמוד.
+    const credFields = o.fields || [];
+    const valueOf = (sel) => { const f = credFields.find((x) => x.selector === sel); return f && f.value; };
+    const idValue = valueOf('#tzId');
+    const pwValue = valueOf('#tzPassword');
+    o.fields = [];
+
+    o.preAction = async () => {
+      // דוח מצב של הטופס. JSON.stringify ולא טקסט חופשי - כדי שאפשר יהיה לקרוא
+      // ממנו את המזהה המדויק בלי לפענח ניסוח.
+      try {
+        const els = await page.evaluate(() => Array.prototype.slice.call(document.querySelectorAll('input, button'))
+          .filter((el) => el.type !== 'hidden')
+          .map((el) => ({ tag: el.tagName, type: el.type || '', id: el.id || '', name: el.name || '', cls: (el.className || '').toString().slice(0, 40), txt: (el.innerText || el.value || '').toString().slice(0, 25) })));
+        console.log('  [עסקי] שדות שנמצאו בעמוד הכניסה (' + els.length + '):');
+        for (const el of els) console.log('      ' + JSON.stringify(el));
+      } catch (e) { console.log('  [עסקי] לא ניתן לקרוא את שדות העמוד: ' + e.message); }
+
+      const fillFirst = async (candidates, value, label) => {
+        if (!value) { console.log('  [עסקי] אין ערך ל' + label + ' בקובץ הסיסמאות.'); return; }
+        for (const sel of candidates) {
+          try {
+            const el = await page.$(sel);
+            if (el) { await el.type(String(value)); console.log('  [עסקי] מולא ' + label + ' דרך ' + sel); return; }
+          } catch (e) { /* מועמד שלא תפס - ממשיכים לבא אחריו */ }
+        }
+        console.log('  [עסקי] לא נמצא שדה ל' + label + ' - מלאו ידנית בחלון.');
       };
-    }
+
+      // ‎#tzId‎ ראשון למקרה שהעמוד העסקי משתמש באותו מזהה; אחריו מזהים סבירים,
+      // ולבסוף "השדה הגלוי הראשון שאינו סיסמה" - שנכון לטופס בן שני שדות.
+      //
+      // המועמד האחרון מנוסח בשלילה ולא כ-‎input[type=text]‎, וזה לא קוסמטי:
+      // ‎<input>‎ בלי מאפיין type הוא שדה טקסט לכל דבר, אבל הבורר ‎[type=text]‎
+      // אינו תופס אותו - הוא בודק מאפיין שאינו קיים. טפסים רבים נכתבים כך,
+      // ובכללם ייתכן שגם זה. ניסוח בשלילה תופס את שניהם.
+      await fillFirst([
+        '#tzId', '#idNum', '#userId', '#username',
+        'input:not([type=password]):not([type=hidden]):not([type=submit]):not([type=button]):not([type=checkbox]):not([type=radio])',
+      ], idValue, 'מספר זהות');
+      await fillFirst(['#tzPassword', 'input[type=password]'], pwValue, 'סיסמה');
+    };
+
+    // כפתור השליחה: פונקציה במקום מחרוזת (הספרייה תומכת בשתיהן), עם מועמדים
+    // ונפילה מסודרת להודעה במקום קריסה.
+    const submitCandidates = [typeof o.submitButtonSelector === 'string' ? o.submitButtonSelector : '.sendBtn', 'button[type=submit]', 'input[type=submit]', '.login-button', 'button.btn-primary'];
+    o.submitButtonSelector = async () => {
+      for (const sel of submitCandidates) {
+        try {
+          const el = await page.$(sel);
+          if (el) { await el.click(); console.log('  [עסקי] נלחץ כפתור הכניסה דרך ' + sel); return; }
+        } catch (e) { /* ממשיכים למועמד הבא */ }
+      }
+      console.log('  [עסקי] לא נמצא כפתור כניסה - לחצו "כניסה" ידנית בחלון.');
+    };
 
     return o;
   };
-
-  if (args.show) {
-    const origFill = scraper.fillInputs;
-    scraper.fillInputs = async function (pageOrFrame, fields) {
-      try { return await origFill.call(this, pageOrFrame, fields); }
-      catch (e) { console.log('  [עסקי] מילוי אוטומטי של הטופס נכשל (' + e.message + ') - מלאו ידנית בחלון.'); }
-    };
-  }
 }
 
 // ===== which banks to scrape (enable/disable here) =====
@@ -445,8 +489,11 @@ const BANKS = {
   // המערכת העסקית. ‎enabled: false‎ בכוונה - אין יוצרים תבנית ריקה, כדי שלא
   // ישבו זה לצד זה שני קבצי מרכנתיל ולא יהיה ברור איזה למלא. מי שצריך את
   // העסקי מעתיק את mercantile.json ומשנה את שמו (ר' "קרא אותי").
-  'mercantile-business': { enabled: false, company: CompanyTypes.mercantile, display: 'מרכנתיל - עסקי (ניסיוני)',  fields: ['id', 'password', 'num'], portal: 'business' },
-  'discount-business':   { enabled: false, company: CompanyTypes.discount,   display: 'דיסקונט - עסקי (ניסיוני)', fields: ['id', 'password', 'num'], portal: 'business' },
+  // שני שדות בלבד, ולא שלושה כמו בפרטי: בטופס העסקי אין "קוד משתמש" (‎#aidnum‎)
+  // אלא "מספר זהות" וסיסמה בלבד. דרישת שדה שלישי הייתה חוסמת את הקליטה עוד
+  // לפני שנגענו בבנק, בהודעה שמבקשת ערך שאין לו מקור.
+  'mercantile-business': { enabled: false, company: CompanyTypes.mercantile, display: 'מרכנתיל - עסקי (ניסיוני)',  fields: ['id', 'password'], portal: 'business' },
+  'discount-business':   { enabled: false, company: CompanyTypes.discount,   display: 'דיסקונט - עסקי (ניסיוני)', fields: ['id', 'password'], portal: 'business' },
 };
 
 // Login details: one JSON file per bank, created blank on first run.
