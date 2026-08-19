@@ -592,6 +592,9 @@ function ensureTemplates() {
   }
 }
 
+// דגל לדיווח מסכם בסוף ההרצה: היו כניסות שדולגו בגלל פרטים חסרים או קובץ שבור.
+let skippedForCreds = false;
+
 function discoverConnections() {
   ensureTemplates();
   const conns = [];
@@ -609,9 +612,128 @@ function discoverConnections() {
       console.log("         לכניסה נוספת לאותו בנק: <בנק>" + CONNECTION_SEPARATOR + "<תווית>.json, למשל mercantile" + CONNECTION_SEPARATOR + "עמותה ב.json");
       continue;
     }
-    conns.push({ key: key, bank: bank, cfg: cfg, display: label ? cfg.display + ' / ' + label : cfg.display });
+    // קובץ אחד יכול להכיל יותר מעמותה אחת. זו אינה גמישות לשמה: זו האינטואיציה
+    // הטבעית ("שלוש עמותות - שלוש רשומות"), והיא נצפתה בפועל אצל הלקוח.
+    const entries = readCredEntries(key, cfg);
+    if (!entries) { skippedForCreds = true; continue; }
+
+    const baseDisplay = label ? cfg.display + ' / ' + label : cfg.display;
+    for (let i = 0; i < entries.length; i++) {
+      // תבנית שכל שדותיה ריקים היא בנק שאינו בשימוש, לא טעות. דיווח עליה
+      // כ"חסרים פרטים" היה מציף שש שורות אזהרה בכל הרצה על בנקים שאיש לא ביקש,
+      // ומטביע בתוכן את השורה היחידה שכן מעניינת - זו של בנק שמולא חלקית.
+      const rec = entries[i];
+      const anyFilled = rec && typeof rec === 'object' && cfg.fields.some((f) => rec[f] && String(rec[f]).trim() !== '');
+      if (!anyFilled) { skippedForCreds = true; continue; }
+      const creds = validateCreds(rec, cfg, key, entries.length > 1 ? i + 1 : 0);
+      if (!creds) { skippedForCreds = true; continue; }
+      // כשיש רשומה אחת המפתח נשאר בדיוק כשהיה - אחרת פרופיל הדפדפן שכבר מוכר
+      // לבנק היה מוחלף בפרופיל ריק, והבנק היה רואה מכשיר חדש ודורש אימות.
+      // כשיש כמה, כל אחת מקבלת סיומת לפי המזהה שלה, ומכאן גם קובץ פלט ופרופיל
+      // נפרדים - בדיוק כמו קבצים נפרדים.
+      const idField = String(creds[cfg.fields[0]] || (i + 1)).replace(/[^A-Za-z0-9_-]/g, '_');
+      const suffix = entries.length > 1 ? '-' + idField : '';
+      conns.push({
+        key: key + suffix,
+        bank: bank,
+        cfg: cfg,
+        creds: creds,
+        display: entries.length > 1 ? baseDisplay + ' [' + idField + ']' : baseDisplay,
+      });
+    }
   }
   return conns;
+}
+
+// כל האובייקטים ברמה העליונה של הטקסט, כשהם מופיעים בזה אחר זה בלי מעטפת מערך.
+// סורקים סוגריים מאוזנים תוך התעלמות ממה שנמצא בתוך מחרוזות - סיסמה שמכילה
+// סוגריים מסולסלים אינה מזיזה את הספירה.
+function splitConcatenatedObjects(text) {
+  const out = [];
+  let depth = 0, start = -1, inStr = false, esc = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === '{') { if (depth === 0) start = i; depth++; }
+    else if (c === '}') {
+      depth--;
+      if (depth < 0) return null;
+      if (depth === 0 && start >= 0) {
+        try { out.push(JSON.parse(text.slice(start, i + 1))); } catch (e) { return null; }
+        start = -1;
+      }
+    }
+  }
+  if (depth !== 0) return null;
+  return out.length ? out : null;
+}
+
+// מחזיר מערך רשומות מקובץ הסיסמאות, או null אם אי אפשר לקרוא אותו.
+// שלוש צורות נתמכות: אובייקט יחיד, מערך של אובייקטים, וכמה אובייקטים בזה אחר
+// זה. השלישית אינה JSON תקין, אבל היא מה שאדם כותב באופן טבעי - ולדחות אותה
+// פירושו סבב נוסף של תיקון קובץ במקום משיכה מהבנק.
+function readCredEntries(key, cfg) {
+  const file = path.join(SECRETS_DIR, key + '.json');
+  const raw = rawCredsText(file);
+  const asList = (v) => (Array.isArray(v) ? v : [v]);
+
+  let firstError = null;
+  try { return asList(JSON.parse(raw)); } catch (e) { firstError = e; }
+
+  // תיקון נעשה תמיד *אחרי* שהניתוח הרגיל נכשל, לעולם לא לפניו: כך קובץ תקין
+  // אינו נוגע, וסיסמה שמכילה במקרה פסיק וסוגר אינה משתנה בשקט.
+  const noTrailingComma = raw.replace(/,(\s*[}\]])/g, '$1');
+  if (noTrailingComma !== raw) {
+    try {
+      const v = JSON.parse(noTrailingComma);
+      console.log('  [תוקן] ' + key + '.json: היה פסיק מיותר לפני הסוגר. נקרא בכל זאת - כדאי למחוק את הפסיק.');
+      return asList(v);
+    } catch (e) { /* לא זו הבעיה */ }
+  }
+
+  const objects = splitConcatenatedObjects(noTrailingComma);
+  if (objects && objects.length > 1) {
+    console.log('  [תוקן] ' + key + '.json: ' + objects.length + ' רשומות זו אחר זו בלי מעטפת מערך. כולן נקראו.');
+    console.log('         הצורה התקנית היא מערך:  [ { ... }, { ... } ]  - אבל אין חובה לשנות.');
+    return objects;
+  }
+
+  const line = jsonErrorLine(raw, firstError);
+  console.log('  [skip] ' + key + '.json אינו קובץ JSON תקין' + (line ? ' - שגיאה בשורה ' + line : '') + '.');
+  console.log('         הטעויות הנפוצות: פסיק אחרי הערך האחרון, מרכאה שנמחקה, או סוגר חסר.');
+  console.log('         הדרך הבטוחה: להריץ את "הזנת פרטי כניסה - מרכנתיל עסקי.bat", שכותב את הקובץ לבד.');
+  // מבנה הקובץ עם *הערכים מוסתרים*. הפלט נשלח בדואר וזהו קובץ סיסמאות; שמות
+  // השדות והפיסוק הם כל מה שדרוש כדי לאתר את השגיאה.
+  console.log('         מבנה הקובץ (הערכים מוסתרים):');
+  const lines = raw.split(/\r?\n/);
+  for (let i = 0; i < lines.length && i < 30; i++) {
+    console.log('           ' + String(i + 1).padStart(2) + ' | ' + lines[i].replace(/"(?:[^"\\]|\\.)*"(\s*:)?/g, (m, colon) => (colon ? m : '"***"')));
+  }
+  return null;
+}
+
+// בדיקת שלמות של רשומה אחת. ‎which‎ הוא מספר הרשומה בקובץ כשיש יותר מאחת,
+// כדי שההודעה תצביע על הרשומה הנכונה ולא רק על הקובץ.
+function validateCreds(rec, cfg, key, which) {
+  const where = which ? key + '.json (רשומה ' + which + ')' : key + '.json';
+  if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
+    console.log('  [skip] ' + where + ': הרשומה אינה בצורת { "שדה": "ערך" }.');
+    return null;
+  }
+  const missing = cfg.fields.filter((f) => !rec[f] || String(rec[f]).trim() === '');
+  if (missing.length) {
+    console.log('  [skip] ' + where + ': חסר ' + missing.join(', ') + '.');
+    return null;
+  }
+  const out = {};
+  for (const f of cfg.fields) out[f] = rec[f];
+  return out;
 }
 
 // מסירים BOM אם קיים: פנקס רשימות עלול להוסיף אותו בשמירה, ואז JSON.parse נופל
@@ -628,53 +750,6 @@ function jsonErrorLine(text, err) {
   const p = /position (\d+)/.exec(err.message);
   if (!p) return null;
   return text.slice(0, Number(p[1])).split(/\r?\n/).length;
-}
-
-function loadCreds(key, cfg) {
-  const file = path.join(SECRETS_DIR, key + '.json');
-  let creds;
-  try {
-    // מסירים BOM אם קיים: פנקס רשימות עלול להוסיף אותו בשמירה, ואז JSON.parse נופל
-    // ב-"Unexpected token" - שגיאה שאין שום דרך לנחש ממנה שהבעיה היא בקידוד הקובץ.
-    creds = JSON.parse(rawCredsText(file));
-  }
-  catch (e) {
-    // הטעות הנפוצה ביותר בעריכה ידנית: מוחקים שורה מהקובץ, והפסיק שבסוף השורה
-    // שלפניה נשאר תלוי לפני הסוגר. לעין הקובץ נראה תקין לחלוטין, ו-JSON פוסל.
-    //
-    // מנסים לתקן רק *אחרי* שהניתוח הרגיל נכשל, ולא לפניו. כך קובץ תקין לעולם
-    // אינו נוגע, וסיסמה שבמקרה מכילה פסיק וסוגר אינה משתנה בשקט.
-    const raw = rawCredsText(file);
-    const repaired = raw.replace(/,(\s*[}\]])/g, '$1');
-    let recovered = null;
-    if (repaired !== raw) { try { recovered = JSON.parse(repaired); } catch (e2) { recovered = null; } }
-    if (recovered) {
-      console.log('  [תוקן] ' + key + '.json: היה פסיק מיותר לפני הסוגר. הקובץ נקרא בכל זאת - כדאי למחוק את הפסיק.');
-      creds = recovered;
-    } else {
-      // מספר תווים מתחילת הקובץ אינו אומר דבר למי שעורך בפנקס רשימות. מספר שורה כן.
-      const line = jsonErrorLine(raw, e);
-      console.log('  [skip] ' + key + '.json אינו קובץ JSON תקין' + (line ? ' - שגיאה בשורה ' + line : '') + '.');
-      console.log('         הטעויות הנפוצות: פסיק אחרי הערך האחרון, מרכאה שנמחקה, או סוגר חסר.');
-      console.log('         הצורה הנכונה:  { "id": "מספר העמותה", "password": "הסיסמה" }');
-      console.log('         הדרך הבטוחה: להריץ את "הזנת פרטי כניסה - מרכנתיל עסקי.bat", שכותב את הקובץ לבד.');
-      // מבנה הקובץ, עם *הערכים מוסתרים*. הפלט הזה נשלח בדואר וזהו קובץ סיסמאות,
-      // ולכן שמות השדות והפיסוק מוצגים - והם כל מה שדרוש כדי לאתר את השגיאה -
-      // בעוד שכל מחרוזת שאינה שם שדה מוחלפת בכוכביות.
-      console.log('         מבנה הקובץ (הערכים מוסתרים):');
-      const lines = raw.split(/\r?\n/);
-      for (let i = 0; i < lines.length && i < 30; i++) {
-        const safe = lines[i].replace(/"(?:[^"\\]|\\.)*"(\s*:)?/g, (m, colon) => (colon ? m : '"***"'));
-        console.log('           ' + String(i + 1).padStart(2) + ' | ' + safe);
-      }
-      return null;
-    }
-  }
-  const missing = cfg.fields.filter((f) => !creds[f] || String(creds[f]).trim() === '');
-  if (missing.length) { console.log('  [skip] ' + key + ': fill in ' + missing.join(', ') + ' in ' + file); return null; }
-  const out = {};
-  for (const f of cfg.fields) out[f] = creds[f];
-  return out;
 }
 
 // תאריך בלבד (YYYY-MM-DD) בלי הסטת אזור-זמן. חשוב: new Date(x).toISOString().slice(0,10)
@@ -860,12 +935,14 @@ async function main() {
   for (const c of all) console.log('  - ' + c.display + '  (' + c.key + ')' + (targets.includes(c) ? '' : '   [לא בהרצה הזו]'));
   console.log('');
 
-  const combined = {}; const summary = []; let hadError = false; let createdTemplate = false;
+  const combined = {}; const summary = []; let hadError = false;
   for (const conn of targets) {
     const key = conn.key; const cfg = conn.cfg;
+    // פרטי ההתחברות נקראו ואומתו כבר בשלב הגילוי, יחד עם דיווח על כל מה שדולג.
+    // כך "אילו כניסות קיימות" ו"אילו מהן שלמות" נענות במקום אחד, ולא מתגלות
+    // אחת-אחת באמצע ההרצה.
+    const creds = conn.creds;
     console.log('==== ' + conn.display + ' (' + key + ') ====');
-    const creds = loadCreds(key, cfg);
-    if (!creds) { createdTemplate = true; continue; }
     // סימון "היה מגע עם הבנק". נכתב *לפני* ההתחברות, ולכן עצם קיומו מעיד שניגשנו
     // לבנק - גם אם ההתחברות נדחתה מיד אחר כך. המתזמן קורא אותו כדי לא לנסות שוב
     // באותו יום: ניסיונות התחברות חוזרים אחרי דחייה הם בדיוק מה שגורם לבנק לחסום
@@ -910,7 +987,7 @@ async function main() {
   }
   // ההודעה הקודמת טענה תמיד ש"נוצרו תבניות ריקות", גם כשהקבצים כבר היו קיימים
   // ופשוט לא מולאו - מבלבל, כי זה נשמע כאילו משהו נמחק ונוצר מחדש.
-  if (createdTemplate) { console.log('\n[action] יש בנקים שדולגו כי פרטי ההתחברות שלהם חסרים ב-' + SECRETS_DIR + '. זה תקין אם אינך משתמשת בהם.'); }
+  if (skippedForCreds) { console.log('\n[action] יש כניסות שדולגו כי פרטי ההתחברות שלהן חסרים ב-' + SECRETS_DIR + '. זה תקין אם אינך משתמשת בהן.'); }
   if (hadError) process.exitCode = 2;
 }
 
