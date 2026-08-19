@@ -614,15 +614,52 @@ function discoverConnections() {
   return conns;
 }
 
+// מסירים BOM אם קיים: פנקס רשימות עלול להוסיף אותו בשמירה, ואז JSON.parse נופל
+// ב-"Unexpected token" - שגיאה שאין שום דרך לנחש ממנה שהבעיה היא בקידוד הקובץ.
+function rawCredsText(file) {
+  return fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
+}
+
+// מספר השורה שבה הניתוח נכשל. V8 נוקב לפעמים ב-"line N" ולפעמים רק ב-"position N";
+// במקרה השני מתרגמים מיקום-תו למספר שורה, כי רק הוא שימושי למי שעורך את הקובץ.
+function jsonErrorLine(text, err) {
+  const m = /line (\d+)/.exec(err.message);
+  if (m) return Number(m[1]);
+  const p = /position (\d+)/.exec(err.message);
+  if (!p) return null;
+  return text.slice(0, Number(p[1])).split(/\r?\n/).length;
+}
+
 function loadCreds(key, cfg) {
   const file = path.join(SECRETS_DIR, key + '.json');
   let creds;
   try {
     // מסירים BOM אם קיים: פנקס רשימות עלול להוסיף אותו בשמירה, ואז JSON.parse נופל
     // ב-"Unexpected token" - שגיאה שאין שום דרך לנחש ממנה שהבעיה היא בקידוד הקובץ.
-    creds = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    creds = JSON.parse(rawCredsText(file));
   }
-  catch (e) { console.log('  [skip] ' + file + ' is not valid JSON: ' + e.message); return null; }
+  catch (e) {
+    // הטעות הנפוצה ביותר בעריכה ידנית: מוחקים שורה מהקובץ, והפסיק שבסוף השורה
+    // שלפניה נשאר תלוי לפני הסוגר. לעין הקובץ נראה תקין לחלוטין, ו-JSON פוסל.
+    //
+    // מנסים לתקן רק *אחרי* שהניתוח הרגיל נכשל, ולא לפניו. כך קובץ תקין לעולם
+    // אינו נוגע, וסיסמה שבמקרה מכילה פסיק וסוגר אינה משתנה בשקט.
+    const raw = rawCredsText(file);
+    const repaired = raw.replace(/,(\s*[}\]])/g, '$1');
+    let recovered = null;
+    if (repaired !== raw) { try { recovered = JSON.parse(repaired); } catch (e2) { recovered = null; } }
+    if (recovered) {
+      console.log('  [תוקן] ' + key + '.json: היה פסיק מיותר לפני הסוגר. הקובץ נקרא בכל זאת - כדאי למחוק את הפסיק.');
+      creds = recovered;
+    } else {
+      // מספר תווים מתחילת הקובץ אינו אומר דבר למי שעורך בפנקס רשימות. מספר שורה כן.
+      const line = jsonErrorLine(raw, e);
+      console.log('  [skip] ' + key + '.json אינו קובץ JSON תקין' + (line ? ' - שגיאה בשורה ' + line : '') + '.');
+      console.log('         הטעויות הנפוצות: פסיק אחרי הערך האחרון, מרכאה שנמחקה, או סוגר חסר.');
+      console.log('         הצורה הנכונה:  { "id": "מספר העמותה", "password": "הסיסמה" }');
+      return null;
+    }
+  }
   const missing = cfg.fields.filter((f) => !creds[f] || String(creds[f]).trim() === '');
   if (missing.length) { console.log('  [skip] ' + key + ': fill in ' + missing.join(', ') + ' in ' + file); return null; }
   const out = {};
