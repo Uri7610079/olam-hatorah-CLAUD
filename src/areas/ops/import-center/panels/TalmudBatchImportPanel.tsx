@@ -156,8 +156,13 @@ export function TalmudBatchImportPanel() {
         </div>
       ),
     },
-    { key: "org", header: "עמותה", render: (e) => e.report?.orgName ?? <span className="text-ink-subtle">—</span> },
-    { key: "month", header: "חודש", className: "tabular ltr-num", render: (e) => monthLabel(e.info?.month ?? null) },
+    { key: "org", header: "עמותה", render: (e) => e.report?.orgName ?? <Pending state={e.state} /> },
+    {
+      key: "month",
+      header: "חודש",
+      className: "tabular ltr-num",
+      render: (e) => (e.info?.month ? monthLabel(e.info.month) : <Pending state={e.state} />),
+    },
     {
       key: "students",
       header: "תלמידים",
@@ -168,14 +173,14 @@ export function TalmudBatchImportPanel() {
             {e.report.matchedStudents} / {e.report.totalRows}
           </span>
         ) : (
-          "—"
+          <Pending state={e.state} />
         ),
     },
     {
       key: "amount",
       header: "סכום שייכנס",
       className: "tabular ltr-num",
-      render: (e) => (e.report ? money(e.report.amountThatWillCommit) : "—"),
+      render: (e) => (e.report ? money(e.report.amountThatWillCommit) : <Pending state={e.state} />),
     },
     {
       key: "issues",
@@ -240,6 +245,15 @@ export function TalmudBatchImportPanel() {
   );
 }
 
+
+// בזמן שקובץ עדיין נבדק מול המסד אין לו עדיין נתונים להציג. "—" במצב הזה
+// נקרא ככישלון, לא כהמתנה, ולכן מצב הביניים נאמר במפורש.
+function Pending({ state }: { state: FileState }) {
+  return state === "מנתח"
+    ? <span className="text-ink-subtle">בודק…</span>
+    : <span className="text-ink-subtle">—</span>;
+}
+
 function StateIcon({ state }: { state: FileState }) {
   if (state === "מנתח") return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ink-subtle" aria-hidden="true" />;
   if (state === "מוכן") return <CheckCircle2 className="h-4 w-4 shrink-0 text-ok" aria-hidden="true" />;
@@ -258,7 +272,7 @@ function IssueSummary({ entry }: { entry: FileEntry }) {
     );
   }
   const r = entry.report;
-  if (!r) return <span className="text-ink-subtle">—</span>;
+  if (!r) return <Pending state={entry.state} />;
 
   const parts: string[] = [];
   if (r.missingStudents.length) parts.push(`${r.missingStudents.length} תלמידים חסרים`);
