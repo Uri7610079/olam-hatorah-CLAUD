@@ -17,6 +17,8 @@ interface FinanceCounts {
   gross_amount: number;
   commission_amount: number;
   net_amount: number;
+  uncalculated_eligibility_amount: number;
+  uncalculated_eligibility_count: number;
   masav_in_process_count: number;
   masav_transmitted_not_completed_count: number;
   group_commitment_total: number;
@@ -27,6 +29,8 @@ interface FinanceCounts {
 }
 
 const PERIOD_STATUS_LABEL: Record<string, string> = { open: "פתוח", in_review: "בבדיקה", closed: "סגור" };
+
+const money = (n: number) => n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 async function fetchOrgs(): Promise<OrgOption[]> {
   const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
@@ -106,6 +110,30 @@ export function FinanceDashboard() {
               <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.net_amount.toLocaleString("he-IL")}</p>
             </div>
           </div>
+          {/* למה הכרטיס הזה קיים: שלוש המשבצות שמעל נקראות מ-
+              eligibility_financial_results - התוצאה שאחרי ההפחתות - ואילו
+              הזכאות שנקלטה מתלמוד יושבת ב-monthly_eligibility. לפני שהחישוב
+              רץ, שלושתן 0 גם כשיש במערכת מאות אלפי שקלים. אפס בלי הסבר
+              נקרא ככשל קליטה ושולח לחפש תקלה במקום שאין בה תקלה. */}
+          <div
+            className={`card mb-4 p-4 ${
+              countsQuery.data.uncalculated_eligibility_amount > 0 ? "border-warn/40 bg-warn-soft" : ""
+            }`}
+          >
+            <p className="text-sm text-ink-muted">זכאות מתלמוד שטרם חושבה</p>
+            <p className="tabular mt-1 text-xl font-semibold text-ink">
+              {money(countsQuery.data.uncalculated_eligibility_amount)} ₪
+              <span className="mr-2 text-sm font-normal text-ink-muted">
+                · {countsQuery.data.uncalculated_eligibility_count.toLocaleString("he-IL")} שורות זכאות
+              </span>
+            </p>
+            <p className="mt-1 text-xs text-ink-muted">
+              {countsQuery.data.uncalculated_eligibility_amount > 0
+                ? "נקלט מדוח תלמוד וטרם עבר חישוב עמלות, ולכן אינו נכלל בברוטו/עמלה/נטו שלמעלה. נדרשים כללי עמלה, פתיחת החודש והרצת החישוב."
+                : "כל הזכאות שנקלטה לחודש זה כבר חושבה."}
+            </p>
+          </div>
+
           <div className="card mb-4 max-w-sm p-4">
             <p className="text-sm text-ink-muted">התחייבות כוללת לקבוצות (יתרת ספר תנועות)</p>
             <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.group_commitment_total.toLocaleString("he-IL")}</p>
