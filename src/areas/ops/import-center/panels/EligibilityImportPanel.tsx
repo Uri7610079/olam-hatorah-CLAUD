@@ -10,6 +10,7 @@ import {
   checkDuplicateFile,
   legacyXlsWarning,
   createImportBatch,
+  type TalmudImportInfo,
   fetchImportBatchRows,
   resolveImportRow,
   type StoredImportRow,
@@ -17,6 +18,7 @@ import {
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
+import { TalmudReportSummaryCard } from "./TalmudReportSummaryCard";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
@@ -24,10 +26,11 @@ import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 interface OrgOption {
   id: string;
   legal_name: string;
+  org_number: string | null;
 }
 
 async function fetchOrgs(): Promise<OrgOption[]> {
-  const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
+  const { data, error } = await supabase.from("organizations").select("id, legal_name, org_number").eq("status", "active").order("legal_name");
   if (error) throw error;
   return data ?? [];
 }
@@ -105,6 +108,8 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ matched: number; unmatched: number } | null>(null);
+  const [talmudInfo, setTalmudInfo] = useState<TalmudImportInfo | null>(null);
+  const [orgNotFound, setOrgNotFound] = useState<string | null>(null);
 
   const batchesQuery = useQuery({ queryKey: ["eligibility-batches", orgId], queryFn: () => fetchEligibilityBatches(orgId), enabled: !!orgId });
   const reviewBatchQuery = useQuery({ queryKey: ["eligibility-batch", reviewBatchId], queryFn: () => fetchBatchById(reviewBatchId!), enabled: !!reviewBatchId });
@@ -114,9 +119,28 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
     enabled: !!reviewBatchId,
   });
 
+
+  // דוח מתלמוד ממלא את עצמו: העמותה נבחרת לפי מספר העמותה שבקובץ, והחודש
+  // לפי הכותרת שבראשו. שני אלה היו עד עכשיו בחירה ידנית, וטעות בהם פירושה
+  // זכאות שנרשמת לעמותה או לחודש הלא נכונים - שגיאה שמתגלה רק בדוח הכספי.
+  //
+  // הבחירה מוצגת ולא נסתרת: המשתמשת רואה מה זוהה ויכולה לשנות.
+  const applyTalmudInfo = (info: TalmudImportInfo | undefined, orgs: OrgOption[]) => {
+    if (!info) { setTalmudInfo(null); setOrgNotFound(null); return; }
+    setTalmudInfo(info);
+    if (info.month) setMonth(info.month);
+    if (info.orgNumber) {
+      const match = orgs.find((o) => (o.org_number ?? '').trim() === info.orgNumber);
+      if (match) { setOrgId(match.id); setOrgNotFound(null); }
+      else setOrgNotFound(info.orgNumber);
+    }
+  };
+
   const resetForm = () => {
     setFile(null);
     setParsedRows(null);
+    setTalmudInfo(null);
+    setOrgNotFound(null);
     setLegacyWarning(false);
     setDuplicateId(null);
     setError(null);
@@ -145,6 +169,7 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
         setHeaderConfirm({ file: selected, previewRows: result.previewRows, detectedIndex: result.headerRowIndex });
         return;
       }
+      applyTalmudInfo(result.talmud, orgsQuery.data ?? []);
       setParsedRows(result.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
@@ -166,6 +191,7 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
     try {
       const result = await analyzeFile(headerConfirm.file, chosenIndex);
       setHeaderConfirm(null);
+      applyTalmudInfo(result.talmud, orgsQuery.data ?? []);
       setParsedRows(result.rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "שגיאה בניתוח הקובץ");
@@ -329,6 +355,7 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
             parsedRows &&
             !duplicateId && (
               <>
+                {talmudInfo && <TalmudReportSummaryCard info={talmudInfo} orgNotFound={orgNotFound} />}
                 <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                   {(tab) => {
                     const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;

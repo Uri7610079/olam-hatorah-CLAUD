@@ -1,5 +1,11 @@
 import { supabase } from "./supabase";
-import { parseImportFile, hashFile, classifyRows, isLegacyXls, type ClassifiedRow } from "./importParsing";
+import { parseImportFile, hashFile, classifyRows, isLegacyXls, type ClassifiedRow, type ParsedFile } from "./importParsing";
+import {
+  isTalmudPaymentReport,
+  parseTalmudPaymentReport,
+  mergeStudentRows,
+  toImportRow,
+} from "./talmudPaymentReport";
 import { safeStorageKey } from "./storagePath";
 
 export class DuplicateImportError extends Error {
@@ -38,22 +44,92 @@ export function legacyXlsWarning(file: File): boolean {
   return isLegacyXls(file);
 }
 
+// מה שזוהה בדוח תלמוד, להצגה ולמילוי אוטומטי של העמותה והחודש. קיים רק
+// כשהקובץ הוא דוח כזה; לכל שאר סוגי היבוא הוא undefined.
+export interface TalmudImportInfo {
+  orgNumber: string | null;
+  orgName: string | null;
+  month: string | null;
+  branchCount: number;
+  sourceRowCount: number;
+  mergedRowCount: number;
+  eligibleCount: number;
+  totalAmount: number;
+  declaredTotal: number | null;
+  transfers: string[];
+  ambiguousBranch: string[];
+  exactDuplicates: string[];
+  problems: string[];
+}
+
 export interface AnalyzeFileResult {
   rows: ClassifiedRow[];
   headerRowIndex: number;
   headerConfidence: "high" | "low";
   previewRows: string[][];
+  talmud?: TalmudImportInfo;
 }
 
 // headerRowIndex: מועבר רק אחרי שהמשתמשת אישרה/בחרה שורת כותרות דרך HeaderRowConfirm
 // (headerConfidence="low" בקריאה הראשונה) - קריאה שנייה עם השורה שנבחרה, לא ניחוש חוזר.
 export async function analyzeFile(file: File, headerRowIndex?: number): Promise<AnalyzeFileResult> {
   const parsed = await parseImportFile(file, headerRowIndex);
+
+  // "דוח דרישת תשלום" מתלמוד עובר תרגום כאן, לפני כל דבר אחר.
+  //
+  // שתי סיבות שההמרה יושבת דווקא בנקודה הזו:
+  //
+  // 1. התצוגה. הכותרות בדוח המקורי אנגליות (StudentIdentity, ReasonLevelName),
+  //    ולמשתמשת אין שום סיבה לראות אותן. מרגע זה כל מה שזורם הלאה - תצוגה
+  //    מקדימה, שורות שנשמרות, והודעות שגיאה - הוא בעברית בלבד.
+  //
+  // 2. אין צורך לגעת בפונקציית הקליטה שבמסד, שכבר עובדת בייצור וקוראת
+  //    מפתחות בעברית. התרגום כאן פירושו שהיא ממשיכה לקבל בדיוק את מה
+  //    שהיא מכירה.
+  const talmud = maybeParseTalmudReport(parsed);
+  if (talmud) {
+    return {
+      rows: classifyRows(talmud.rows),
+      headerRowIndex: parsed.headerRowIndex,
+      headerConfidence: "high",
+      previewRows: parsed.previewRows,
+      talmud: talmud.info,
+    };
+  }
+
   return {
     rows: classifyRows(parsed.rows),
     headerRowIndex: parsed.headerRowIndex,
     headerConfidence: parsed.headerConfidence,
     previewRows: parsed.previewRows,
+  };
+}
+
+// מזהה דוח תשלום מתלמוד וממיר אותו לשורות בעברית. מחזיר null לכל קובץ אחר,
+// כך ששאר סוגי היבוא אינם מושפעים כלל.
+function maybeParseTalmudReport(parsed: ParsedFile): { rows: Record<string, string>[]; info: TalmudImportInfo } | null {
+  if (!isTalmudPaymentReport(parsed.headers)) return null;
+
+  const { rows, summary } = parseTalmudPaymentReport(parsed.rows, parsed.previewRows);
+  const { merged, exactDuplicates, transfers, ambiguousBranch } = mergeStudentRows(rows);
+
+  return {
+    rows: merged.map(toImportRow),
+    info: {
+      orgNumber: summary.orgNumbers[0] ?? null,
+      orgName: merged[0]?.orgName ?? null,
+      month: summary.month,
+      branchCount: summary.branches.length,
+      sourceRowCount: summary.rowCount,
+      mergedRowCount: merged.length,
+      eligibleCount: summary.eligibleCount,
+      totalAmount: summary.totalAmount,
+      declaredTotal: summary.declaredOrgTotal,
+      transfers,
+      ambiguousBranch,
+      exactDuplicates,
+      problems: summary.problems,
+    },
   };
 }
 

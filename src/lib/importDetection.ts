@@ -77,7 +77,28 @@ export const IMPORT_SIGNATURES: ImportSignature[] = [
     label: "זכאות חודשית",
     area: "תפעול שוטף",
     target: { kind: "import-center-tab", tab: "eligibility" },
-    variants: [{ required: ["מזהה תלמיד", "סכום ברוטו"], optional: ["ניקוד/סוג תשלום"] }],
+    variants: [
+      { name: "פורמט המערכת", required: ["מזהה תלמיד", "סכום ברוטו"], optional: ["ניקוד/סוג תשלום"] },
+      {
+        // "דוח דרישת תשלום" - הדוח החודשי שיורד מתלמוד בפועל. הכותרות שלו
+        // באנגלית, ולכן אף חתימה קיימת לא זיהתה אותו: הקובץ חזר "unknown"
+        // עם אפס מועמדים, ואי אפשר היה לקלוט אותו כלל.
+        //
+        // ‎Textbox145‎ הוא שם אמיתי בדוח (שדה שמכיל את שורת העמותה והסניף),
+        // ולא שם שהומצא כאן. הוא נדרש כי הוא מה שמבדיל בין הדוח הזה לבין
+        // דוחות אחרים מתלמוד שגם הם מכילים ת"ז וסכום.
+        name: "דוח דרישת תשלום מתלמוד",
+        required: ["StudentIdentity", "ReasonLevelName", "Textbox145"],
+        optional: ["EntitlementStatusName", "StudyTypeNumber1", "PaymentSum", "Points", "StudentName1", "StudentFamilyName1", "IdentityTypeName"],
+      },
+      {
+        // אותו דוח אחרי תרגום או עריכה ידנית. נתמך כי קבצים עוברים דרך
+        // אנשים, ואדם שתרגם כותרות לא אמור לגרום לקובץ להידחות.
+        name: "דוח דרישת תשלום (כותרות בעברית)",
+        required: ["עמותה", "ת.ז/דרכון", "סכום"],
+        optional: ["סטטוס זכאות", "קוד סוג לימוד", "שם תלמיד", "שם משפחה", "ניקוד", "סוג מזהה"],
+      },
+    ],
   },
   {
     key: "talmud_errors",
