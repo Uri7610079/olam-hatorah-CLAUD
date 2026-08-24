@@ -54,6 +54,29 @@ export interface TalmudValidationReport {
 
 // שאילתת ‎in‎ עם אלפי ערכים חורגת מאורך כתובת מותר. הפיצול אינו אופטימיזציה
 // אלא תנאי לעבודה: קובץ של ברכת אלימלך מכיל 1,935 תלמידים.
+
+// נרמול ת.ז/דרכון - חייב להיות זהה ל-normalize_identity() שבמסד (מיגרציה 098).
+// "תלמוד" מנפיק ת.ז מרופדת לתשע ספרות (066107285), ובמערכת אותו תלמיד רשום
+// כפי שהוקלד במקור (66107285). בלי הנרמול הבדיקה כאן תדווח על מאות "תלמידים
+// חסרים" שקיימים היטב, והקליטה עצמה תדחה אותם.
+export function normalizeIdentity(value: string | null | undefined): string {
+  const v = String(value ?? "").trim();
+  if (!v) return "";
+  if (/^[0-9]+$/.test(v)) return v.replace(/^0+/, "") || "0";
+  return v.toUpperCase();
+}
+
+// PostgREST משווה מחרוזות בדיוק, ואי אפשר לקרוא לפונקציית מסד בתוך in().
+// לכן שולחים את כל הצורות הסבירות של אותו מזהה: כפי שהוא בקובץ, בלי אפסים
+// מובילים, ומרופד לתשע ספרות (הצורה שבה חלק מהמערכות שומרות ת.ז).
+function identityVariants(raw: string): string[] {
+  const v = String(raw ?? "").trim();
+  if (!v) return [];
+  if (!/^[0-9]+$/.test(v)) return [...new Set([v, v.toUpperCase()])];
+  const bare = v.replace(/^0+/, "") || "0";
+  return [...new Set([v, bare, bare.padStart(9, "0")])];
+}
+
 const CHUNK = 200;
 
 async function inChunks<T>(values: string[], run: (chunk: string[]) => Promise<T[]>): Promise<T[]> {
@@ -120,12 +143,13 @@ export async function validateTalmudImport(
 
   // ===== 3. תלמידים =====
   const ids = [...new Set(rows.map((r) => r["מזהה תלמיד"]).filter(Boolean))];
+  const lookupValues = [...new Set(ids.flatMap(identityVariants))];
 
-  const students = await inChunks(ids, async (chunk) => {
+  const students = await inChunks(lookupValues, async (chunk) => {
     const { data } = await supabase.from("students").select("id, external_id, full_name").in("external_id", chunk);
     return data ?? [];
   });
-  const byExternalId = new Map(students.map((s) => [s.external_id, s]));
+  const byExternalId = new Map(students.map((s) => [normalizeIdentity(s.external_id), s]));
 
   // ===== 4. שיוך פעיל (קבוצה וסניף) =====
   //
@@ -158,7 +182,7 @@ export async function validateTalmudImport(
       amount,
     };
 
-    const student = byExternalId.get(externalId);
+    const student = byExternalId.get(normalizeIdentity(externalId));
     if (!student) {
       report.missingStudents.push(entry);
       continue;
