@@ -181,6 +181,7 @@ export function ExceptionsCenterScreen() {
             <option value="critical">קריטי</option>
             <option value="high">גבוה</option>
             <option value="medium">בינוני</option>
+            <option value="low">לידיעה</option>
           </select>
         </div>
         <div>
