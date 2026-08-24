@@ -12,6 +12,11 @@ export interface DataTableColumn<T> {
   // עמודה שמוסתרת כברירת מחדל בבחירת העמודות (columnPicker) - עדיין מוצגת אם columnPicker
   // לא מופעל בכלל, כדי לא לשבור מסכים קיימים שלא ביקשו את היכולת הזו.
   hiddenByDefault?: boolean;
+  // העמודה שסופגת את הרוחב הפנוי, במקום עמודת הסרק. מיועדת לעמודת טקסט
+  // חופשי ארוך: בלעדיה הסרק בולע את כל השארית, וטקסט ארוך נדחס לרוחב
+  // המילה הארוכה ביותר - עמודה צרה וגבוהה שקשה לקרוא. עמודה אחת לכל
+  // היותר; אם סומנו כמה, הראשונה מנצחת.
+  grow?: boolean;
 }
 
 export interface DataTablePagination {
@@ -57,6 +62,7 @@ export function DataTable<T>({
   const [showPicker, setShowPicker] = useState(false);
 
   const visibleColumns = columnPicker ? columns.filter((c) => !hiddenKeys.has(c.key)) : columns;
+  const growKey = visibleColumns.find((c) => c.grow)?.key;
 
   const toggleColumn = (key: string) => {
     setHiddenKeys((prev) => {
@@ -107,7 +113,15 @@ export function DataTable<T>({
             <thead className="sticky top-0 z-10 border-b border-line bg-surface-muted text-ink-muted">
               <tr>
                 {visibleColumns.map((col) => (
-                  <th key={col.key} className="whitespace-nowrap px-4 py-3 font-medium">
+                  <th
+                    key={col.key}
+                    // w-full: העמודה סופגת את הרוחב הפנוי כשיש כזה.
+                    // min-w: כשאין - כשהטבלה כבר רחבה מהמסך - w-full חסר
+                    // משמעות, והעמודה הייתה מתמוטטת לרוחב המילה הארוכה
+                    // ביותר. עדיף שהטבלה תיגלל לרוחב (המכל כבר תומך בזה)
+                    // מאשר עמודת טקסט צרה וגבוהה.
+                    className={`whitespace-nowrap px-4 py-3 font-medium ${col.key === growKey ? "w-full min-w-[22rem]" : ""}`}
+                  >
                     {col.header}
                   </th>
                 ))}
@@ -117,7 +131,7 @@ export function DataTable<T>({
                     ישב 800 פיקסל משמאל לקוד שלו. העין לא מצליחה לקשר בין שני
                     קצוות של שורה, וזה מה שגרם למסך להיראות מפוזר.
                     כשהטבלה רחבה מהמכל, הסרק מקבל 0 ושום דבר לא משתנה. */}
-                <th className="w-full" aria-hidden="true" />
+                {!growKey && <th className="w-full" aria-hidden="true" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -142,11 +156,14 @@ export function DataTable<T>({
                   className={`${onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""} ${rowClassName?.(row) ?? ""}`.trim()}
                 >
                   {visibleColumns.map((col) => (
-                    <td key={col.key} className={`px-4 py-3 ${col.className ?? ""}`}>
+                    <td
+                      key={col.key}
+                      className={`px-4 py-3 ${col.key === growKey ? "min-w-[22rem]" : ""} ${col.className ?? ""}`}
+                    >
                       {col.render(row)}
                     </td>
                   ))}
-                  <td aria-hidden="true" />
+                  {!growKey && <td aria-hidden="true" />}
                 </tr>
               ))}
             </tbody>

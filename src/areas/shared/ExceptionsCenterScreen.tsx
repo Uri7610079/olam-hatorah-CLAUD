@@ -150,10 +150,11 @@ export function ExceptionsCenterScreen() {
 
   const columns: DataTableColumn<ExceptionRow>[] = [
     { key: "severity", header: "חומרה", render: (r) => <StatusBadge severity={r.severity} /> },
-    { key: "domain", header: "תחום", render: (r) => DOMAIN_LABEL[TYPE_DOMAIN[r.exception_type]] },
-    { key: "type", header: "סוג", render: (r) => TYPE_LABEL[r.exception_type] },
-    { key: "org", header: "עמותה", render: (r) => r.organization?.legal_name ?? "—" },
-    { key: "desc", header: "פירוט", render: (r) => r.description },
+    { key: "domain", header: "תחום", className: "whitespace-nowrap", render: (r) => DOMAIN_LABEL[TYPE_DOMAIN[r.exception_type]] },
+    { key: "type", header: "סוג", className: "whitespace-nowrap", render: (r) => TYPE_LABEL[r.exception_type] },
+    { key: "org", header: "עמותה", className: "whitespace-nowrap", render: (r) => r.organization?.legal_name ?? "—" },
+    // הפירוט הוא הטקסט היחיד באורך משתנה כאן, ולכן הוא שמקבל את הרוחב הפנוי
+    { key: "desc", header: "פירוט", grow: true, render: (r) => r.description },
     { key: "date", header: "תאריך", className: "tabular", render: (r) => r.related_date ?? "—" },
     { key: "amount", header: "סכום", className: "tabular", render: (r) => (r.amount != null ? r.amount.toLocaleString("he-IL") : "—") },
   ];

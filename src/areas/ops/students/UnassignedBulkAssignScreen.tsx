@@ -80,7 +80,11 @@ export function UnassignedBulkAssignScreen() {
       if (!map.has(key)) {
         map.set(key, {
           key,
-          label: `${s.organization_name} · סניף ${s.branch_code}${s.branch_name ? ` — ${s.branch_name}` : ""}`,
+          // השם הפנימי של הסניף הוא לרוב הקוד עצמו ("08"), ואז "סניף 08 — 08"
+          // הוא רעש. מוסיפים אותו רק כשהוא באמת מוסיף מידע.
+          label:
+            `${s.organization_name} · סניף ${s.branch_code}` +
+            (s.branch_name && s.branch_name !== s.branch_code ? ` — ${s.branch_name}` : ""),
           branchId: s.branch_id,
           branchCode: s.branch_code,
           students: [],
