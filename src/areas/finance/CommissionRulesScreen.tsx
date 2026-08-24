@@ -44,6 +44,8 @@ interface CommissionRule {
   percentage: number | null;
   fixed_amount: number | null;
   rounding_rule: RoundingRule;
+  rounding_step: number;
+  rounding_target: RoundingTarget;
   priority: number;
   effective_from: string;
   effective_until: string | null;
@@ -54,7 +56,23 @@ interface CommissionRule {
 }
 
 const TYPE_LABEL: Record<CalculationType, string> = { percentage: "אחוז", fixed: "קבוע", combined: "משולב" };
-const ROUNDING_LABEL: Record<RoundingRule, string> = { none: "ללא עיגול", round_int: "עיגול לשקל", ceil_int: "כלפי מעלה", floor_int: "כלפי מטה" };
+// rounding_rule מציין מעתה *כיוון* בלבד; לאיזו כפולה מעגלים נקבע ב-rounding_step
+// (מיגרציה 105). הערכים לא שונו כדי שכללים קיימים ימשיכו לעבוד.
+const ROUNDING_LABEL: Record<RoundingRule, string> = { none: "ללא עיגול", round_int: "לקרוב", ceil_int: "כלפי מעלה", floor_int: "כלפי מטה" };
+
+type RoundingTarget = "commission" | "net";
+
+// "כלפי מטה לכפולות של 10, על הסכום לתלמיד" - קריא יותר משלוש עמודות נפרדות
+function roundingText(r: { rounding_rule: RoundingRule; rounding_step: number; rounding_target: RoundingTarget }): string {
+  if (r.rounding_rule === "none") return "ללא עיגול";
+  const step = Number(r.rounding_step) || 1;
+  const unit = step === 1 ? "לשקל שלם" : `לכפולות של ${step.toLocaleString("he-IL")}`;
+  return `${ROUNDING_LABEL[r.rounding_rule]} ${unit}, ${TARGET_LABEL[r.rounding_target ?? "commission"]}`;
+}
+const TARGET_LABEL: Record<RoundingTarget, string> = {
+  commission: "על העמלה",
+  net: "על הסכום לתלמיד",
+};
 
 async function fetchOrgs(): Promise<OrgOption[]> {
   const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
@@ -92,7 +110,7 @@ async function fetchRules(orgId: string): Promise<CommissionRule[]> {
   const { data, error } = await supabase
     .from("commission_rules")
     .select(
-      "id, group_id, study_code, student_id, calculation_type, percentage, fixed_amount, rounding_rule, priority, effective_from, effective_until, is_active, notes, group:groups(name), student:students(external_id, full_name)",
+      "id, group_id, study_code, student_id, calculation_type, percentage, fixed_amount, rounding_rule, rounding_step, rounding_target, priority, effective_from, effective_until, is_active, notes, group:groups(name), student:students(external_id, full_name)",
     )
     .eq("organization_id", orgId)
     .order("priority", { ascending: false })
@@ -113,6 +131,8 @@ const EMPTY_FORM = {
   percentage: "",
   fixedAmount: "",
   roundingRule: "none" as RoundingRule,
+  roundingStep: "1",
+  roundingTarget: "commission" as RoundingTarget,
   priority: "0",
   effectiveFrom: new Date().toISOString().slice(0, 10),
   effectiveUntil: "",
@@ -164,6 +184,8 @@ export function CommissionRulesScreen() {
       percentage: toNum(form.percentage),
       fixed_amount: toNum(form.fixedAmount),
       rounding_rule: form.roundingRule,
+      rounding_step: Number(form.roundingStep) || 1,
+      rounding_target: form.roundingTarget,
       priority: Number(form.priority) || 0,
       effective_from: form.effectiveFrom,
       effective_until: form.effectiveUntil || null,
@@ -192,7 +214,7 @@ export function CommissionRulesScreen() {
       "סוג חישוב": TYPE_LABEL[r.calculation_type],
       אחוז: r.percentage ?? "",
       "סכום קבוע": r.fixed_amount ?? "",
-      "כלל עיגול": ROUNDING_LABEL[r.rounding_rule],
+      "כלל עיגול": roundingText(r),
       עדיפות: r.priority,
       "תקף מתאריך": r.effective_from,
       "תקף עד תאריך": r.effective_until ?? "",
@@ -241,7 +263,7 @@ export function CommissionRulesScreen() {
       render: (r) =>
         [r.percentage != null ? `${r.percentage}%` : null, r.fixed_amount != null ? r.fixed_amount.toLocaleString("he-IL") : null].filter(Boolean).join(" + ") || "—",
     },
-    { key: "rounding", header: "עיגול", render: (r) => ROUNDING_LABEL[r.rounding_rule] },
+    { key: "rounding", header: "עיגול", className: "whitespace-nowrap", render: (r) => roundingText(r) },
     { key: "priority", header: "עדיפות", className: "tabular", render: (r) => r.priority },
     {
       key: "effective",
@@ -449,7 +471,7 @@ export function CommissionRulesScreen() {
               <input type="number" step="0.01" value={form.fixedAmount} onChange={(e) => setForm((f) => ({ ...f, fixedAmount: e.target.value }))} className="input-field tabular" />
             </div>
             <div>
-              <label className="field-label">כלל עיגול</label>
+              <label className="field-label">כיוון עיגול</label>
               <select value={form.roundingRule} onChange={(e) => setForm((f) => ({ ...f, roundingRule: e.target.value as RoundingRule }))} className="input-field">
                 {(Object.keys(ROUNDING_LABEL) as RoundingRule[]).map((r) => (
                   <option key={r} value={r}>
@@ -459,6 +481,52 @@ export function CommissionRulesScreen() {
               </select>
             </div>
           </div>
+
+          {/* שדות העיגול מוסתרים כש"ללא עיגול" נבחר: הם חסרי משמעות אז,
+              ושדה שאפשר למלא ואין לו השפעה מזמין טעות שקטה. */}
+          {form.roundingRule !== "none" && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="field-label" htmlFor="rounding-step">מעגלים לכפולות של</label>
+                <input
+                  id="rounding-step"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={form.roundingStep}
+                  onChange={(e) => setForm((f) => ({ ...f, roundingStep: e.target.value }))}
+                  className="input-field tabular"
+                />
+                <p className="mt-1 text-xs text-ink-subtle">1 = שקל שלם · 10 = כפולות של עשרה</p>
+              </div>
+              <div>
+                <label className="field-label" htmlFor="rounding-target">העיגול חל</label>
+                <select
+                  id="rounding-target"
+                  value={form.roundingTarget}
+                  onChange={(e) => setForm((f) => ({ ...f, roundingTarget: e.target.value as RoundingTarget }))}
+                  className="input-field"
+                >
+                  {(Object.keys(TARGET_LABEL) as RoundingTarget[]).map((t) => (
+                    <option key={t} value={t}>
+                      {TARGET_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* ההפרש חייב להיאמר במפורש: הברוטו מגיע מתלמוד ואינו משתנה,
+                  ולכן מה שנגרע מהתלמיד עובר לעמלה. זו החלטה כספית. */}
+              <div className="sm:col-span-3">
+                <p className="text-xs text-ink-muted">
+                  {form.roundingTarget === "net"
+                    ? `דוגמה: אם לתלמיד יוצא 99 ₪ והעיגול הוא כלפי מטה לכפולות של ${form.roundingStep || 1} — הוא יקבל ${
+                        Math.floor(99 / (Number(form.roundingStep) || 1)) * (Number(form.roundingStep) || 1)
+                      } ₪, וההפרש נזקף לעמלה. הברוטו מגיע מתלמוד ואינו משתנה.`
+                    : "העיגול חל על סכום העמלה. הסכום לתלמיד הוא השארית, ולכן הוא עצמו אינו מעוגל."}
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
