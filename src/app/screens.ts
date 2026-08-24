@@ -21,6 +21,7 @@ import {
   Undo2,
   ArrowLeftRight,
   UserCog,
+  UserPlus,
   BookOpen,
   Tags,
   FlaskConical,
@@ -53,6 +54,17 @@ export interface ScreenDef {
 export const SCREENS: ScreenDef[] = [
   // תפעול שוטף
   { path: "/ops/students", area: "ops", navLabel: "תלמידים", title: "תלמידים", builtInStage: "שלב 4", icon: Users },
+  {
+    // מסך משימה ולא יעד קבוע: ברוב הזמן הוא ריק. הוא בכל זאת בתפריט כי
+    // בלעדיו הדרך היחידה אליו הייתה לחיצה על שורה במרכז החריגות, ואי
+    // אפשר לחפש משהו שלא יודעים שהוא קיים.
+    path: "/ops/students/unassigned",
+    area: "ops",
+    navLabel: "שיוך מרוכז",
+    title: "שיוך מרוכז לתלמידים חסרי שיוך",
+    builtInStage: "שלב 33",
+    icon: UserPlus,
+  },
   {
     path: "/ops/organizations",
     area: "ops",
