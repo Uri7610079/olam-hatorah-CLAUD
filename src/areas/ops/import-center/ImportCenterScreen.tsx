@@ -9,13 +9,15 @@ import { ErrorsImportPanel } from "./panels/ErrorsImportPanel";
 import { AuditsImportPanel } from "./panels/AuditsImportPanel";
 import { PhoneListsImportPanel } from "./panels/PhoneListsImportPanel";
 import { BankImportPanel } from "./panels/BankImportPanel";
+import { TalmudBatchImportPanel } from "./panels/TalmudBatchImportPanel";
 
-type DataTypeKey = "auto" | "folder" | "master" | "eligibility" | "errors" | "audits" | "phone" | "bank";
+type DataTypeKey = "auto" | "folder" | "master" | "talmudBatch" | "eligibility" | "errors" | "audits" | "phone" | "bank";
 
 const DATA_TYPE_TABS: TabDef<DataTypeKey>[] = [
   { key: "auto", label: "זיהוי אוטומטי" },
   { key: "folder", label: "קבצים מהתיקייה" },
   { key: "master", label: "עמותות/סניפים/קבוצות" },
+  { key: "talmudBatch", label: "דוחות תלמוד (כמה יחד)" },
   { key: "eligibility", label: "זכאות חודשית" },
   { key: "errors", label: "שגיאות תלמוד" },
   { key: "audits", label: "ביקורות" },
@@ -60,6 +62,7 @@ export function ImportCenterScreen() {
       {dataType === "auto" && <AutoDetectPanel onRouteToTab={routeToTab} />}
       {dataType === "folder" && <FolderInboxPanel onRouteToTab={routeToTab} />}
       {dataType === "master" && <MasterDataImportWizard initialFile={handoffFile} />}
+      {dataType === "talmudBatch" && <TalmudBatchImportPanel />}
       {dataType === "eligibility" && <EligibilityImportPanel initialFile={handoffFile} />}
       {dataType === "errors" && <ErrorsImportPanel initialFile={handoffFile} />}
       {dataType === "audits" && <AuditsImportPanel initialFile={handoffFile} />}
