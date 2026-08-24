@@ -97,8 +97,8 @@ function routeFor(areaPrefix: string, type: ExceptionType): string {
   // כאן לא חסר נתון - צריך להריץ את ההשלמה, והכפתור נמצא במסך זכאות.
   if (type === "talmud_row_recoverable") return "/ops/talmud/eligibility";
   if (type === "talmud_branch_missing") return "/ops/branches-groups";
-  if (type === "talmud_student_missing" || type === "talmud_student_unassigned"
-      || type === "talmud_students_missing_no_amount") return "/ops/students";
+  if (type === "talmud_student_unassigned") return "/ops/students/unassigned";
+  if (type === "talmud_student_missing" || type === "talmud_students_missing_no_amount") return "/ops/students";
   const domain = TYPE_DOMAIN[type];
   if (domain === "bank") return "/finance/bank-matching";
   if (domain === "talmud") return "/ops/talmud/errors";
