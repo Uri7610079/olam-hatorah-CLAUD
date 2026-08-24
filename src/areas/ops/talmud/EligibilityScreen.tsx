@@ -190,6 +190,8 @@ export function EligibilityScreen() {
   const [sectionTab, setSectionTab] = useState<SectionTabKey>("month");
 
   const [reviewBatchId, setReviewBatchId] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
+  const [retryResult, setRetryResult] = useState<string | null>(null);
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ matched: number; unmatched: number } | null>(null);
@@ -298,6 +300,38 @@ export function EligibilityScreen() {
     await resolveImportRow(reviewBatchId, rowNumber, status);
     setResolvingRow(null);
     queryClient.invalidateQueries({ queryKey: ["eligibility-batch-rows", reviewBatchId] });
+  };
+
+  // השלמת שורות שנדחו באצווה שכבר נקלטה. נחוץ כשהנתונים שחסרו הוזנו
+  // אחרי הקליטה: התלמיד קיים כעת, אבל הכסף שלו לא נזקף כי הקליטה כבר
+  // רצה. קליטה חוזרת של הקובץ חסומה (file_hash ייחודי, ובצדק - היא
+  // מונעת זכאות כפולה), ולכן מריצים את ההתאמה שוב על אותה אצווה.
+  const retryRejected = async (batchId: string) => {
+    setRetrying(batchId);
+    setRetryResult(null);
+    setError(null);
+    const { data, error: retryError } = await supabase
+      .rpc("retry_rejected_eligibility_rows", { p_batch_id: batchId })
+      .single();
+    setRetrying(null);
+    if (retryError) {
+      setError(retryError.message);
+      return;
+    }
+    const r = data as { recovered_count: number; already_had_count: number; still_rejected_count: number };
+    setRetryResult(
+      r.recovered_count === 0 && r.already_had_count === 0
+        ? `לא הושלמה אף שורה. ${r.still_rejected_count} שורות עדיין חסרות תלמיד או שיוך.`
+        : `הושלמו ${r.recovered_count} שורות` +
+          (r.already_had_count ? ` · ${r.already_had_count} כבר היו זכאיות` : "") +
+          (r.still_rejected_count ? ` · ${r.still_rejected_count} עדיין חסרות נתונים` : "")
+    );
+    queryClient.invalidateQueries({ queryKey: ["eligibility-batches", orgId] });
+    queryClient.invalidateQueries({ queryKey: ["eligibility-batch", batchId] });
+    queryClient.invalidateQueries({ queryKey: ["eligibility-batch-rows", batchId] });
+    queryClient.invalidateQueries({ queryKey: ["month-eligibility", orgId, month] });
+    queryClient.invalidateQueries({ queryKey: ["eligibility-amount-check", orgId, month] });
+    queryClient.invalidateQueries({ queryKey: ["missing-from-report", orgId, month] });
   };
 
   const commit = async () => {
@@ -593,6 +627,12 @@ export function EligibilityScreen() {
           )}
 
           {sectionTab === "history" && (
+            <>
+            {retryResult && (
+              <div className="mb-3 rounded-control border border-line bg-surface-muted p-3 text-sm text-ink">
+                {retryResult}
+              </div>
+            )}
             <DataTable
               columns={[
                 { key: "file", header: "קובץ", render: (b: EligibilityBatchSummary) => b.file_name },
@@ -611,6 +651,25 @@ export function EligibilityScreen() {
                   ),
                 },
                 { key: "date", header: "תאריך", className: "tabular", render: (b: EligibilityBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+                {
+                  key: "retry",
+                  header: "",
+                  render: (b: EligibilityBatchSummary) =>
+                    b.status === "committed" && b.invalid_count > 0 ? (
+                      <button
+                        type="button"
+                        className="link-action text-xs"
+                        disabled={retrying === b.id}
+                        onClick={(e) => {
+                          e.stopPropagation();   // אחרת הלחיצה פותחת גם את סקירת האצווה
+                          void retryRejected(b.id);
+                        }}
+                        title="מריץ שוב את ההתאמה על השורות שנדחו, אחרי שהנתונים החסרים הוזנו"
+                      >
+                        {retrying === b.id ? "משלים…" : "השלמת שורות שנדחו"}
+                      </button>
+                    ) : null,
+                },
               ]}
               rows={batchesQuery.data ?? []}
               rowKey={(b: EligibilityBatchSummary) => b.id}
@@ -618,6 +677,7 @@ export function EligibilityScreen() {
               emptyTitle="אין עדיין יבואים"
               onRowClick={(b: EligibilityBatchSummary) => setReviewBatchId(b.id)}
             />
+            </>
           )}
         </>
       )}

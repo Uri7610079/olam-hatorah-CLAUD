@@ -28,7 +28,8 @@ type ExceptionType =
   | "talmud_student_missing"
   | "talmud_student_unassigned"
   | "talmud_branch_missing"
-  | "talmud_students_missing_no_amount";
+  | "talmud_students_missing_no_amount"
+  | "talmud_row_recoverable";
 
 interface ExceptionRow {
   exception_type: ExceptionType;
@@ -59,6 +60,9 @@ const TYPE_LABEL: Record<ExceptionType, string> = {
   talmud_student_unassigned: "תלמיד ללא שיוך לסניף/קבוצה",
   talmud_branch_missing: "סניף בדוח תלמוד שאינו במערכת",
   talmud_students_missing_no_amount: "תלמידים חסרים ללא זכאות החודש",
+  // הנתונים תוקנו מאז הקליטה, ולכן התלמיד כבר אינו "חסר" - אבל הכסף שלו
+  // לא נזקף, כי הקליטה כבר רצה. בלי השורה הזו הפער בלתי נראה לחלוטין.
+  talmud_row_recoverable: "זכאות שנדחתה וניתן להשלים",
 };
 
 type Domain = "bank" | "talmud" | "audits" | "documents" | "masav_returns";
@@ -77,6 +81,7 @@ const TYPE_DOMAIN: Record<ExceptionType, Domain> = {
   talmud_student_unassigned: "talmud",
   talmud_branch_missing: "talmud",
   talmud_students_missing_no_amount: "talmud",
+  talmud_row_recoverable: "talmud",
 };
 const DOMAIN_LABEL: Record<Domain, string> = {
   bank: "בנק והתאמות",
@@ -89,6 +94,8 @@ const DOMAIN_LABEL: Record<Domain, string> = {
 function routeFor(areaPrefix: string, type: ExceptionType): string {
   // חריגות הפער של תלמוד מובילות למסך שבו *מתקנים* אותן, לא למרכז שגיאות
   // תלמוד: מה שחסר הוא תלמיד או סניף, ושם מזינים אותם.
+  // כאן לא חסר נתון - צריך להריץ את ההשלמה, והכפתור נמצא במסך זכאות.
+  if (type === "talmud_row_recoverable") return "/ops/talmud/eligibility";
   if (type === "talmud_branch_missing") return "/ops/branches-groups";
   if (type === "talmud_student_missing" || type === "talmud_student_unassigned"
       || type === "talmud_students_missing_no_amount") return "/ops/students";
