@@ -24,7 +24,11 @@ type ExceptionType =
   | "audit_attendance"
   | "document_expiry"
   | "payment_return_open"
-  | "masav_needs_correction";
+  | "masav_needs_correction"
+  | "talmud_student_missing"
+  | "talmud_student_unassigned"
+  | "talmud_branch_missing"
+  | "talmud_students_missing_no_amount";
 
 interface ExceptionRow {
   exception_type: ExceptionType;
@@ -49,6 +53,12 @@ const TYPE_LABEL: Record<ExceptionType, string> = {
   document_expiry: "תוקף מסמך מתקרב/פג",
   payment_return_open: "החזרת תשלום פתוחה",
   masav_needs_correction: 'אצוות מס"ב דורשת תיקון',
+  // ארבעת אלה מסבירים את הפער בין הסכום שבדוח תלמוד לסכום שנקלט בפועל.
+  // עד שנוספו, הפער היה גלוי רק בכרטיס שלפני הקליטה ונעלם אחריו.
+  talmud_student_missing: "תלמיד בדוח תלמוד שאינו במערכת",
+  talmud_student_unassigned: "תלמיד ללא שיוך לסניף/קבוצה",
+  talmud_branch_missing: "סניף בדוח תלמוד שאינו במערכת",
+  talmud_students_missing_no_amount: "תלמידים חסרים ללא זכאות החודש",
 };
 
 type Domain = "bank" | "talmud" | "audits" | "documents" | "masav_returns";
@@ -63,6 +73,10 @@ const TYPE_DOMAIN: Record<ExceptionType, Domain> = {
   document_expiry: "documents",
   payment_return_open: "masav_returns",
   masav_needs_correction: "masav_returns",
+  talmud_student_missing: "talmud",
+  talmud_student_unassigned: "talmud",
+  talmud_branch_missing: "talmud",
+  talmud_students_missing_no_amount: "talmud",
 };
 const DOMAIN_LABEL: Record<Domain, string> = {
   bank: "בנק והתאמות",
@@ -73,6 +87,11 @@ const DOMAIN_LABEL: Record<Domain, string> = {
 };
 
 function routeFor(areaPrefix: string, type: ExceptionType): string {
+  // חריגות הפער של תלמוד מובילות למסך שבו *מתקנים* אותן, לא למרכז שגיאות
+  // תלמוד: מה שחסר הוא תלמיד או סניף, ושם מזינים אותם.
+  if (type === "talmud_branch_missing") return "/ops/branches-groups";
+  if (type === "talmud_student_missing" || type === "talmud_student_unassigned"
+      || type === "talmud_students_missing_no_amount") return "/ops/students";
   const domain = TYPE_DOMAIN[type];
   if (domain === "bank") return "/finance/bank-matching";
   if (domain === "talmud") return "/ops/talmud/errors";
