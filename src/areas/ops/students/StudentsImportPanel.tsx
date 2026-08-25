@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { flagInvalidIdentities } from "@/lib/israeliId";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -182,7 +183,7 @@ export function StudentsImportPanel() {
         passportNumber: (r.raw["מזהה חיצוני"] ?? "").trim(),
       }));
     if (passports.length === 0) {
-      setParsedRows(rows);
+      setParsedRows(flagInvalidIdentities(rows));
       return;
     }
     setPassportStep({ rows, passports });
@@ -191,8 +192,10 @@ export function StudentsImportPanel() {
   const handlePassportConfirm = (countryByRow: Record<number, string>) => {
     if (!passportStep) return;
     setParsedRows(
-      passportStep.rows.map((r) =>
-        countryByRow[r.rowNumber] ? { ...r, raw: { ...r.raw, "מדינת דרכון": countryByRow[r.rowNumber] } } : r,
+      flagInvalidIdentities(
+        passportStep.rows.map((r) =>
+          countryByRow[r.rowNumber] ? { ...r, raw: { ...r.raw, "מדינת דרכון": countryByRow[r.rowNumber] } } : r,
+        ),
       ),
     );
     setPassportStep(null);

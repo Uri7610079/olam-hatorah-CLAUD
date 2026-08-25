@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { entityNumberWarning } from "@/lib/israeliId";
 import { ErrorState } from "@/components/ErrorState";
 
 export interface OrganizationFormValues {
@@ -38,6 +39,9 @@ export function OrganizationForm({ initialValues, onSubmit, submitLabel, submitt
     await onSubmit(values);
   };
 
+  const orgNumberWarning = entityNumberWarning(values.org_number);
+
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
@@ -46,7 +50,20 @@ export function OrganizationForm({ initialValues, onSubmit, submitLabel, submitt
       </div>
       <div>
         <label className="field-label">מספר עמותה</label>
-        <input value={values.org_number} onChange={set("org_number")} className="input-field tabular" />
+        <input
+          value={values.org_number}
+          onChange={set("org_number")}
+          className="input-field tabular"
+          aria-describedby={orgNumberWarning ? "org-number-warning" : undefined}
+        />
+        {/* אזהרה ולא חסימה. ספרת הביקורת ודאית, אבל בדיקת הקידומת (58)
+            היא היוריסטיקה - רק הרשם הוא מקור סמכא - ולכן שתיהן מנוסחות
+            כהמלצה לבדוק ולא כקביעה שהמספר פסול. */}
+        {orgNumberWarning && (
+          <p id="org-number-warning" className="mt-1 text-xs text-warn-ink">
+            {orgNumberWarning}
+          </p>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>

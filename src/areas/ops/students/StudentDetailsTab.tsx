@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { israeliIdWarning } from "@/lib/israeliId";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
@@ -26,6 +27,7 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idWarning = israeliIdWarning(values.external_id, values.id_type as "israeli_id" | "passport" | "other");
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -101,7 +103,17 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
             value={values.external_id}
             onChange={(e) => setValues((v) => ({ ...v, external_id: e.target.value }))}
             className="input-field tabular"
+            aria-describedby={idWarning ? "external-id-warning" : undefined}
           />
+          {/* אזהרה ולא חסימה: ספרת ביקורת שגויה היא כמעט תמיד טעות הקלדה,
+              אבל היא לא אמורה לעצור עבודה. ההסבר אומר מה יקרה בפועל -
+              תלמיד כזה לא יותאם לדוח של תלמוד והכסף שלו לא ייכנס - כי
+              "מספר לא תקין" לבדו לא מסביר למה זה משנה. */}
+          {idWarning && (
+            <p id="external-id-warning" className="mt-1 text-xs text-warn-ink">
+              {idWarning}
+            </p>
+          )}
         </div>
       </div>
       <div>
