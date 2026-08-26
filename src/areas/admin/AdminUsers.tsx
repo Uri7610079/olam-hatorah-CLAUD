@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { UserPermissionsDrawer } from "./UserPermissionsDrawer";
+import { InviteUserPanel } from "./InviteUserPanel";
 
 type ProfileStatus = "pending" | "approved" | "disabled";
 type Area = "ops" | "finance" | "admin" | "tasks";
@@ -161,7 +162,11 @@ export function AdminUsers() {
 
   return (
     <div>
-      <PageHeader title="משתמשים והרשאות" description="אישור, דחייה או השבתה של משתמשים, כולל תפקיד ואזור ברירת מחדל." />
+      <PageHeader
+        title="משתמשים והרשאות"
+        description="הוספת משתמש עם תפקיד מראש, ואישור, דחייה או השבתה של קיימים."
+      />
+      <InviteUserPanel roles={rolesQuery.data ?? []} />
       <DataTable
         columns={columns}
         rows={profilesQuery.data ?? []}
