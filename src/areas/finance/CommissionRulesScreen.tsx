@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Percent, FlaskConical } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -201,6 +202,27 @@ export function CommissionRulesScreen() {
     queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
   };
 
+  // מחיקה עוברת דרך פונקציית מסד ולא דרך delete ישיר: היא זו שבודקת אם
+  // הכלל כבר שימש לחישוב כספי. כלל כזה אינו נתון שאפשר למחוק אלא
+  // היסטוריה, והפונקציה חוסמת אותו ומחזירה הסבר בעברית.
+  const [ruleToDelete, setRuleToDelete] = useState<CommissionRule | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const confirmDelete = async () => {
+    if (!ruleToDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    const { error: err } = await supabase.rpc("delete_commission_rule", { p_id: ruleToDelete.id });
+    setDeleting(false);
+    if (err) {
+      setDeleteError(err.message);
+      return;
+    }
+    setRuleToDelete(null);
+    void queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
+  };
+
   const toggleActive = async (rule: CommissionRule) => {
     const { error: err } = await supabase.from("commission_rules").update({ is_active: !rule.is_active }).eq("id", rule.id);
     if (!err) queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
@@ -283,10 +305,49 @@ export function CommissionRulesScreen() {
           <StatusBadge severity={r.is_active ? "ok" : "neutral"} label={r.is_active ? "פעיל" : "כבוי"} />
         ),
     },
+    {
+      key: "actions",
+      header: "",
+      render: (r) =>
+        canManage ? (
+          <button
+            type="button"
+            className="link-action text-xs text-danger"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteError(null);
+              setRuleToDelete(r);
+            }}
+          >
+            מחיקה
+          </button>
+        ) : null,
+    },
   ];
 
   return (
     <div>
+      <ConfirmDialog
+        open={!!ruleToDelete}
+        title="מחיקת כלל עמלה"
+        danger
+        confirmLabel={deleting ? "מוחקת…" : "מחיקה"}
+        description={
+          deleteError ??
+          `הכלל יימחק לצמיתות ולא ניתן לשחזר אותו. ${
+            ruleToDelete
+              ? `(${TYPE_LABEL[ruleToDelete.calculation_type]}${
+                  ruleToDelete.percentage != null ? ` ${ruleToDelete.percentage}%` : ""
+                }${ruleToDelete.group ? ` · קבוצה: ${ruleToDelete.group.name}` : ""})`
+              : ""
+          } אם הכלל כבר שימש לחישוב כספי המחיקה תיחסם, ואפשר יהיה רק לכבות אותו.`
+        }
+        onCancel={() => {
+          setRuleToDelete(null);
+          setDeleteError(null);
+        }}
+        onConfirm={confirmDelete}
+      />
       <PageHeader
         title="כללי עמלה"
         description="כלל תואם לפי עמותה, קבוצה, קוד לימוד או חריג לתלמיד ספציפי, בטווח תאריכים. כשכמה כללים תואמים - מנצח העדיפות הגבוהה ביותר."

@@ -75,6 +75,61 @@ async function fetchGroups(branchId: string): Promise<GroupRow[]> {
   return (data ?? []).map((g: any) => ({ ...g, group_leader_name: g.leader?.full_name ?? null }));
 }
 
+interface AllGroupRow {
+  id: string;
+  name: string;
+  status: string;
+  branch_id: string;
+  branch_code: string;
+  branch_name: string;
+  leader_name: string | null;
+  duplicateBranches: string[];
+}
+
+// כל הקבוצות של העמותה בכל הסניפים, ברשימה אחת.
+//
+// שם קבוצה אינו ייחודי בין סניפים, וזה לגיטימי - "רוטנברג" קיים בסניפים
+// 01, 02 ו-04 של ברכת אלימלך, ואלה שלוש קבוצות שונות. אבל כשעוברים סניף
+// אחרי סניף זה נראה בדיוק כמו כפילות. לכן הרשימה הזו מציגה את הסניף לצד
+// כל שם, ומסמנת במפורש שם שחוזר ביותר מסניף אחד.
+async function fetchAllGroups(orgId: string): Promise<AllGroupRow[]> {
+  const { data, error } = await supabase
+    .from("groups")
+    .select("id, name, status, branch_id, leader:group_leaders(full_name), branch:branches!inner(talmud_branch_code, internal_name, organization_id)")
+    .eq("branch.organization_id", orgId)
+    .order("name");
+  if (error) throw error;
+
+  const rows = (data ?? []).map((g: any) => {
+    const br = Array.isArray(g.branch) ? g.branch[0] : g.branch;
+    const ld = Array.isArray(g.leader) ? g.leader[0] : g.leader;
+    return {
+      id: g.id,
+      name: g.name,
+      status: g.status,
+      branch_id: g.branch_id,
+      branch_code: br?.talmud_branch_code ?? "—",
+      branch_name: br?.internal_name ?? "—",
+      leader_name: ld?.full_name ?? null,
+      duplicateBranches: [] as string[],
+    };
+  });
+
+  // שם שמופיע ביותר מסניף אחד. אותו שם *באותו* סניף היה כפילות אמיתית,
+  // אבל כזו אין במסד - נבדק על הנתונים החיים ונמצאו אפס מקרים.
+  const byName = new Map<string, string[]>();
+  rows.forEach((r) => {
+    const list = byName.get(r.name) ?? [];
+    if (!list.includes(r.branch_code)) list.push(r.branch_code);
+    byName.set(r.name, list);
+  });
+  rows.forEach((r) => {
+    const list = byName.get(r.name) ?? [];
+    r.duplicateBranches = list.length > 1 ? list.slice().sort() : [];
+  });
+  return rows;
+}
+
 const EMPTY_BRANCH_FORM = { talmud_branch_code: "", internal_name: "", address: "", responsible_person: "", phone_system_id: "" };
 const EMPTY_GROUP_FORM = { name: "", group_leader_id: "", opened_at: "", default_distribution_method: "" };
 
@@ -95,6 +150,13 @@ export function BranchesGroupsScreen() {
     queryKey: ["groups", selectedBranchId],
     queryFn: () => fetchGroups(selectedBranchId!),
     enabled: !!selectedBranchId,
+  });
+
+  const [showAllGroups, setShowAllGroups] = useState(false);
+  const allGroupsQuery = useQuery({
+    queryKey: ["all-groups", orgId],
+    queryFn: () => fetchAllGroups(orgId),
+    enabled: !!orgId && showAllGroups,
   });
 
   const [showAddBranch, setShowAddBranch] = useState(false);
@@ -381,6 +443,79 @@ export function BranchesGroupsScreen() {
         <ErrorState message="יש לבחור עמותה כדי לראות ולנהל את הסניפים שלה." />
       ) : (
         <>
+          {/* רשימה אחת לכל הקבוצות של העמותה, חוצת סניפים. קיימת כי
+              מעבר סניף-אחרי-סניף אינו נותן תמונה כוללת, ובעיקר: אותו שם
+              קבוצה חוזר בכמה סניפים ונראה בדיוק כמו כפילות. */}
+          <div className="mb-4">
+            <button
+              type="button"
+              className="btn-secondary flex items-center gap-1.5 text-xs"
+              onClick={() => setShowAllGroups((v) => !v)}
+            >
+              <Network className="h-3.5 w-3.5" aria-hidden="true" />
+              {showAllGroups ? "הסתרת כל הקבוצות" : "כל הקבוצות בכל הסניפים"}
+            </button>
+          </div>
+
+          {showAllGroups && (
+            <div className="mb-6">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-ink-muted">
+                  כל הקבוצות של העמותה
+                  {allGroupsQuery.data ? ` — ${allGroupsQuery.data.length}` : ""}
+                </h3>
+                {(() => {
+                  const dup = (allGroupsQuery.data ?? []).filter((g) => g.duplicateBranches.length > 0);
+                  const names = [...new Set(dup.map((g) => g.name))];
+                  return names.length > 0 ? (
+                    <span className="text-xs text-warn-ink">
+                      {names.length} שמות חוזרים ביותר מסניף אחד — אלה קבוצות נפרדות, לא כפילות
+                    </span>
+                  ) : (
+                    <span className="text-xs text-ink-subtle">אין שמות חוזרים</span>
+                  );
+                })()}
+              </div>
+              <DataTable
+                columns={[
+                  {
+                    key: "name",
+                    header: "קבוצה",
+                    render: (g: AllGroupRow) => (
+                      <span className="flex items-center gap-2">
+                        {g.name}
+                        {g.duplicateBranches.length > 0 && (
+                          <span
+                            className="rounded-full bg-warn-soft px-2 py-0.5 text-[11px] text-warn-ink"
+                            title={`השם הזה קיים גם בסניפים ${g.duplicateBranches.join(", ")}`}
+                          >
+                            גם ב-{g.duplicateBranches.filter((c) => c !== g.branch_code).join(", ")}
+                          </span>
+                        )}
+                      </span>
+                    ),
+                  },
+                  { key: "branch", header: "סניף", className: "tabular", render: (g: AllGroupRow) => g.branch_code },
+                  { key: "branchName", header: "שם הסניף", render: (g: AllGroupRow) => g.branch_name },
+                  { key: "leader", header: "ראש קבוצה", render: (g: AllGroupRow) => g.leader_name ?? "—" },
+                  {
+                    key: "status",
+                    header: "סטטוס",
+                    render: (g: AllGroupRow) => (
+                      <StatusBadge severity={g.status === "active" ? "ok" : "neutral"} label={g.status === "active" ? "פעילה" : "סגורה"} />
+                    ),
+                  },
+                ]}
+                rows={allGroupsQuery.data ?? []}
+                rowKey={(g: AllGroupRow) => g.id}
+                loading={allGroupsQuery.isLoading}
+                emptyTitle="אין קבוצות לעמותה זו"
+                emptyIcon={Network}
+                onRowClick={(g: AllGroupRow) => setSelectedBranchId(g.branch_id)}
+              />
+            </div>
+          )}
+
           <div className="mb-6">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-ink-muted">סניפים</h3>
