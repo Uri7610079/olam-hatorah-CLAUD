@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Phone, Upload, Sparkles, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -61,17 +62,13 @@ interface MissingStudent {
 const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = { pending: "ממתין", matched: "תואם", extra: "עודף", duplicate: "כפול", invalid: "לא תקין" };
 const IMPORT_STATUS_LABEL: Record<ImportStatus, string> = { uploaded: "הועלה", committed: "נקלט", rejected: "בוטל" };
 
-function normalizePhone(raw: string): string {
-  return raw.replace(/\D/g, "");
-}
-
 function buildLocalRows(parsed: ParsedFile): LocalRow[] {
   const phoneKey = parsed.headers.find((h) => h.includes("טלפון")) ?? parsed.headers[0];
   const seen = new Set<string>();
   return parsed.rows.map((raw, index) => {
     const rowNumber = index + 1;
     const rawPhone = (raw[phoneKey] ?? "").trim();
-    const normalizedPhone = normalizePhone(rawPhone);
+    const normalizedPhone = normalizeIsraeliPhone(rawPhone);
     if (!normalizedPhone) {
       return { rowNumber, rawPhone, normalizedPhone, status: "invalid", errorMessage: "אין ספרות בטלפון" };
     }

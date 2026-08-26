@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { PhoneField } from "@/components/PhoneField";
 import { entityNumberWarning } from "@/lib/israeliId";
 import { ErrorState } from "@/components/ErrorState";
 
@@ -66,10 +67,11 @@ export function OrganizationForm({ initialValues, onSubmit, submitLabel, submitt
         )}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
-          <label className="field-label">טלפון</label>
-          <input dir="ltr" value={values.contact_phone} onChange={set("contact_phone")} className="input-field text-right" />
-        </div>
+        <PhoneField
+          id="org-contact-phone"
+          value={values.contact_phone}
+          onChange={(v) => setValues((prev) => ({ ...prev, contact_phone: v }))}
+        />
         <div>
           <label className="field-label">אימייל</label>
           <input type="email" dir="ltr" value={values.contact_email} onChange={set("contact_email")} className="input-field text-right" />

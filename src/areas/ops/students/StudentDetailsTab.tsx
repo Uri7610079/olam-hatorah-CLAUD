@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from "react";
+import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
+import { PhoneField } from "@/components/PhoneField";
 import { israeliIdWarning } from "@/lib/israeliId";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +35,10 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const phoneDigits = values.phone.replace(/\D/g, "");
+    // הצורה הקנונית ולא ספרות-בלבד: phone_normalized הוא מה שההתאמה
+    // לרשימות הטלפון משווה, ו-"+972521234567" מול "0521234567" הם אותו
+    // אדם ששתי מחרוזות שונות מייצגות.
+    const phoneDigits = normalizeIsraeliPhone(values.phone);
     const { error } = await supabase
       .from("students")
       .update({
@@ -125,10 +130,11 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           <label className="field-label">תאריך לידה</label>
           <input type="date" value={values.birth_date} onChange={(e) => setValues((v) => ({ ...v, birth_date: e.target.value }))} className="input-field" />
         </div>
-        <div>
-          <label className="field-label">טלפון</label>
-          <input value={values.phone} onChange={(e) => setValues((v) => ({ ...v, phone: e.target.value }))} className="input-field" />
-        </div>
+        <PhoneField
+          id="student-phone"
+          value={values.phone}
+          onChange={(v) => setValues((prev) => ({ ...prev, phone: v }))}
+        />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { PhoneField } from "@/components/PhoneField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -142,10 +143,11 @@ export function OrganizationOfficeholdersTab({ organizationId }: OrganizationOff
               <label className="field-label">ת"ז</label>
               <input value={form.id_number} onChange={(e) => setForm((f) => ({ ...f, id_number: e.target.value }))} className="input-field tabular" />
             </div>
-            <div>
-              <label className="field-label">טלפון</label>
-              <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="input-field" />
-            </div>
+            <PhoneField
+              id="officeholder-phone"
+              value={form.phone}
+              onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+            />
             <div>
               <label className="field-label">תחילת כהונה</label>
               <input type="date" value={form.tenure_start} onChange={(e) => setForm((f) => ({ ...f, tenure_start: e.target.value }))} className="input-field" />

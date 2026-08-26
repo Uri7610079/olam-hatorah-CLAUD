@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from "react";
+import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
+import { PhoneField } from "@/components/PhoneField";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users } from "lucide-react";
@@ -96,7 +98,10 @@ export function StudentsListScreen() {
     e.preventDefault();
     setCreating(true);
     setCreateError(null);
-    const phoneDigits = form.phone.replace(/\D/g, "");
+    // הצורה הקנונית ולא ספרות-בלבד: phone_normalized הוא מה שההתאמה
+    // לרשימות הטלפון משווה, ו-"+972521234567" מול "0521234567" הם אותו
+    // אדם ששתי מחרוזות שונות מייצגות.
+    const phoneDigits = normalizeIsraeliPhone(form.phone);
     const { data, error } = await supabase
       .from("students")
       .insert({
@@ -267,10 +272,11 @@ export function StudentsListScreen() {
                 <label className="field-label">שם מלא</label>
                 <input required value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} className="input-field" />
               </div>
-              <div>
-                <label className="field-label">טלפון</label>
-                <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="input-field" />
-              </div>
+              <PhoneField
+                id="new-student-phone"
+                value={form.phone}
+                onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
+              />
               {createError && <ErrorState message={createError} />}
               <button type="submit" disabled={creating} className="btn-primary w-full">
                 {creating ? "יוצרת…" : "יצירה"}
