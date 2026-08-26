@@ -29,7 +29,7 @@ export function Layout() {
     <div className="flex min-h-screen flex-col">
       <DemoBanner />
 
-      <header className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
         <button
           className="rounded-control p-2 text-ink-muted hover:bg-surface-muted lg:hidden"
           aria-label="פתח תפריט"
@@ -93,7 +93,7 @@ export function Layout() {
 
       <div className="flex flex-1">
         <aside
-          className={`${sidebarOpen ? "block" : "hidden"} w-64 shrink-0 border-l border-line bg-surface lg:block`}
+          className={`${sidebarOpen ? "block" : "hidden"} w-64 shrink-0 self-start border-l border-line bg-surface lg:sticky lg:top-[3.25rem] lg:block lg:h-[calc(100vh-3.25rem)] lg:overflow-y-auto`}
         >
           {/* כותרת האזור - פס צבע בצד ואייקון, כדי שהאזור הנוכחי יזוהה מיד גם
               בלי לקרוא את הטקסט. */}
