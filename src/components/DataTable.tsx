@@ -64,6 +64,20 @@ export function DataTable<T>({
   const visibleColumns = columnPicker ? columns.filter((c) => !hiddenKeys.has(c.key)) : columns;
   const growKey = visibleColumns.find((c) => c.grow)?.key;
 
+  // ברירת מחדל: תא אינו נשבר לשורות. עמודת הסרק שסופגת את הרוחב הפנוי
+  // מכריחה כל עמודה אמיתית להצטמצם למינימום שלה, ולטקסט המינימום הוא
+  // רוחב המילה הארוכה ביותר - כך "אורלנסקי משה" נפרס לשתי שורות בעמודה
+  // צרה בזמן שיש מקום פנוי בשפע מימין.
+  //
+  // עמודה שמסמנת grow היא היוצאת: היא סופגת את השארית *ומותר* לה
+  // להישבר, כי טקסט חופשי ארוך בשורה אחת היה מותח את הטבלה בלי סוף.
+  // עמודה שמגדירה whitespace משלה מנצחת - היא ביקשה במפורש.
+  const cellClass = (col: DataTableColumn<T>) => {
+    const own = col.className ?? "";
+    if (col.key === growKey) return `min-w-[22rem] ${own}`;
+    return own.includes("whitespace") ? own : `whitespace-nowrap ${own}`;
+  };
+
   const toggleColumn = (key: string) => {
     setHiddenKeys((prev) => {
       const next = new Set(prev);
@@ -156,10 +170,7 @@ export function DataTable<T>({
                   className={`${onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""} ${rowClassName?.(row) ?? ""}`.trim()}
                 >
                   {visibleColumns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={`px-4 py-3 ${col.key === growKey ? "min-w-[22rem]" : ""} ${col.className ?? ""}`}
-                    >
+                    <td key={col.key} className={`px-4 py-3 ${cellClass(col)}`}>
                       {col.render(row)}
                     </td>
                   ))}

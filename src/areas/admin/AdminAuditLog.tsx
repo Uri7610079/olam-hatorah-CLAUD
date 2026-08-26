@@ -68,7 +68,22 @@ export function AdminAuditLog() {
     {
       key: "detail",
       header: "פרטים",
-      render: (r) => (r.detail ? <code className="text-xs">{JSON.stringify(r.detail)}</code> : "—"),
+      // JSON גולמי באורך בלתי צפוי. בלי grow הוא מותח את הטבלה לרוחב
+      // של 5,000 פיקסל ומכריח גלילה אופקית בכל שורה; איתו הוא סופג את
+      // הרוחב הפנוי ונשבר לשורות רק כשצריך.
+      grow: true,
+      className: "whitespace-normal break-all",
+      // גזירה לשלוש שורות: אירוע בודד יכול להכיל JSON ארוך מאוד, ושורה
+      // אחת בגובה 265 פיקסל הופכת את כל היומן לבלתי קריא. הערך המלא
+      // נשאר זמין בריחוף, ולכן שום מידע לא הולך לאיבוד.
+      render: (r) =>
+        r.detail ? (
+          <code className="line-clamp-3 text-xs" title={JSON.stringify(r.detail)}>
+            {JSON.stringify(r.detail)}
+          </code>
+        ) : (
+          "—"
+        ),
     },
   ];
 
