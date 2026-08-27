@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { MonthField } from "@/components/MonthField";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useLastSelected } from "@/lib/useLastSelected";
@@ -79,10 +80,7 @@ export function FinanceDashboard() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="field-label">חודש</label>
-          <input type="date" value={month} onChange={(e) => setMonth(e.target.value)} className="input-field" />
-        </div>
+        <MonthField id="finance-month" value={month} onChange={setMonth} />
       </div>
 
       {!orgId && <p className="text-sm text-ink-subtle">בחרי עמותה כדי להציג את מצב החודש.</p>}

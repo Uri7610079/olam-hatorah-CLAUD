@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Split, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -466,7 +467,7 @@ export function DistributionsScreen() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="field-label">חודש</label>
-                  <input required type="date" value={newBatch.periodMonth} onChange={(e) => setNewBatch((f) => ({ ...f, periodMonth: e.target.value }))} className="input-field" />
+                  <input required type="month" value={toMonthInput(newBatch.periodMonth)} onChange={(e) => setNewBatch((f) => ({ ...f, periodMonth: fromMonthInput(e.target.value) }))} className="input-field" />
                 </div>
                 <div>
                   <label className="field-label">מקור כסף</label>

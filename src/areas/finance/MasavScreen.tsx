@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
@@ -330,7 +331,7 @@ export function MasavScreen() {
         </div>
         <div>
           <label className="field-label">חודש</label>
-          <input type="date" value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} className="input-field" />
+          <input type="month" value={toMonthInput(periodMonth)} onChange={(e) => setPeriodMonth(fromMonthInput(e.target.value))} className="input-field" />
         </div>
       </div>
 

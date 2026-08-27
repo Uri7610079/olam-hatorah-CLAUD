@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -240,15 +241,15 @@ export function RetroScreen() {
               <label className="field-label">חודש מקור</label>
               <input
                 required
-                type="date"
-                value={form.sourceMonth}
+                type="month"
+                value={toMonthInput(form.sourceMonth)}
                 onChange={(e) => setForm((f) => ({ ...f, sourceMonth: e.target.value, priorEligibleCount: "", priorAmount: "" }))}
                 className="input-field"
               />
             </div>
             <div>
               <label className="field-label">חודש קבלה</label>
-              <input required type="date" value={form.receivedMonth} onChange={(e) => setForm((f) => ({ ...f, receivedMonth: e.target.value }))} className="input-field" />
+              <input required type="month" value={toMonthInput(form.receivedMonth)} onChange={(e) => setForm((f) => ({ ...f, receivedMonth: fromMonthInput(e.target.value) }))} className="input-field" />
             </div>
           </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -311,7 +312,7 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
         </div>
         <div>
           <label className="field-label">חודש (לקובץ חדש)</label>
-          <input type="date" value={month} onChange={(e) => setMonth(e.target.value)} className="input-field" />
+          <input type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -220,9 +221,9 @@ export function GroupBalancesScreen() {
                       <label className="field-label">חודש כספי</label>
                       <input
                         required
-                        type="date"
-                        value={correction.periodMonth}
-                        onChange={(e) => setCorrection((f) => ({ ...f, periodMonth: e.target.value }))}
+                        type="month"
+                        value={toMonthInput(correction.periodMonth)}
+                        onChange={(e) => setCorrection((f) => ({ ...f, periodMonth: fromMonthInput(e.target.value) }))}
                         className="input-field"
                       />
                     </div>
