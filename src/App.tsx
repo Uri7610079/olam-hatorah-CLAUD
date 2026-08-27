@@ -8,6 +8,7 @@ import { OpsDashboard } from "./areas/ops/OpsDashboard";
 import { FinanceDashboard } from "./areas/finance/FinanceDashboard";
 import { AdminHome } from "./areas/admin/AdminHome";
 import { AdminUsers } from "./areas/admin/AdminUsers";
+import { GuideScreen } from "./areas/admin/GuideScreen";
 import { AdminAuditLog } from "./areas/admin/AdminAuditLog";
 import { OrganizationsListScreen } from "./areas/ops/organizations/OrganizationsListScreen";
 import { OrganizationDetailScreen } from "./areas/ops/organizations/OrganizationDetailScreen";
@@ -50,6 +51,7 @@ import { TasksSettingsScreen } from "./areas/tasks/TasksSettingsScreen";
 const SCREENS_WITH_REAL_PAGES = new Set([
   "/admin/users",
   "/admin/audit-log",
+  "/admin/guide",
   "/admin/study-codes",
   "/ops/organizations",
   "/ops/branches-groups",
@@ -102,6 +104,7 @@ export default function App() {
             <Route path="/admin" element={<AdminHome />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/audit-log" element={<AdminAuditLog />} />
+            <Route path="/admin/guide" element={<GuideScreen />} />
             <Route path="/ops/organizations" element={<OrganizationsListScreen />} />
             <Route path="/ops/organizations/:id" element={<OrganizationDetailScreen />} />
             <Route path="/ops/branches-groups" element={<BranchesGroupsScreen />} />

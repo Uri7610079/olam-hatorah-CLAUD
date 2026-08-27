@@ -316,6 +316,16 @@ export const SCREENS: ScreenDef[] = [
     icon: Palette,
   },
   {
+    // ראשון ברשימת הניהול בכוונה: מי שלא יודע מה המסכים עושים צריך
+    // למצוא את המדריך בלי לחפש אותו.
+    path: "/admin/guide",
+    area: "admin",
+    navLabel: "מדריך המערכת",
+    title: "מדריך המערכת",
+    builtInStage: "שלב 33",
+    icon: BookOpen,
+  },
+  {
     path: "/admin/audit-log",
     area: "admin",
     navLabel: "יומן פעילות",

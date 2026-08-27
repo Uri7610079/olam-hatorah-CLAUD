@@ -4,6 +4,8 @@ import { ChevronLeft } from "lucide-react";
 import { SCREENS } from "@/app/screens";
 import { AREA_ICON, AREA_LABEL } from "@/app/Layout";
 import { Breadcrumbs, type BreadcrumbItem } from "./Breadcrumbs";
+import { HelpHint } from "./HelpHint";
+import { guideForPath } from "@/lib/screenGuide";
 
 interface PageHeaderProps {
   title: string;
@@ -28,6 +30,7 @@ function findCurrentScreen(pathname: string) {
 export function PageHeader({ title, description, primaryAction, breadcrumbs }: PageHeaderProps) {
   const { pathname } = useLocation();
   const screen = findCurrentScreen(pathname);
+  const guide = guideForPath(pathname);
   const AreaIcon = screen ? AREA_ICON[screen.area] : null;
 
   return (
@@ -51,7 +54,10 @@ export function PageHeader({ title, description, primaryAction, breadcrumbs }: P
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
-          <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
+          <h1 className="flex items-center gap-1.5 text-2xl font-bold tracking-tight text-ink">
+            {title}
+            {guide && <HelpHint guide={guide} />}
+          </h1>
           {description && <p className="mt-1.5 text-sm text-ink-muted">{description}</p>}
         </div>
         {primaryAction && <div>{primaryAction}</div>}
