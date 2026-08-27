@@ -72,6 +72,29 @@ export function DataTable<T>({
   // עמודה שמסמנת grow היא היוצאת: היא סופגת את השארית *ומותר* לה
   // להישבר, כי טקסט חופשי ארוך בשורה אחת היה מותח את הטבלה בלי סוף.
   // עמודה שמגדירה whitespace משלה מנצחת - היא ביקשה במפורש.
+  // עמודת הפעולות נשארת במקומה בגלילה לרוחב. היא נמצאת בקצה השמאלי של
+  // השורה, ובטבלה רחבה מהמסך היא הראשונה להיעלם - בדיוק העמודה שבגללה
+  // פתחו את המסך. הזיהוי לפי מפתח "actions", שהוא השם שבו כל 29
+  // העמודות האלה מוגדרות בכל המסכים.
+  const stickyEndKey = visibleColumns.find((c) => c.key === "actions")?.key;
+
+  // גם העמודה הראשונה - עמודת הזהות. עמודת פעולות מוצמדת בלי לדעת על
+  // *מי* היא פועלת אינה שימושית: רואים "מחיקה" ולא רואים של מי. מוצמדת
+  // רק כשיש עמודת פעולות, כדי לא לצמצם ללא צורך טבלה שאין בה פעולות.
+  const stickyStartKey = stickyEndKey && visibleColumns.length > 3 ? visibleColumns[0].key : undefined;
+
+  // רקע: תא מוצמד שקוף מראה דרכו את התוכן שנגלל מתחתיו. bg-inherit
+  // לוקח את הרקע מהשורה, כך שריחוף והדגשת שורה ממשיכים לעבוד - רקע
+  // קבוע היה מבטל אותם דווקא בעמודה הבולטת ביותר.
+  const stickyCell = (key: string, head: boolean) => {
+    const bg = head ? "z-20 bg-surface-muted" : "z-10 bg-inherit";
+    // left/right פיזיים ולא לוגיים: הגלילה עצמה פיזית, ובממשק ימין-לשמאל
+    // הקצה ההתחלתי הוא הימני.
+    if (key === stickyEndKey) return `sticky left-0 ${bg} border-s border-line`;
+    if (key === stickyStartKey) return `sticky right-0 ${bg} border-e border-line`;
+    return "";
+  };
+
   const cellClass = (col: DataTableColumn<T>) => {
     const own = col.className ?? "";
     if (col.key === growKey) return `min-w-[22rem] ${own}`;
@@ -134,7 +157,7 @@ export function DataTable<T>({
                     // משמעות, והעמודה הייתה מתמוטטת לרוחב המילה הארוכה
                     // ביותר. עדיף שהטבלה תיגלל לרוחב (המכל כבר תומך בזה)
                     // מאשר עמודת טקסט צרה וגבוהה.
-                    className={`whitespace-nowrap px-4 py-3 font-medium ${col.key === growKey ? "w-full min-w-[22rem]" : ""}`}
+                    className={`whitespace-nowrap px-4 py-3 font-medium ${col.key === growKey ? "w-full min-w-[22rem]" : ""} ${stickyCell(col.key, true)}`}
                   >
                     {col.header}
                   </th>
@@ -167,10 +190,13 @@ export function DataTable<T>({
                         }
                       : undefined
                   }
-                  className={`${onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""} ${rowClassName?.(row) ?? ""}`.trim()}
+                  // bg-surface על השורה ולא רק על הכרטיס: התא המוצמד יורש
+                  // ממנה את הרקע, ובלי רקע אמיתי הוא היה שקוף והתוכן
+                  // שנגלל מתחתיו היה נראה דרכו.
+                  className={`bg-surface ${onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""} ${rowClassName?.(row) ?? ""}`.trim()}
                 >
                   {visibleColumns.map((col) => (
-                    <td key={col.key} className={`px-4 py-3 ${cellClass(col)}`}>
+                    <td key={col.key} className={`px-4 py-3 ${cellClass(col)} ${stickyCell(col.key, false)}`}>
                       {col.render(row)}
                     </td>
                   ))}
