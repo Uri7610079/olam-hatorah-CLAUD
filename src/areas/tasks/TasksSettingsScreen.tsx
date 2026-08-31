@@ -629,6 +629,25 @@ function TaskTemplatesSection() {
   );
 }
 
+// הודעת שגיאה בעברית, במונחים של מי שיושב מול המסך.
+//
+// המסד מחזיר טקסט טכני באנגלית - "duplicate key value violates unique
+// constraint" - ומי שמקבל אותו לא יודע מה עשה לא נכון ומה לעשות עכשיו.
+// הודעה כזו גרועה מאין הודעה: היא נראית כתקלה במערכת ולא כטעות הזנה.
+function whatsappConnectError(e: any): string {
+  const raw = String(e?.message ?? "");
+  if (/duplicate key|unique constraint/i.test(raw)) {
+    return "המזהה החיצוני הזה כבר מחובר. לכל ספק יש מזהה משלו — אצל Twilio זה מספר ה-WhatsApp שלהם בפורמט whatsapp:+1415…, ואצל Meta זה ה-Phone number ID. יש לוודא שהוזן המזהה של הספק הנכון.";
+  }
+  if (/permission denied/i.test(raw)) {
+    return "אין לך הרשאה לחבר קבוצות WhatsApp.";
+  }
+  if (/violates foreign key|not present in table/i.test(raw)) {
+    return "הצוות שנבחר אינו קיים עוד. יש לבחור צוות אחר.";
+  }
+  return raw || "החיבור נכשל.";
+}
+
 export function TasksSettingsScreen() {
   const queryClient = useQueryClient();
   const { session } = useAuth();
@@ -662,7 +681,7 @@ export function TasksSettingsScreen() {
       setNewGroupTeamId("");
       queryClient.invalidateQueries({ queryKey: ["all-whatsapp-groups"] });
     } catch (e: any) {
-      setError(e.message ?? "שגיאה בחיבור הקבוצה");
+      setError(whatsappConnectError(e));
     }
   };
 
