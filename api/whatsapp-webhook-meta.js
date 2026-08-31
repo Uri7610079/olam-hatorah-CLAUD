@@ -24,11 +24,23 @@ export default async function handler(req, res) {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
     const expectedToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
-    if (mode === "subscribe" && expectedToken && token === expectedToken) {
-      res.status(200).send(challenge);
-    } else {
-      res.status(403).send("verification failed");
+    // שלוש סיבות שונות לכישלון, ובעבר כולן החזירו את אותה תשובה. כשמטא
+    // מציגה "verification failed" בלי שום פירוט, אי אפשר לדעת אם הבעיה
+    // בטוקן שהוקלד אצלה או במשתנה שלא הגיע לשרת - וזה הבדל בין תיקון של
+    // דקה לבין חיפוש באפלה. הערך עצמו לעולם אינו מוחזר, רק אם הוא קיים.
+    if (!expectedToken) {
+      res.status(403).send("server misconfigured: META_WEBHOOK_VERIFY_TOKEN is not set on this deployment");
+      return;
     }
+    if (mode !== "subscribe") {
+      res.status(403).send("not a verification request");
+      return;
+    }
+    if (token !== expectedToken) {
+      res.status(403).send("token mismatch");
+      return;
+    }
+    res.status(200).send(challenge);
     return;
   }
 
