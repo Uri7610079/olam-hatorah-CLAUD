@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { MultiSelect } from "@/components/MultiSelect";
 import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
 import { PhoneField } from "@/components/PhoneField";
 import { useNavigate } from "react-router-dom";
@@ -28,7 +29,7 @@ interface FetchResult {
 // חיפוש וסינון בצד שרת + pagination אמיתי - "אלפי תלמידים, pagination וחיפוש צד שרת"
 // באפיון (§9, נפח). זו הטבלה הכי גדולת-נפח במערכת, ולכן הראשונה שמקבלת את היכולת הזו
 // (שאר הטבלאות הקטנות יותר ממשיכות עם הדפוס הישן - סינון בצד לקוח על כל הנתונים).
-async function fetchStudents(search: string, statusFilter: string, page: number): Promise<FetchResult> {
+async function fetchStudents(search: string, statusFilter: string[], page: number): Promise<FetchResult> {
   let query = supabase
     .from("students")
     .select(
@@ -42,7 +43,9 @@ async function fetchStudents(search: string, statusFilter: string, page: number)
     const term = search.trim();
     query = query.or(`full_name.ilike.%${term}%,external_id.ilike.%${term}%`);
   }
-  if (statusFilter) query = query.eq("status", statusFilter);
+  // eq לסטטוס אחד, in לכמה. ריק = ללא סינון כלל.
+  if (statusFilter.length === 1) query = query.eq("status", statusFilter[0]);
+  else if (statusFilter.length > 1) query = query.in("status", statusFilter);
 
   const { data, error, count } = await query;
   if (error) throw error;
@@ -66,7 +69,7 @@ export function StudentsListScreen() {
   const { hasPermission: canManage } = useHasPermission("students", "manage");
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -77,14 +80,17 @@ export function StudentsListScreen() {
   useEscapeToClose(showCreate, () => setShowCreate(false));
   const [savingFilterName, setSavingFilterName] = useState("");
 
-  const query = useQuery({ queryKey: ["students", search, statusFilter, page], queryFn: () => fetchStudents(search, statusFilter, page) });
+  const query = useQuery({ queryKey: ["students", search, statusFilter.join(","), page], queryFn: () => fetchStudents(search, statusFilter, page) });
   const savedFilters = useSavedFilters(SCREEN_KEY);
 
   const applySavedFilter = (id: string) => {
     const f = savedFilters.filters.find((sf) => sf.id === id);
     if (!f) return;
     setSearch(String(f.filters.search ?? ""));
-    setStatusFilter(String(f.filters.statusFilter ?? ""));
+    // מסנן שנשמר לפני מעבר לבחירה מרובה מחזיק מחרוזת אחת, והוא
+    // עדיין צריך לעבוד למי ששמר אותו.
+    const savedStatus = f.filters.statusFilter;
+    setStatusFilter(Array.isArray(savedStatus) ? savedStatus.map(String) : savedStatus ? [String(savedStatus)] : []);
     setPage(0);
   };
 
@@ -192,21 +198,16 @@ export function StudentsListScreen() {
         searchPlaceholder="חיפוש לפי שם או מספר מזהה…"
         advancedFilters={
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <MultiSelect
+              className="w-48"
+              options={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))}
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
+              onChange={(v) => {
+                setStatusFilter(v);
                 setPage(0);
               }}
-              className="input-field"
-            >
-              <option value="">כל הסטטוסים</option>
-              {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              emptyMeaning="כל הסטטוסים"
+            />
             {savedFilters.filters.length > 0 && (
               <select onChange={(e) => e.target.value && applySavedFilter(e.target.value)} className="input-field" defaultValue="">
                 <option value="">— מסננים שמורים —</option>

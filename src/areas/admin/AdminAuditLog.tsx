@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { MultiSelect } from "@/components/MultiSelect";
 import { useQuery } from "@tanstack/react-query";
 import { History } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +34,7 @@ async function fetchAuditEvents(): Promise<AuditEventRow[]> {
 export function AdminAuditLog() {
   const { hasPermission, isLoading: permissionLoading } = useHasPermission("audit", "view");
   const query = useQuery({ queryKey: ["audit-events"], queryFn: fetchAuditEvents, enabled: hasPermission });
-  const [resourceFilter, setResourceFilter] = useState("");
+  const [resourceFilter, setResourceFilter] = useState<string[]>([]);
 
   const resourceOptions = useMemo(
     () => Array.from(new Set((query.data ?? []).map((r) => r.resource))).sort(),
@@ -41,8 +42,8 @@ export function AdminAuditLog() {
   );
 
   const filteredRows = useMemo(() => {
-    if (!resourceFilter) return query.data ?? [];
-    return (query.data ?? []).filter((r) => r.resource === resourceFilter);
+    if (resourceFilter.length === 0) return query.data ?? [];
+    return (query.data ?? []).filter((r) => resourceFilter.includes(r.resource));
   }, [query.data, resourceFilter]);
 
   if (permissionLoading) return <LoadingState rows={4} />;
@@ -91,15 +92,13 @@ export function AdminAuditLog() {
     <div>
       <PageHeader title="יומן פעילות" description={`${AUDIT_EVENTS_LIMIT} האירועים האחרונים בלבד.`} />
       <div className="mb-4 max-w-xs">
-        <label className="field-label">משאב</label>
-        <select value={resourceFilter} onChange={(e) => setResourceFilter(e.target.value)} className="input-field">
-          <option value="">— הכול —</option>
-          {resourceOptions.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
+        <MultiSelect
+          options={resourceOptions.map((r) => ({ value: r, label: r }))}
+          value={resourceFilter}
+          onChange={setResourceFilter}
+          label="משאב"
+          emptyMeaning="— הכול —"
+        />
       </div>
       <DataTable
         columns={columns}

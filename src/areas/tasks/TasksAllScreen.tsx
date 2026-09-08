@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
+import { MultiSelect } from "@/components/MultiSelect";
 import { Tabs } from "@/components/Tabs";
 import { LoadingState } from "@/components/LoadingState";
 import { fetchAllTasks, fetchAssignableUsers, fetchCategories, fetchTeams, updateTask, type TaskWithRelations } from "./api";
@@ -78,8 +79,8 @@ export function TasksAllScreen() {
 
   const [view, setView] = useState<ViewMode>("list");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | "">("");
-  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "">("");
+  const [statusFilter, setStatusFilter] = useState<TaskStatus[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority[]>([]);
   const [teamFilter, setTeamFilter] = useState<string[]>([]);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerInitialDueDate, setDrawerInitialDueDate] = useState<string | undefined>(undefined);
@@ -106,8 +107,10 @@ export function TasksAllScreen() {
   const teamFilteredTasks = (query.data ?? []).filter((t) => teamFilter.length === 0 || t.team_ids.some((id) => teamFilter.includes(id)));
 
   const listFiltered = teamFilteredTasks.filter((t) => {
-    if (statusFilter && t.status !== statusFilter) return false;
-    if (priorityFilter && t.priority !== priorityFilter) return false;
+    // ריק = ללא סינון. אחרת מסנן מכיל: משימה נכנסת אם הסטטוס
+    // שלה הוא אחד מהנבחרים - כמו סינון הצוותים שמעל.
+    if (statusFilter.length > 0 && !statusFilter.includes(t.status)) return false;
+    if (priorityFilter.length > 0 && !priorityFilter.includes(t.priority)) return false;
     if (search && !t.title.includes(search.trim())) return false;
     return true;
   });
@@ -256,22 +259,22 @@ export function TasksAllScreen() {
             searchPlaceholder="חיפוש לפי כותרת…"
             advancedFilters={
               <>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as TaskStatus | "")} className="input-field w-auto">
-                  <option value="">כל הסטטוסים</option>
-                  {(Object.keys(STATUS_LABEL) as TaskStatus[]).map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABEL[s]}
-                    </option>
-                  ))}
-                </select>
-                <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as TaskPriority | "")} className="input-field w-auto">
-                  <option value="">כל העדיפויות</option>
-                  {(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((p) => (
-                    <option key={p} value={p}>
-                      {PRIORITY_LABEL[p]}
-                    </option>
-                  ))}
-                </select>
+                {/* בחירה מרובה: לרוב רוצים "פתוחות ובטיפול" יחד, ולא
+                    סטטוס אחד בלבד או הכל. */}
+                <MultiSelect
+                  className="w-48"
+                  options={(Object.keys(STATUS_LABEL) as TaskStatus[]).map((k) => ({ value: k, label: STATUS_LABEL[k] }))}
+                  value={statusFilter}
+                  onChange={(v) => setStatusFilter(v as TaskStatus[])}
+                  emptyMeaning="כל הסטטוסים"
+                />
+                <MultiSelect
+                  className="w-48"
+                  options={(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((k) => ({ value: k, label: PRIORITY_LABEL[k] }))}
+                  value={priorityFilter}
+                  onChange={(v) => setPriorityFilter(v as TaskPriority[])}
+                  emptyMeaning="כל העדיפויות"
+                />
               </>
             }
           />

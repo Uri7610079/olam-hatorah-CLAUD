@@ -127,8 +127,8 @@ async function fetchRules(orgId: string): Promise<CommissionRule[]> {
 
 const EMPTY_FORM = {
   groupIds: [] as string[],
-  studyCode: "",
-  studentId: "",
+  studyCodes: [] as string[],
+  studentIds: [] as string[],
   calculationType: "percentage" as CalculationType,
   percentage: "",
   fixedAmount: "",
@@ -173,18 +173,32 @@ export function CommissionRulesScreen() {
 
   const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
 
+  // כל צירוף של קבוצה × קוד לימוד × תלמיד שנבחרו. ממד שנשאר ריק תורם
+  // ערך אחד - null - שמשמעותו "לא מגביל", בדיוק כמו כלל יחיד היום.
+  // כך בחירה ריקה לגמרי נשארת כלל אחד לכל העמותה, כמו לפני השינוי.
+  const buildRuleRows = () => {
+    const groups = form.groupIds.length ? form.groupIds : [null];
+    const codes = form.studyCodes.length ? form.studyCodes : [null];
+    const students = form.studentIds.length ? form.studentIds : [null];
+    const out: { groupId: string | null; studyCode: string | null; studentId: string | null }[] = [];
+    for (const g of groups) for (const c of codes) for (const st of students) {
+      out.push({ groupId: g, studyCode: c, studentId: st });
+    }
+    return out;
+  };
+  const ruleCount = buildRuleRows().length;
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    // ריק = כלל אחד לכל העמותה. אחרת שורה נפרדת לכל קבוצה שנבחרה.
-    const targets = form.groupIds.length > 0 ? form.groupIds : [null];
+    const rows = buildRuleRows();
     const { error: err } = await supabase.from("commission_rules").insert(
-      targets.map((gid) => ({
+      rows.map((t) => ({
       organization_id: orgId,
-      group_id: gid,
-      study_code: form.studyCode || null,
-      student_id: form.studentId || null,
+      group_id: t.groupId,
+      study_code: t.studyCode,
+      student_id: t.studentId,
       calculation_type: form.calculationType,
       percentage: toNum(form.percentage),
       fixed_amount: toNum(form.fixedAmount),
@@ -496,26 +510,24 @@ export function CommissionRulesScreen() {
               />
             </div>
             <div>
-              <label className="field-label">קוד לימוד (לא חובה)</label>
-              <select value={form.studyCode} onChange={(e) => setForm((f) => ({ ...f, studyCode: e.target.value }))} className="input-field">
-                <option value="">— ללא —</option>
-                {(studyCodesQuery.data ?? []).map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.code} - {s.description}
-                  </option>
-                ))}
-              </select>
+              <MultiSelect
+                id="rule-codes"
+                label="קודי לימוד (ריק = כל הקודים)"
+                emptyMeaning="— כל הקודים —"
+                options={(studyCodesQuery.data ?? []).map((c) => ({ value: c.code, label: c.code, hint: c.description }))}
+                value={form.studyCodes}
+                onChange={(v) => setForm((f) => ({ ...f, studyCodes: v }))}
+              />
             </div>
             <div>
-              <label className="field-label">חריג לתלמיד (לא חובה)</label>
-              <select value={form.studentId} onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))} className="input-field">
-                <option value="">— ללא —</option>
-                {(studentsQuery.data ?? []).map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.full_name} ({s.external_id})
-                  </option>
-                ))}
-              </select>
+              <MultiSelect
+                id="rule-students"
+                label="חריגים לתלמידים (ריק = כל התלמידים)"
+                emptyMeaning="— ללא חריג —"
+                options={(studentsQuery.data ?? []).map((st) => ({ value: st.id, label: st.full_name, hint: st.external_id }))}
+                value={form.studentIds}
+                onChange={(v) => setForm((f) => ({ ...f, studentIds: v }))}
+              />
             </div>
           </div>
 
@@ -617,8 +629,10 @@ export function CommissionRulesScreen() {
           </div>
 
           {error && <ErrorState message={error} />}
+          {/* הספירה על הכפתור: שלוש קבוצות ושני קודים הם שישה כללים,
+              ועדיף לדעת את זה לפני הלחיצה ולא מהטבלה אחריה. */}
           <button type="submit" disabled={submitting} className="btn-primary">
-            {submitting ? "שומרת…" : "שמירת כלל"}
+            {submitting ? "שומרת…" : ruleCount > 1 ? `שמירת ${ruleCount} כללים` : "שמירת כלל"}
           </button>
         </form>
       )}
