@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { MultiSelect } from "@/components/MultiSelect";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Percent, FlaskConical } from "lucide-react";
@@ -125,7 +126,7 @@ async function fetchRules(orgId: string): Promise<CommissionRule[]> {
 }
 
 const EMPTY_FORM = {
-  groupId: "",
+  groupIds: [] as string[],
   studyCode: "",
   studentId: "",
   calculationType: "percentage" as CalculationType,
@@ -176,9 +177,12 @@ export function CommissionRulesScreen() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const { error: err } = await supabase.from("commission_rules").insert({
+    // ריק = כלל אחד לכל העמותה. אחרת שורה נפרדת לכל קבוצה שנבחרה.
+    const targets = form.groupIds.length > 0 ? form.groupIds : [null];
+    const { error: err } = await supabase.from("commission_rules").insert(
+      targets.map((gid) => ({
       organization_id: orgId,
-      group_id: form.groupId || null,
+      group_id: gid,
       study_code: form.studyCode || null,
       student_id: form.studentId || null,
       calculation_type: form.calculationType,
@@ -191,7 +195,8 @@ export function CommissionRulesScreen() {
       effective_from: form.effectiveFrom,
       effective_until: form.effectiveUntil || null,
       notes: form.notes || null,
-    });
+      }))
+    );
     setSubmitting(false);
     if (err) {
       setError(err.message);
@@ -478,15 +483,17 @@ export function CommissionRulesScreen() {
         <form onSubmit={submit} className="card mb-6 max-w-3xl space-y-3 p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="field-label">קבוצה (לא חובה - ריק = כל העמותה)</label>
-              <select value={form.groupId} onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value }))} className="input-field">
-                <option value="">— ללא —</option>
-                {(groupsQuery.data ?? []).map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+              {/* בחירה מרובה: אותו אחוז חל לרוב על כמה קבוצות, והזנה
+                  אחת-אחת של אותם נתונים שוב ושוב היא בדיוק המקום שבו
+                  נופלת טעות. */}
+              <MultiSelect
+                id="rule-groups"
+                label="קבוצות (ריק = כל העמותה)"
+                emptyMeaning="— כל העמותה —"
+                options={(groupsQuery.data ?? []).map((g) => ({ value: g.id, label: g.name }))}
+                value={form.groupIds}
+                onChange={(v) => setForm((f) => ({ ...f, groupIds: v }))}
+              />
             </div>
             <div>
               <label className="field-label">קוד לימוד (לא חובה)</label>
