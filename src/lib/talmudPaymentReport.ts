@@ -125,6 +125,36 @@ export function isTalmudPaymentReport(headers: string[]): boolean {
   return hasOrg && hasId && hasAmount;
 }
 
+// "זכאי" לעומת "אינו זכאי" / "לא זכאי". בדיקת "אינו" בלבד פספסה את "לא
+// זכאי", שמופיע בגרסת הכותרות העבריות - ושורה כזו נספרה כזכאית.
+export function isEligibleStatus(value: string): boolean {
+  const s = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!s.includes('זכאי')) return false;
+  return !/(אינו|לא|אין)[\s-]*זכאי/.test(s);
+}
+
+// מה בקובץ עצמו מונע את קליטתו, לפני כל בדיקה מול המסד.
+//
+// שלושת אלה היו מוצגים כהערה ולא חוסמים. בקליטה מרובה אף אחד לא רואה את
+// ההערה, והתוצאה שקטה: חודש חסר נקלט כחודש ריק ושורף את הקובץ (ה-hash חוסם
+// ניסיון נוסף); שתי עמותות נזקפות כולן לראשונה; וסכום שאינו תואם פירושו
+// שנקראה עמודה לא נכונה. requireMonth כבוי במסך הבודד, שבו יש בחירת חודש ידנית.
+export function talmudFileBlocker(
+  info: { month: string | null; orgCount: number; totalAmount: number; declaredTotal: number | null },
+  { requireMonth }: { requireMonth: boolean }
+): string | null {
+  if (requireMonth && !info.month) {
+    return "לא זוהה חודש התשלום בכותרת הקובץ. יש לקלוט אותו במסך הקליטה הבודדת ולבחור חודש ידנית.";
+  }
+  if (info.orgCount > 1) {
+    return `הקובץ מכיל ${info.orgCount} עמותות. יש להפיק מתלמוד קובץ נפרד לכל עמותה.`;
+  }
+  if (info.declaredTotal !== null && Math.abs(info.totalAmount - info.declaredTotal) > 0.5) {
+    return `סכום השורות (${info.totalAmount.toLocaleString("he-IL")} ₪) אינו תואם לסה"כ שבקובץ (${info.declaredTotal.toLocaleString("he-IL")} ₪). ייתכן שהקובץ חלקי.`;
+  }
+  return null;
+}
+
 // ‎headers‎ אינו פרמטר: השדות נמצאים לפי שם מתוך השורות עצמן, בשתי השפות.
 // כך קובץ שבו סדר העמודות שונה נקלט בדיוק אותו דבר.
 export function parseTalmudPaymentReport(
@@ -159,7 +189,7 @@ export function parseTalmudPaymentReport(
       firstName: pick(row, FIELDS.firstName),
       familyName: pick(row, FIELDS.familyName),
       studyCode: pick(row, FIELDS.studyCode),
-      eligible: pick(row, FIELDS.eligible).includes('זכאי') && !pick(row, FIELDS.eligible).includes('אינו'),
+      eligible: isEligibleStatus(pick(row, FIELDS.eligible)),
       amount: parseAmount(pick(row, FIELDS.amount)),
       points: parseAmount(pick(row, FIELDS.points)),
       dateFrom: pick(row, FIELDS.dateFrom),

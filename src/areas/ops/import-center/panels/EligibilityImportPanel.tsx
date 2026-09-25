@@ -20,6 +20,7 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { TalmudReportSummaryCard } from "./TalmudReportSummaryCard";
+import { talmudFileBlocker } from "@/lib/talmudPaymentReport";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
@@ -133,7 +134,7 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
     if (info.orgNumber) {
       const match = orgs.find((o) => (o.org_number ?? '').trim() === info.orgNumber);
       if (match) { setOrgId(match.id); setOrgNotFound(null); }
-      else setOrgNotFound(info.orgNumber);
+      else { setOrgId(""); setOrgNotFound(info.orgNumber); }
     }
   };
 
@@ -206,8 +207,16 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
     resetForm();
   };
 
+  // מה חוסם את הקובץ לפני שהוא נשלח. עמותה שלא נמצאה במערכת חוסמת תמיד:
+  // בחירה ידנית של עמותה אחרת פירושה זקיפת הכסף לעמותה הלא נכונה.
+  const submitBlocker = orgNotFound
+    ? `עמותה ${orgNotFound} אינה קיימת במערכת. יש להוסיף אותה לפני הקליטה.`
+    : talmudInfo
+      ? talmudFileBlocker(talmudInfo, { requireMonth: false })
+      : null;
+
   const submitBatch = async () => {
-    if (!file || !parsedRows || !orgId) return;
+    if (!file || !parsedRows || !orgId || submitBlocker) return;
     setUploading(true);
     setError(null);
     try {
@@ -363,7 +372,8 @@ export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelPr
                     return <DataTable columns={localCols} rows={data} rowKey={(r) => String(r.rowNumber)} emptyTitle="אין שורות" />;
                   }}
                 </ImportPreviewTabs>
-                <button onClick={submitBatch} disabled={uploading} className="btn-primary flex items-center gap-2">
+                {submitBlocker && <ErrorState message={submitBlocker} />}
+                <button onClick={submitBatch} disabled={uploading || !!submitBlocker || !orgId} className="btn-primary flex items-center gap-2">
                   <Upload className="h-4 w-4" aria-hidden="true" />
                   {uploading ? "מעלה…" : "אישור ויצירת אצווה"}
                 </button>

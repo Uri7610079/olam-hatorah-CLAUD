@@ -243,7 +243,7 @@ export function RetroScreen() {
                 required
                 type="month"
                 value={toMonthInput(form.sourceMonth)}
-                onChange={(e) => setForm((f) => ({ ...f, sourceMonth: e.target.value, priorEligibleCount: "", priorAmount: "" }))}
+                onChange={(e) => setForm((f) => ({ ...f, sourceMonth: fromMonthInput(e.target.value), priorEligibleCount: "", priorAmount: "" }))}
                 className="input-field"
               />
             </div>

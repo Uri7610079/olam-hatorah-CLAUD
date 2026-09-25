@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import type { TalmudImportInfo } from "./importBatches";
+import { talmudFileBlocker } from "./talmudPaymentReport";
 
 // בדיקת תקינות של דוח תלמוד מול הנתונים שכבר במערכת, *לפני* הקליטה.
 //
@@ -107,6 +108,13 @@ export async function validateTalmudImport(
     blocked: false,
     blockReason: null,
   };
+
+  const fileProblem = talmudFileBlocker(info, { requireMonth: true });
+  if (fileProblem) {
+    report.blocked = true;
+    report.blockReason = fileProblem;
+    return report;
+  }
 
   // ===== 1. עמותה =====
   if (!info.orgNumber) {

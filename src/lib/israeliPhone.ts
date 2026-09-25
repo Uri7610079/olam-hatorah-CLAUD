@@ -44,12 +44,14 @@ export function normalizeIsraeliPhone(raw: string | null | undefined): string {
 
   // 972 בהתחלה הוא קידומת המדינה - אבל רק כשהמספר שאחריה סביר. בלי
   // הסייג הזה מספר מקומי שבמקרה מתחיל ב-972 (למשל 0972...) היה נחתך.
+  // אחרי הקידומת מופיע לא פעם גם האפס המקומי: +972-052-1234567. בלי
+  // הסרתו התוצאה הייתה 00521234567.
   if ((hadPlus || s.length >= 11) && s.startsWith("972")) {
-    s = "0" + s.slice(3);
+    s = "0" + s.slice(3).replace(/^0/, "");
   }
 
   // 00972 - צורת חיוג בינלאומי נפוצה בישראל
-  if (s.startsWith("00972")) s = "0" + s.slice(5);
+  if (s.startsWith("00972")) s = "0" + s.slice(5).replace(/^0/, "");
 
   return s;
 }

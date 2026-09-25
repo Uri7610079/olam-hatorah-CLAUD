@@ -48,6 +48,8 @@ export function legacyXlsWarning(file: File): boolean {
 // כשהקובץ הוא דוח כזה; לכל שאר סוגי היבוא הוא undefined.
 export interface TalmudImportInfo {
   orgNumber: string | null;
+  /** כמה עמותות שונות בקובץ. יותר מאחת - הקובץ אינו ניתן לקליטה כאצווה אחת. */
+  orgCount: number;
   orgName: string | null;
   month: string | null;
   branchCount: number;
@@ -117,6 +119,7 @@ function maybeParseTalmudReport(parsed: ParsedFile): { rows: Record<string, stri
     rows: merged.map(toImportRow),
     info: {
       orgNumber: summary.orgNumbers[0] ?? null,
+      orgCount: summary.orgNumbers.length,
       orgName: merged[0]?.orgName ?? null,
       month: summary.month,
       branchCount: summary.branches.length,
@@ -190,6 +193,21 @@ export async function fetchImportBatchRows(batchId: string): Promise<StoredImpor
   return data ?? [];
 }
 
+// סימון שנשמר עם שורה שהמפעיל דחה בסקירה. "השלמת שורות שנדחו" ומרכז
+// החריגות מדלגים עליה (מיגרציה 110) - בלי הסימון אין דרך להבדיל בינה לבין
+// שורה שהמערכת דחתה משום שהיה חסר לה משהו שהוזן מאז.
+export const MANUAL_REJECT_MARK = "נדחתה ידנית בבדיקה";
+
 export async function resolveImportRow(batchId: string, rowNumber: number, status: "valid" | "invalid") {
+  if (status === "invalid") {
+    await supabase.from("import_rows")
+      .update({ status, error_message: MANUAL_REJECT_MARK })
+      .eq("batch_id", batchId).eq("row_number", rowNumber);
+    return;
+  }
+  // אישור אחרי דחייה: הסימון יורד, והודעה אחרת (סיבת "דורש החלטה") נשארת.
   await supabase.from("import_rows").update({ status }).eq("batch_id", batchId).eq("row_number", rowNumber);
+  await supabase.from("import_rows")
+    .update({ error_message: null })
+    .eq("batch_id", batchId).eq("row_number", rowNumber).eq("error_message", MANUAL_REJECT_MARK);
 }
