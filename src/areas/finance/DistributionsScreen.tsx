@@ -1,3 +1,4 @@
+import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useState, type FormEvent } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -98,35 +99,32 @@ async function fetchBatches(groupId: string): Promise<BatchRow[]> {
 }
 
 async function fetchLines(batchId: string): Promise<LineRow[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("distribution_lines")
     .select("id, student_id, amount, student:students(external_id, full_name)")
     .eq("batch_id", batchId)
-    .order("created_at");
-  if (error) throw error;
+    .order("created_at").order("id"));
   return (data ?? []).map((r: any) => ({ ...r, student: Array.isArray(r.student) ? r.student[0] : r.student }));
 }
 
 async function fetchGroupStudents(groupId: string): Promise<GroupStudent[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("student_assignments")
     .select("students!inner(id, external_id, full_name, status)")
     .eq("group_id", groupId)
-    .eq("is_active", true);
-  if (error) throw error;
+    .eq("is_active", true).order("id"));
   const students = (data ?? []).map((r: any) => r.students);
   const studentIds = students.map((s) => s.id);
   if (studentIds.length === 0) return [];
 
   // שאילתה אחת מרוכזת במקום שאילתה נפרדת לכל תלמיד בקבוצה (N+1 שנתפס בביקורת ביצועים
   // שלב 16 - קבוצה של מאות תלמידים הייתה יוצרת מאות בקשות רשת נפרדות בכל טעינת מסך).
-  const { data: verifiedAccounts, error: accountsError } = await supabase
+  const verifiedAccounts = await fetchAllIn(studentIds, (chunk) => supabase
     .from("student_bank_accounts")
     .select("student_id")
-    .in("student_id", studentIds)
+    .in("student_id", chunk)
     .eq("is_active", true)
-    .eq("verification_status", "verified");
-  if (accountsError) throw accountsError;
+    .eq("verification_status", "verified").order("id"));
   const verifiedIds = new Set((verifiedAccounts ?? []).map((r) => r.student_id));
 
   return students.map((s) => ({ id: s.id, external_id: s.external_id, full_name: s.full_name, status: s.status, verified: verifiedIds.has(s.id) }));

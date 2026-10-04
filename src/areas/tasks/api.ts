@@ -1,3 +1,4 @@
+import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { supabase } from "@/lib/supabase";
 import { safeStorageKey } from "@/lib/storagePath";
 import { addDaysIso } from "./dateUtils";
@@ -80,19 +81,23 @@ export async function fetchMyTasks(userId: string): Promise<TaskWithRelations[]>
   const ids = Array.from(new Set([...(ownedIds ?? []).map((r) => r.task_id), ...(watchedIds ?? []).map((r) => r.task_id)]));
   if (ids.length === 0) return [];
 
-  const { data, error } = await supabase
+  const data = await fetchAllIn(ids, (chunk) => supabase
     .from("tasks")
     .select(TASK_COLUMNS)
-    .in("id", ids)
+    .in("id", chunk)
     .not("status", "in", "(cancelled,archived)")
-    .order("due_date", { ascending: true, nullsFirst: false });
-  if (error) throw error;
-  return attachRelations(data ?? []);
+    .order("id"));
+  return attachRelations(byDueDate(data ?? []));
+}
+
+// מנות של 200 מזהים ממוינות כל אחת לחוד - המיון הכולל נעשה כאן, אחרי האיחוד.
+// תאריך יעד ראשון, בלי תאריך בסוף (כמו nullsFirst: false).
+function byDueDate<T extends { due_date: string | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
 }
 
 export async function fetchAllTasks(): Promise<TaskWithRelations[]> {
-  const { data, error } = await supabase.from("tasks").select(TASK_COLUMNS).order("created_at", { ascending: false });
-  if (error) throw error;
+  const data = await fetchAll(() => supabase.from("tasks").select(TASK_COLUMNS).order("created_at", { ascending: false }).order("id"));
   return attachRelations(data ?? []);
 }
 
@@ -102,9 +107,8 @@ export async function fetchTeamTasks(teamIds: string[]): Promise<TaskWithRelatio
   if (linksError) throw linksError;
   const ids = Array.from(new Set((links ?? []).map((l) => l.task_id)));
   if (ids.length === 0) return [];
-  const { data, error } = await supabase.from("tasks").select(TASK_COLUMNS).in("id", ids).order("due_date", { ascending: true, nullsFirst: false });
-  if (error) throw error;
-  return attachRelations(data ?? []);
+  const data = await fetchAllIn(ids, (chunk) => supabase.from("tasks").select(TASK_COLUMNS).in("id", chunk).order("id"));
+  return attachRelations(byDueDate(data ?? []));
 }
 
 export async function fetchMyTeamIds(userId: string): Promise<string[]> {

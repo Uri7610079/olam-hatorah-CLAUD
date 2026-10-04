@@ -1,3 +1,4 @@
+import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
@@ -50,22 +51,24 @@ async function fetchGroups(branchId: string): Promise<GroupOption[]> {
 }
 
 async function fetchCandidates(orgId: string, branchId: string, groupId: string): Promise<CandidateStudent[]> {
-  let query = supabase
-    .from("student_assignments")
-    .select("student_id, students!inner(id, external_id, full_name, phone_normalized, status)")
-    .eq("is_active", true)
-    .eq("organization_id", orgId)
-    .in("students.status", ["ready_for_talmud", "sent_to_talmud", "active", "active_with_error"]);
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (groupId) query = query.eq("group_id", groupId);
+  // יצוא לתלמוד: תלמיד שנחתך כאן לא נשלח, ולא מקבל זכאות. לכן כל השורות.
+  const build = () => {
+    let query = supabase
+      .from("student_assignments")
+      .select("student_id, students!inner(id, external_id, full_name, phone_normalized, status)")
+      .eq("is_active", true)
+      .eq("organization_id", orgId)
+      .in("students.status", ["ready_for_talmud", "sent_to_talmud", "active", "active_with_error"]);
+    if (branchId) query = query.eq("branch_id", branchId);
+    if (groupId) query = query.eq("group_id", groupId);
+    return query.order("id");
+  };
+  const data = await fetchAll(build);
 
-  const { data, error } = await query;
-  if (error) throw error;
-
-  const studentIds = (data ?? []).map((r: any) => r.student_id);
-  const { data: exported } = studentIds.length
-    ? await supabase.from("export_batch_students").select("student_id").in("student_id", studentIds)
-    : { data: [] as { student_id: string }[] };
+  const studentIds = data.map((r: any) => r.student_id);
+  const exported = await fetchAllIn(studentIds, (chunk) =>
+    supabase.from("export_batch_students").select("student_id").in("student_id", chunk).order("id"),
+  );
   const exportedSet = new Set((exported ?? []).map((e) => e.student_id));
 
   return (data ?? []).map((r: any) => ({

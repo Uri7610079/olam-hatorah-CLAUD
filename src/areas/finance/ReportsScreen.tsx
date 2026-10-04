@@ -1,3 +1,4 @@
+import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -56,12 +57,12 @@ function unwrap<T>(v: T | T[] | null): T | null {
 }
 
 async function orgStudentIds(orgId: string): Promise<string[]> {
-  const { data } = await supabase.from("student_assignments").select("student_id").eq("organization_id", orgId);
+  const data = await fetchAll(() => supabase.from("student_assignments").select("student_id").eq("organization_id", orgId).order("id"));
   return Array.from(new Set((data ?? []).map((r) => r.student_id)));
 }
 
 async function orgActiveStudentIds(orgId: string): Promise<string[]> {
-  const { data } = await supabase.from("student_assignments").select("student_id").eq("organization_id", orgId).eq("is_active", true);
+  const data = await fetchAll(() => supabase.from("student_assignments").select("student_id").eq("organization_id", orgId).eq("is_active", true).order("id"));
   return Array.from(new Set((data ?? []).map((r) => r.student_id)));
 }
 
@@ -73,7 +74,7 @@ const REPORTS: ReportDef[] = [
       const { start, end } = monthRange(month);
       const ids = await orgStudentIds(orgId);
       if (ids.length === 0) return [];
-      const { data } = await supabase.from("students").select("external_id, full_name, status, created_at, exit_date, exit_reason").in("id", ids);
+      const data = await fetchAllIn(ids, (chunk) => supabase.from("students").select("external_id, full_name, status, created_at, exit_date, exit_reason").in("id", chunk).order("id"));
       return (data ?? [])
         .filter((s) => (s.created_at >= start && s.created_at < end) || (s.exit_date && s.exit_date >= start && s.exit_date < end))
         .map((s) => ({
@@ -94,11 +95,11 @@ const REPORTS: ReportDef[] = [
       const latestMonth = latest?.[0]?.month;
       const ids = await orgActiveStudentIds(orgId);
       if (!latestMonth || ids.length === 0) return [];
-      const { data: have } = await supabase.from("monthly_eligibility").select("student_id").eq("organization_id", orgId).eq("month", latestMonth);
+      const have = await fetchAll(() => supabase.from("monthly_eligibility").select("student_id").eq("organization_id", orgId).eq("month", latestMonth).order("id"));
       const haveSet = new Set((have ?? []).map((r) => r.student_id));
       const missing = ids.filter((id) => !haveSet.has(id));
       if (missing.length === 0) return [];
-      const { data: students } = await supabase.from("students").select("external_id, full_name").in("id", missing);
+      const students = await fetchAllIn(missing, (chunk) => supabase.from("students").select("external_id, full_name").in("id", chunk).order("id"));
       return (students ?? []).map((s) => ({ "מזהה": s.external_id, "שם": s.full_name, "חודש אחרון שדווח": latestMonth }));
     },
   },
@@ -106,10 +107,10 @@ const REPORTS: ReportDef[] = [
     key: "eligibility",
     label: "זכאות חודשית",
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("monthly_eligibility")
         .select("gross_amount, score_or_payment_type, status, student:students(external_id, full_name)")
-        .eq("organization_id", orgId).eq("month", month);
+        .eq("organization_id", orgId).eq("month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         return { "מזהה": s?.external_id ?? "—", "שם": s?.full_name ?? "—", "ברוטו": r.gross_amount, "ניקוד/סוג תשלום": r.score_or_payment_type ?? "—", "סטטוס": r.status };
@@ -120,10 +121,10 @@ const REPORTS: ReportDef[] = [
     key: "errors",
     label: "שגיאות תלמוד",
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("talmud_errors")
         .select("external_student_ref, error_code, error_description, status, is_recurring, student:students(external_id, full_name)")
-        .eq("organization_id", orgId).eq("month", month);
+        .eq("organization_id", orgId).eq("month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         return { "מזהה": s?.external_id ?? r.external_student_ref ?? "—", "שם": s?.full_name ?? "(לא הותאם)", "קוד": r.error_code, "תיאור": r.error_description ?? "—", "סטטוס": r.status, "חוזרת": r.is_recurring ? "כן" : "לא" };
@@ -134,10 +135,10 @@ const REPORTS: ReportDef[] = [
     key: "retro",
     label: "רטרו והפרשים",
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("payment_calculation_versions")
         .select("source_month, received_month, calculation_type, prior_amount, current_amount, difference, student:students(external_id, full_name)")
-        .eq("organization_id", orgId).eq("received_month", month);
+        .eq("organization_id", orgId).eq("received_month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         return { "מזהה": s?.external_id ?? "—", "שם": s?.full_name ?? "—", "חודש מקור": r.source_month, "חודש קליטה": r.received_month, "סוג חישוב": r.calculation_type ?? "—", "סכום קודם": r.prior_amount, "סכום נוכחי": r.current_amount, "הפרש": r.difference };
@@ -148,10 +149,10 @@ const REPORTS: ReportDef[] = [
     key: "commission",
     label: "עמלה - ברוטו/עמלה/נטו והכלל שהופעל",
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("eligibility_financial_results")
         .select("gross_amount, commission_amount, net_amount, rule_snapshot, student:students(external_id, full_name)")
-        .eq("organization_id", orgId).eq("month", month).eq("status", "active");
+        .eq("organization_id", orgId).eq("month", month).eq("status", "active").order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         return { "מזהה": s?.external_id ?? "—", "שם": s?.full_name ?? "—", "ברוטו": r.gross_amount, "עמלה": r.commission_amount, "נטו": r.net_amount, "כלל שהופעל": r.rule_snapshot?.calculation_type ?? "—" };
@@ -205,10 +206,10 @@ const REPORTS: ReportDef[] = [
     key: "group_ledger",
     label: "ספר תנועות קבוצות",
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("group_ledger_entries")
         .select("entry_type, amount, reason, created_at, group:groups(name)")
-        .eq("organization_id", orgId).eq("period_month", month);
+        .eq("organization_id", orgId).eq("period_month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const g = unwrap(r.group);
         return { "קבוצה": g?.name ?? "—", "סוג תנועה": r.entry_type, "סכום": r.amount, "סיבה": r.reason ?? "—", "תאריך": r.created_at?.slice(0, 10) };
@@ -241,10 +242,10 @@ const REPORTS: ReportDef[] = [
     key: "distributions",
     label: "הוראות חלוקה",
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("distribution_lines")
         .select("amount, student:students(external_id, full_name), batch:distribution_batches!inner(organization_id, period_month, status, method, group:groups(name))")
-        .eq("batch.organization_id", orgId).eq("batch.period_month", month);
+        .eq("batch.organization_id", orgId).eq("batch.period_month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         const b = unwrap(r.batch);
@@ -257,10 +258,10 @@ const REPORTS: ReportDef[] = [
     key: "masav_lines",
     label: 'מס"ב - שורות תשלום',
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("masav_lines")
         .select("amount, status, rejection_code, student:students(external_id, full_name), batch:masav_batches!inner(organization_id, period_month)")
-        .eq("batch.organization_id", orgId).eq("batch.period_month", month);
+        .eq("batch.organization_id", orgId).eq("batch.period_month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         return { "מזהה": s?.external_id ?? "—", "שם": s?.full_name ?? "—", "סכום": r.amount, "סטטוס": r.status, "קוד דחייה": r.rejection_code ?? "—" };
@@ -272,10 +273,10 @@ const REPORTS: ReportDef[] = [
     label: "החזרות תשלום",
     fetch: async ({ orgId, month }) => {
       const { start, end } = monthRange(month);
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("payment_returns")
         .select("return_date, amount, reason, status, masav_line:masav_lines!payment_returns_masav_line_id_fkey(student:students(external_id, full_name), batch:masav_batches(organization_id))")
-        .gte("return_date", start).lt("return_date", end);
+        .gte("return_date", start).lt("return_date", end).order("id"));
       return (data ?? [])
         .map((r: any) => ({ ...r, masav_line: unwrap(r.masav_line) }))
         .filter((r: any) => unwrap(r.masav_line?.batch)?.organization_id === orgId)
@@ -292,7 +293,7 @@ const REPORTS: ReportDef[] = [
       const { data: accounts } = await supabase.from("organization_bank_accounts_view").select("id").eq("organization_id", orgId);
       const accountIds = (accounts ?? []).map((a) => a.id);
       if (accountIds.length === 0) return [];
-      const { data } = await supabase.from("bank_transactions").select("execution_date, direction, amount, description, classification_status").in("organization_bank_account_id", accountIds).neq("classification_status", "confirmed");
+      const data = await fetchAllIn(accountIds, (chunk) => supabase.from("bank_transactions").select("execution_date, direction, amount, description, classification_status").in("organization_bank_account_id", chunk).neq("classification_status", "confirmed").order("id"));
       return (data ?? []).map((r) => ({ "תאריך": r.execution_date, "צד": r.direction === "debit" ? "חובה" : "זכות", "סכום": r.amount, "תיאור": r.description ?? "—", "סטטוס סיווג": r.classification_status }));
     },
   },
@@ -300,7 +301,7 @@ const REPORTS: ReportDef[] = [
     key: "bank_reconciliation",
     label: 'התאמה חודשית להנה"ח',
     fetch: async ({ orgId }) => {
-      const { data } = await supabase.from("bank_reconciliation_exceptions").select("exception_type, severity, amount, related_date, description").eq("organization_id", orgId);
+      const data = await fetchAll(() => supabase.from("bank_reconciliation_exceptions").select("exception_type, severity, amount, related_date, description").eq("organization_id", orgId).order("severity").order("exception_type").order("related_id"));
       return (data ?? []).map((r) => ({ "סוג": r.exception_type, "חומרה": r.severity, "סכום": r.amount ?? "—", "תאריך": r.related_date ?? "—", "פירוט": r.description }));
     },
   },
@@ -308,10 +309,10 @@ const REPORTS: ReportDef[] = [
     key: "audit_attendance",
     label: "חוסרים בביקורת משרד החינוך",
     fetch: async ({ orgId }) => {
-      const { data } = await supabase
+      const data = await fetchAll(() => supabase
         .from("audit_attendance")
         .select("external_student_ref, status, is_recurring, student:students(external_id, full_name), audit:audits!inner(organization_id, audit_date)")
-        .eq("audit.organization_id", orgId);
+        .eq("audit.organization_id", orgId).order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         const a = unwrap(r.audit);
@@ -326,7 +327,7 @@ const REPORTS: ReportDef[] = [
       const { data: imports } = await supabase.from("phone_list_imports").select("id").eq("organization_id", orgId).eq("status", "committed").order("created_at", { ascending: false }).limit(1);
       const importId = imports?.[0]?.id;
       if (!importId) return [];
-      const { data } = await supabase.from("phone_list_entries").select("raw_phone, normalized_phone, status").eq("import_id", importId).in("status", ["extra", "duplicate", "invalid"]);
+      const data = await fetchAll(() => supabase.from("phone_list_entries").select("raw_phone, normalized_phone, status").eq("import_id", importId).in("status", ["extra", "duplicate", "invalid"]).order("id"));
       return (data ?? []).map((r) => ({ "טלפון גולמי": r.raw_phone ?? "—", "מנורמל": r.normalized_phone ?? "—", "סטטוס": r.status }));
     },
   },
@@ -336,7 +337,7 @@ const REPORTS: ReportDef[] = [
     needsGroup: true,
     fetch: async ({ groupId, month }) => {
       if (!groupId) return [];
-      const { data } = await supabase.from("group_ledger_entries").select("entry_type, amount, reason, created_at").eq("group_id", groupId).eq("period_month", month);
+      const data = await fetchAll(() => supabase.from("group_ledger_entries").select("entry_type, amount, reason, created_at").eq("group_id", groupId).eq("period_month", month).order("id"));
       return (data ?? []).map((r) => ({ "סוג תנועה": r.entry_type, "סכום": r.amount, "סיבה": r.reason ?? "—", "תאריך": r.created_at?.slice(0, 10) }));
     },
   },

@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useState, type FormEvent } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -57,12 +58,11 @@ async function fetchGroupBalances(orgId: string): Promise<GroupBalanceRow[]> {
 }
 
 async function fetchLedgerEntries(groupId: string): Promise<LedgerEntry[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("group_ledger_entries")
     .select("id, entry_type, amount, period_month, source_table, reference, reason, created_at")
     .eq("group_id", groupId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+    .order("created_at", { ascending: false }).order("id"));
   return data ?? [];
 }
 

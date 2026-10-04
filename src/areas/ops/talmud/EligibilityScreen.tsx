@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -59,14 +60,13 @@ interface EligibilityRow {
 }
 
 async function fetchMonthEligibility(orgId: string, month: string): Promise<EligibilityRow[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("monthly_eligibility")
     .select("id, gross_amount, score_or_payment_type, student:students(external_id, full_name)")
     .eq("organization_id", orgId)
     .eq("month", month)
     .eq("status", "active")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+    .order("created_at", { ascending: false }).order("id"));
   return (data ?? []).map((r: any) => ({ ...r, student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student }));
 }
 
@@ -79,18 +79,17 @@ interface MissingStudent {
 // "תלמידים פעילים שלא הופיעו בדוח" - דרישה מפורשת באפיון. תלמיד עם שיוך פעיל בעמותה,
 // שכבר נשלח/פעיל בתלמוד, אבל אין לו זכאות פעילה לחודש הזה.
 async function fetchMissingFromReport(orgId: string, month: string): Promise<MissingStudent[]> {
-  const { data: assigned, error } = await supabase
+  const assigned = await fetchAll(() => supabase
     .from("student_assignments")
     .select("student_id, students!inner(id, external_id, full_name, status)")
     .eq("organization_id", orgId)
     .eq("is_active", true)
-    .in("students.status", ["sent_to_talmud", "active", "active_with_error"]);
-  if (error) throw error;
+    .in("students.status", ["sent_to_talmud", "active", "active_with_error"]).order("id"));
 
   const ids = (assigned ?? []).map((r: any) => r.students.id);
   if (ids.length === 0) return [];
 
-  const { data: eligible } = await supabase.from("monthly_eligibility").select("student_id").eq("organization_id", orgId).eq("month", month).eq("status", "active");
+  const eligible = await fetchAll(() => supabase.from("monthly_eligibility").select("student_id").eq("organization_id", orgId).eq("month", month).eq("status", "active").order("id"));
   const eligibleSet = new Set((eligible ?? []).map((e) => e.student_id));
 
   return (assigned ?? [])
@@ -115,9 +114,12 @@ interface AmountCheckRow {
 }
 
 async function fetchAmountCheck(orgId: string, month: string): Promise<AmountCheckRow[]> {
-  const { data, error } = await supabase.rpc("eligibility_amount_check", { p_organization_id: orgId, p_month: month });
-  if (error) throw error;
-  return (data ?? []) as AmountCheckRow[];
+  // פונקציה שמחזירה שורה לכל תלמיד - גם היא נחתכת ב-1,000. המיון בצד השרת
+  // (שם ואז מזהה) נדרש כדי שהחלקים לא יחפפו.
+  const data = await fetchAll(() =>
+    supabase.rpc("eligibility_amount_check", { p_organization_id: orgId, p_month: month }).order("full_name").order("student_id"),
+  );
+  return data as AmountCheckRow[];
 }
 
 // הסכומים מעוגלים לשתי ספרות במסד, ולכן כל פער אמיתי גדול מחצי אגורה.

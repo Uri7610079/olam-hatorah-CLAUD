@@ -378,11 +378,11 @@ function AccessList() {
         <table className="w-full text-sm">
           <thead className="bg-surface-muted text-right text-ink-muted">
             <tr>
-              <th className="px-3 py-2 font-semibold">ראש קבוצה</th>
-              <th className="px-3 py-2 font-semibold">נכנס עם</th>
-              <th className="px-3 py-2 font-semibold">קבוצות</th>
-              <th className="px-3 py-2 font-semibold">כניסה אחרונה</th>
-              <th className="px-3 py-2 font-semibold">מצב</th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold">נכנס עם</th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold">קבוצות</th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold">כניסה אחרונה</th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold">מצב</th>
               <th className="px-3 py-2"><span className="sr-only">פעולות</span></th>
             </tr>
           </thead>
@@ -420,7 +420,7 @@ function AccessList() {
                         <button type="button" onClick={() => setEditing(null)} className="btn-secondary h-8">ביטול</button>
                       </form>
                     ) : (
-                      <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 whitespace-nowrap">
                         <button onClick={() => { setDone(null); setEditing(a.group_leader_id); setPassword(""); }} className="link-action">קביעת סיסמה</button>
                         {a.phone && (
                           <button onClick={() => { setDone(null); setPw.mutate({ id: a.group_leader_id, pw: null }); }} className="link-action">איפוס ל-4 ספרות</button>
@@ -452,12 +452,12 @@ function RequestHistory() {
       <table className="w-full text-sm">
         <thead className="bg-surface-muted text-right text-ink-muted">
           <tr>
-            <th className="px-3 py-2 font-semibold">תאריך</th>
-            <th className="px-3 py-2 font-semibold">ראש קבוצה</th>
-            <th className="px-3 py-2 font-semibold">תלמיד</th>
-            <th className="px-3 py-2 font-semibold">סוג</th>
-            <th className="px-3 py-2 font-semibold">שינוי</th>
-            <th className="px-3 py-2 font-semibold">מצב</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">תאריך</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">תלמיד</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">סוג</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">שינוי</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">מצב</th>
           </tr>
         </thead>
         <tbody>

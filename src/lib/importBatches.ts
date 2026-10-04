@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { supabase } from "./supabase";
 import { parseImportFile, hashFile, classifyRows, isLegacyXls, type ClassifiedRow, type ParsedFile } from "./importParsing";
 import {
@@ -188,8 +189,7 @@ export interface StoredImportRow {
 }
 
 export async function fetchImportBatchRows(batchId: string): Promise<StoredImportRow[]> {
-  const { data, error } = await supabase.from("import_rows").select("row_number, raw, status, error_message").eq("batch_id", batchId).order("row_number");
-  if (error) throw error;
+  const data = await fetchAll(() => supabase.from("import_rows").select("row_number, raw, status, error_message").eq("batch_id", batchId).order("row_number").order("id"));
   return data ?? [];
 }
 

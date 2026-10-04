@@ -1,3 +1,4 @@
+import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useSearchParams } from "react-router-dom";
@@ -112,14 +113,13 @@ async function fetchBatches(orgId: string): Promise<BatchRow[]> {
 }
 
 async function fetchLines(batchId: string): Promise<LineRow[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("masav_lines")
     .select(
       "id, student_id, group_id, student_bank_account_id, amount, status, rejection_code, student:students(external_id, full_name), group:groups(name)",
     )
     .eq("batch_id", batchId)
-    .order("created_at");
-  if (error) throw error;
+    .order("created_at").order("id"));
 
   const rows = (data ?? []).map((r: any) => ({
     ...r,
@@ -133,7 +133,7 @@ async function fetchLines(batchId: string): Promise<LineRow[]> {
   // שולפים בנפרד ומאחדים בצד הלקוח, במקום embed שהיה נכשל ב-runtime.
   const accountIds = Array.from(new Set(rows.map((r) => r.student_bank_account_id).filter((id): id is string => !!id)));
   if (accountIds.length > 0) {
-    const { data: accounts } = await supabase.from("student_bank_accounts_view").select("id, account_number_masked").in("id", accountIds);
+    const accounts = await fetchAllIn(accountIds, (chunk) => supabase.from("student_bank_accounts_view").select("id, account_number_masked").in("id", chunk).order("id"));
     const byId = new Map((accounts ?? []).map((a) => [a.id, a.account_number_masked]));
     for (const row of rows) {
       if (row.student_bank_account_id) row.bank_account = { account_number_masked: byId.get(row.student_bank_account_id) ?? null };

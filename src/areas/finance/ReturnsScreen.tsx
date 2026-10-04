@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,24 +59,22 @@ interface RetryLineOption {
 const RETURN_STATUS_LABEL: Record<ReturnStatus, string> = { open: "פתוח", retried: "נשלח שוב", resolved: "טופל" };
 
 async function fetchVerifiedAccounts(studentId: string): Promise<BankAccountOption[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("student_bank_accounts_view")
     .select("id, account_number_masked")
     .eq("student_id", studentId)
     .eq("verification_status", "verified")
-    .eq("is_active", true);
-  if (error) throw error;
+    .eq("is_active", true).order("id"));
   return data ?? [];
 }
 
 async function fetchRetryLineOptions(studentId: string, excludeLineId: string): Promise<RetryLineOption[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("masav_lines")
     .select("id, amount, batch:masav_batches(period_month, status)")
     .eq("student_id", studentId)
     .eq("status", "valid")
-    .neq("id", excludeLineId);
-  if (error) throw error;
+    .neq("id", excludeLineId).order("id"));
   return (data ?? []).map((r: any) => ({ ...r, batch: Array.isArray(r.batch) ? r.batch[0] : r.batch }));
 }
 
@@ -97,12 +96,11 @@ async function fetchTransmittedBatches(orgId: string): Promise<TransmittedBatch[
 }
 
 async function fetchValidLines(batchId: string): Promise<ValidLine[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("masav_lines")
     .select("id, amount, student:students(external_id, full_name)")
     .eq("batch_id", batchId)
-    .eq("status", "valid");
-  if (error) throw error;
+    .eq("status", "valid").order("id"));
   return (data ?? []).map((r: any) => ({ ...r, student: Array.isArray(r.student) ? r.student[0] : r.student }));
 }
 

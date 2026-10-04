@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitMerge, AlertTriangle, Sparkles } from "lucide-react";
@@ -84,23 +85,20 @@ const DIRECTION_LABEL: Record<"debit" | "credit", string> = { debit: "חובה",
 const SEVERITY_LABEL: Record<"critical" | "warning", string> = { critical: "קריטי", warning: "אזהרה" };
 
 async function fetchTransactions(accountId: string): Promise<TransactionRow[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("bank_transactions")
     .select("id, execution_date, direction, amount, description, reference, matches:bank_matches(id, match_type, target_table, target_id, matched_amount, status, suggested_reason, notes, rejected_reason)")
     .eq("organization_bank_account_id", accountId)
-    .order("execution_date", { ascending: false });
-  if (error) throw error;
+    .order("execution_date", { ascending: false }).order("id"));
   return data ?? [];
 }
 
 async function fetchExceptions(orgId: string): Promise<ExceptionRow[]> {
-  const { data, error } = await supabase
+  return fetchAll(() => supabase
     .from("bank_reconciliation_exceptions")
     .select("exception_type, severity, related_table, related_id, amount, related_date, description")
     .eq("organization_id", orgId)
-    .order("severity");
-  if (error) throw error;
-  return data ?? [];
+    .order("severity").order("exception_type").order("related_id"));
 }
 
 async function fetchMasavBatchOptions(accountId: string): Promise<MasavBatchOption[]> {

@@ -1,3 +1,4 @@
+import { fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -78,10 +79,12 @@ async function fetchQuotaData(orgId: string, month: string, branches: BranchRow[
   const branchIds = branches.map((b) => b.id);
   // שאילתה אחת מרוכזת לכל הסניפים במקום שתי שאילתות ספירה לכל סניף בנפרד (N+1 שנתפס
   // בביקורת ביצועים שלב 16) - סופרים בצד לקוח לפי branch_id במקום count() נפרד לכל סניף.
-  const [{ data: approved }, { data: registered }, { data: eligible }] = await Promise.all([
+  // ספירה בצד לקוח - ולכן חייבים את כל השורות. בעמותה של 1,187 תלמידים
+  // ספירה מ-1,000 שורות הייתה מציגה מכסה מנוצלת נמוכה מהאמת.
+  const [{ data: approved }, registered, eligible] = await Promise.all([
     supabase.from("monthly_quotas").select("branch_id, approved_quota").eq("organization_id", orgId).eq("month", month),
-    branchIds.length ? supabase.from("student_assignments").select("branch_id").in("branch_id", branchIds).eq("is_active", true) : Promise.resolve({ data: [] as { branch_id: string }[] }),
-    branchIds.length ? supabase.from("monthly_eligibility").select("branch_id").in("branch_id", branchIds).eq("month", month).eq("status", "active") : Promise.resolve({ data: [] as { branch_id: string }[] }),
+    fetchAllIn(branchIds, (chunk) => supabase.from("student_assignments").select("branch_id").in("branch_id", chunk).eq("is_active", true).order("id")),
+    fetchAllIn(branchIds, (chunk) => supabase.from("monthly_eligibility").select("branch_id").in("branch_id", chunk).eq("month", month).eq("status", "active").order("id")),
   ]);
   const approvedMap = new Map((approved ?? []).map((a) => [a.branch_id, a.approved_quota]));
   const registeredMap = countByBranch(registered);

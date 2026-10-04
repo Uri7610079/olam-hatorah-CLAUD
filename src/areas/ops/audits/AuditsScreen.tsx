@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ClipboardList, Download, FileSpreadsheet, Upload } from "lucide-react";
@@ -73,12 +74,11 @@ async function fetchAudits(orgId: string): Promise<AuditRow[]> {
 }
 
 async function fetchAttendance(auditId: string): Promise<AttendanceRow[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("audit_attendance")
     .select("id, external_student_ref, status, reason, is_recurring, student:students(external_id, full_name), group:groups(name)")
     .eq("audit_id", auditId)
-    .order("is_recurring", { ascending: false });
-  if (error) throw error;
+    .order("is_recurring", { ascending: false }).order("id"));
   return (data ?? []).map((r: any) => ({
     ...r,
     student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student,

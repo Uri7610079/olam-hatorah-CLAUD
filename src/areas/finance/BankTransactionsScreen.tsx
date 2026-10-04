@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowLeftRight, Upload } from "lucide-react";
@@ -215,7 +216,7 @@ async function analyzeBankFile(file: File, accountId: string, headerRowIndexOver
   const fileAccountNumbers = [
     ...new Set(parsed.rows.map((r) => (r["account_number"] ?? "").toString().trim()).filter(Boolean)),
   ];
-  const { data: existing } = await supabase.from("bank_transactions").select("fingerprint").eq("organization_bank_account_id", accountId);
+  const existing = await fetchAll(() => supabase.from("bank_transactions").select("fingerprint").eq("organization_bank_account_id", accountId).order("id"));
   const existingSet = new Set((existing ?? []).map((r) => r.fingerprint));
   const seen = new Set<string>();
   const rows: ClassifiedBankRow[] = [];
@@ -279,18 +280,20 @@ async function fetchBatches(accountId: string): Promise<BatchSummary[]> {
 }
 
 async function fetchTransactions(accountId: string, filter: ClassificationFilter): Promise<TransactionRow[]> {
-  let query = supabase
-    .from("bank_transactions")
-    .select(
-      "id, execution_date, direction, amount, description, reference, classification_status, suggested_confidence, suggested_reason, suggested_type:bank_transaction_types!bank_transactions_suggested_type_id_fkey(label_he), confirmed_type:bank_transaction_types!bank_transactions_confirmed_type_id_fkey(label_he)",
-    )
-    .eq("organization_bank_account_id", accountId)
-    .order("execution_date", { ascending: false });
-  if (filter === "unclassified") query = query.eq("classification_status", "unclassified");
-  if (filter === "suggested") query = query.eq("classification_status", "suggested");
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+  const data = await fetchAll(() => {
+    let query = supabase
+      .from("bank_transactions")
+      .select(
+        "id, execution_date, direction, amount, description, reference, classification_status, suggested_confidence, suggested_reason, suggested_type:bank_transaction_types!bank_transactions_suggested_type_id_fkey(label_he), confirmed_type:bank_transaction_types!bank_transactions_confirmed_type_id_fkey(label_he)",
+      )
+      .eq("organization_bank_account_id", accountId)
+      .order("execution_date", { ascending: false })
+      .order("id");
+    if (filter === "unclassified") query = query.eq("classification_status", "unclassified");
+    if (filter === "suggested") query = query.eq("classification_status", "suggested");
+    return query;
+  });
+  return data.map((r: any) => ({
     ...r,
     suggested_type: Array.isArray(r.suggested_type) ? (r.suggested_type[0] ?? null) : r.suggested_type,
     confirmed_type: Array.isArray(r.confirmed_type) ? (r.confirmed_type[0] ?? null) : r.confirmed_type,

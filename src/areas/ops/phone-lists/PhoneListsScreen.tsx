@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -98,21 +99,21 @@ async function fetchImports(orgId: string): Promise<ImportSummary[]> {
 }
 
 async function fetchEntries(importId: string, filter: string): Promise<EntryRow[]> {
-  let query = supabase
-    .from("phone_list_entries")
-    .select("id, raw_phone, normalized_phone, status, matched_student:students(external_id, full_name)")
-    .eq("import_id", importId)
-    .order("row_number");
-  if (filter) query = query.eq("status", filter);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({ ...r, matched_student: Array.isArray(r.matched_student) ? (r.matched_student[0] ?? null) : r.matched_student }));
+  const data = await fetchAll(() => {
+    let query = supabase
+      .from("phone_list_entries")
+      .select("id, raw_phone, normalized_phone, status, matched_student:students(external_id, full_name)")
+      .eq("import_id", importId)
+      .order("row_number")
+      .order("id");
+    if (filter) query = query.eq("status", filter);
+    return query;
+  });
+  return data.map((r: any) => ({ ...r, matched_student: Array.isArray(r.matched_student) ? (r.matched_student[0] ?? null) : r.matched_student }));
 }
 
 async function fetchMissing(importId: string): Promise<MissingStudent[]> {
-  const { data, error } = await supabase.rpc("get_phone_list_missing_students", { p_import_id: importId });
-  if (error) throw error;
-  return data ?? [];
+  return fetchAll(() => supabase.rpc("get_phone_list_missing_students", { p_import_id: importId }).order("full_name").order("student_id"));
 }
 
 export function PhoneListsScreen() {

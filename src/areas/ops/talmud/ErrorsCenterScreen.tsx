@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -56,16 +57,18 @@ const STATUS_LABEL: Record<ErrorStatus, string> = {
 };
 
 async function fetchErrors(orgId: string, statusFilter: string): Promise<TalmudError[]> {
-  let query = supabase
-    .from("talmud_errors")
-    .select("id, external_student_ref, month, error_code, error_description, status, is_recurring, created_at, student:students(external_id, full_name)")
-    .eq("organization_id", orgId)
-    .order("is_recurring", { ascending: false })
-    .order("created_at", { ascending: false });
-  if (statusFilter) query = query.eq("status", statusFilter);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({ ...r, student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student }));
+  const data = await fetchAll(() => {
+    let query = supabase
+      .from("talmud_errors")
+      .select("id, external_student_ref, month, error_code, error_description, status, is_recurring, created_at, student:students(external_id, full_name)")
+      .eq("organization_id", orgId)
+      .order("is_recurring", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id");
+    if (statusFilter) query = query.eq("status", statusFilter);
+    return query;
+  });
+  return data.map((r: any) => ({ ...r, student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student }));
 }
 
 type BatchStatus = "uploaded" | "analyzed" | "previewed" | "committed" | "rejected";

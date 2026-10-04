@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useState, type FormEvent } from "react";
 import { MultiSelect } from "@/components/MultiSelect";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -99,12 +100,11 @@ async function fetchStudyCodes(): Promise<StudyCodeOption[]> {
 }
 
 async function fetchOrgStudents(orgId: string): Promise<StudentOption[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("student_assignments")
     .select("students!inner(id, external_id, full_name)")
     .eq("organization_id", orgId)
-    .eq("is_active", true);
-  if (error) throw error;
+    .eq("is_active", true).order("id"));
   return (data ?? []).map((r: any) => r.students);
 }
 

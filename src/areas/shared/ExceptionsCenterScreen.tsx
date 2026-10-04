@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -117,11 +118,13 @@ async function fetchOrgs(): Promise<OrgOption[]> {
 async function fetchExceptions(orgId: string, severity: string, domain: string, orgs: OrgOption[]): Promise<ExceptionRow[]> {
   // unified_exceptions הוא view (לא טבלה) - ל-PostgREST אין FK אמיתי להסיק ממנו embed
   // אל organizations, אז שם העמותה נפתר בצד לקוח מרשימת העמותות שכבר טעונה לפילטר.
-  let query = supabase.from("unified_exceptions").select("exception_type, severity, organization_id, related_table, related_id, amount, related_date, description");
-  if (orgId) query = query.eq("organization_id", orgId);
-  if (severity) query = query.eq("severity", severity);
-  const { data, error } = await query.order("severity");
-  if (error) throw error;
+  // view בלי מזהה משלה - המיון המלא (חומרה, סוג, רשומה) הוא שמונע חפיפה בין המנות
+  const data = await fetchAll(() => {
+    let query = supabase.from("unified_exceptions").select("exception_type, severity, organization_id, related_table, related_id, amount, related_date, description");
+    if (orgId) query = query.eq("organization_id", orgId);
+    if (severity) query = query.eq("severity", severity);
+    return query.order("severity").order("exception_type").order("related_id");
+  });
   const orgById = new Map(orgs.map((o) => [o.id, o.legal_name]));
   let rows: ExceptionRow[] = (data ?? []).map((r) => ({ ...r, organization: orgById.has(r.organization_id) ? { legal_name: orgById.get(r.organization_id)! } : null }));
   if (domain) rows = rows.filter((r) => TYPE_DOMAIN[r.exception_type as ExceptionType] === domain);

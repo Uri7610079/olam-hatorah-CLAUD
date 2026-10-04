@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { useEffect, useState, type FormEvent } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,12 +48,11 @@ async function fetchOrgs(): Promise<OrgOption[]> {
 }
 
 async function fetchStudents(orgId: string): Promise<StudentOption[]> {
-  const { data, error } = await supabase
+  const data = await fetchAll(() => supabase
     .from("student_assignments")
     .select("students!inner(id, external_id, full_name)")
     .eq("organization_id", orgId)
-    .eq("is_active", true);
-  if (error) throw error;
+    .eq("is_active", true).order("id"));
   return (data ?? []).map((r: any) => r.students);
 }
 
