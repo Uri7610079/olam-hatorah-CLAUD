@@ -51,15 +51,30 @@ function buildItems(c: OpsCounts): ExceptionCounter[] {
   ];
 }
 
+async function fetchPortalCounts(): Promise<ExceptionCounter[]> {
+  const [requests, questions] = await Promise.all([
+    supabase.from("portal_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("portal_questions").select("id", { count: "exact", head: true }).eq("status", "open"),
+  ]);
+  if (requests.error || questions.error) return [];
+  const r = requests.count ?? 0;
+  const q = questions.count ?? 0;
+  return [
+    { key: "portal-requests", label: "עדכונים מראשי קבוצות שממתינים לאישור", count: r, severity: r > 0 ? "high" : "ok", href: "/ops/leader-portal" },
+    { key: "portal-questions", label: "שאלות מראשי קבוצות שממתינות לתשובה", count: q, severity: q > 0 ? "high" : "ok", href: "/ops/leader-portal" },
+  ];
+}
+
 export function OpsDashboard() {
   const query = useQuery({ queryKey: ["ops-dashboard-counts"], queryFn: fetchOpsCounts });
+  const portal = useQuery({ queryKey: ["portal-office-counts"], queryFn: fetchPortalCounts });
 
   return (
     <div>
       <PageHeader title="דשבורד תפעולי" description="מונים שדורשים טיפול בפועל — כל כרטיס מוביל לרשימה המסוננת הרלוונטית. ללא תנועות בנק או סכומים רגישים." />
       {query.isLoading && <LoadingState rows={3} />}
       {query.isError && <ErrorState message="שגיאה בטעינת נתוני הדשבורד." />}
-      {query.data && <ExceptionGrid items={buildItems(query.data)} />}
+      {query.data && <ExceptionGrid items={[...buildItems(query.data), ...(portal.data ?? [])]} />}
     </div>
   );
 }

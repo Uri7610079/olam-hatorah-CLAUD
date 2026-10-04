@@ -42,6 +42,7 @@ import { AppearanceScreen } from "./areas/admin/AppearanceScreen";
 import { FoldersScreen } from "./areas/admin/FoldersScreen";
 import { BankScraperScreen } from "./areas/admin/BankScraperScreen";
 import { UnassignedBulkAssignScreen } from "./areas/ops/students/UnassignedBulkAssignScreen";
+import { LeaderPortalScreen } from "./areas/ops/leader-portal/LeaderPortalScreen";
 import { TasksHomeScreen } from "./areas/tasks/TasksHomeScreen";
 import { TasksAllScreen } from "./areas/tasks/TasksAllScreen";
 import { TasksWhatsAppScreen } from "./areas/tasks/TasksWhatsAppScreen";
@@ -57,6 +58,7 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/ops/branches-groups",
   "/ops/students",
   "/ops/students/unassigned",
+  "/ops/leader-portal",
   "/ops/import-center",
   "/ops/talmud/export",
   "/ops/talmud/eligibility",
@@ -110,6 +112,7 @@ export default function App() {
             <Route path="/ops/branches-groups" element={<BranchesGroupsScreen />} />
             <Route path="/ops/students" element={<StudentsListScreen />} />
             <Route path="/ops/students/unassigned" element={<UnassignedBulkAssignScreen />} />
+            <Route path="/ops/leader-portal" element={<LeaderPortalScreen />} />
             <Route path="/ops/students/:id" element={<StudentDetailScreen />} />
             <Route path="/ops/import-center" element={<ImportCenterScreen />} />
             <Route path="/admin/study-codes" element={<StudyCodesScreen />} />

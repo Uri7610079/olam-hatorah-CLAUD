@@ -10,6 +10,7 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
 import { Tabs, type TabDef } from "@/components/Tabs";
+import { StudentPortalTab } from "@/areas/ops/leader-portal/StudentPortalTab";
 import { Stepper, type StepDef } from "@/components/Stepper";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { STATUS_LABEL, type Student } from "./types";
@@ -19,7 +20,7 @@ import { StudentBankTab } from "./StudentBankTab";
 import { StudentTalmudTab } from "./StudentTalmudTab";
 import { StudentAuditsTab } from "./StudentAuditsTab";
 
-type TabKey = "details" | "assignment" | "talmud" | "bank" | "audits" | "documents";
+type TabKey = "details" | "assignment" | "talmud" | "bank" | "audits" | "documents" | "portal";
 
 const TABS: TabDef<TabKey>[] = [
   { key: "details", label: "פרטים" },
@@ -28,6 +29,7 @@ const TABS: TabDef<TabKey>[] = [
   { key: "bank", label: "בנק" },
   { key: "audits", label: "ביקורות" },
   { key: "documents", label: "מסמכים" },
+  { key: "portal", label: "מראש הקבוצה" },
 ];
 
 const STEPS: StepDef[] = [
@@ -191,6 +193,7 @@ export function StudentDetailScreen() {
       {activeTab === "talmud" && <StudentTalmudTab studentId={student.id} />}
       {activeTab === "bank" && <StudentBankTab studentId={student.id} />}
       {activeTab === "audits" && <StudentAuditsTab studentId={student.id} />}
+      {activeTab === "portal" && <StudentPortalTab studentId={student.id} />}
       {activeTab === "documents" && <EmptyState title="מסמכים" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={FileText} />}
 
       <ConfirmDialog

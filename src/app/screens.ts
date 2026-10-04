@@ -34,6 +34,7 @@ import {
   FolderCog,
   CalendarClock,
   UserSquare2,
+  Contact,
 } from "lucide-react";
 import type { Area } from "./AreaContext";
 
@@ -64,6 +65,15 @@ export const SCREENS: ScreenDef[] = [
     title: "שיוך מרוכז לתלמידים חסרי שיוך",
     builtInStage: "שלב 33",
     icon: UserPlus,
+  },
+  {
+    path: "/ops/leader-portal",
+    area: "ops",
+    navLabel: "פורטל ראשי קבוצות",
+    title: "פורטל ראשי קבוצות",
+    description: "עדכונים ושאלות שראשי הקבוצות שלחו מהפורטל, וניהול הגישה שלהם.",
+    builtInStage: "שלב 35",
+    icon: Contact,
   },
   {
     path: "/ops/organizations",
