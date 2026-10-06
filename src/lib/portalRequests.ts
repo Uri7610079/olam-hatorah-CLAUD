@@ -29,6 +29,9 @@ export const ID_TYPE_LABEL: Record<string, string> = {
 
 type Payload = Record<string, string | null | undefined>;
 
+const MARITAL_TEXT: Record<string, string> = { single: "בחור", married: "נשוי" };
+const SCOPE_TEXT: Record<string, string> = { full_day: "יום שלם", half_day_morning: "חצי יום בוקר", half_day_afternoon: 'חצי יום אחה"צ' };
+
 const FIELD_LABEL: Record<string, string> = {
   phone: "טלפון",
   address_street: "רחוב",
@@ -56,8 +59,18 @@ export function monthLabel(iso: string): string {
 /** שורות "לפני ← אחרי" לבקשה, רק לשדות שהשתנו. */
 export function requestChanges(kind: RequestKind, payload: Payload, previous: Payload | null): string[] {
   if (kind === "new_student") {
-    const lines = [`${payload.full_name} · ${show("id_type", payload.id_type)} ${payload.external_id}`];
+    const country = payload.passport_country ? ` (${payload.passport_country})` : "";
+    const lines = [`${payload.full_name} · ${show("id_type", payload.id_type)} ${payload.external_id}${country}`];
+    if (payload.birth_date) lines.push(`תאריך לידה: ${formatDate(payload.birth_date)}`);
     if (payload.phone) lines.push(`טלפון: ${payload.phone}`);
+    if (payload.marital_status) {
+      const scope = payload.study_scope ? ` · ${SCOPE_TEXT[payload.study_scope] ?? payload.study_scope}` : "";
+      const code = payload.study_code ? ` · קוד לימוד ${payload.study_code}` : "";
+      lines.push(`${MARITAL_TEXT[payload.marital_status] ?? payload.marital_status}${scope}${code}`);
+    }
+    if (payload.account_number) {
+      lines.push(`בנק: ${payload.bank_name ?? ""} (${payload.bank_code}) · סניף ${payload.bank_branch} · חשבון ${payload.account_number} · ${payload.account_holder}`);
+    }
     const addr = [payload.address_street, payload.address_house_number, payload.address_city].filter(Boolean).join(" ");
     if (addr) lines.push(`כתובת: ${addr}`);
     if (payload.start_date) lines.push(`מתאריך: ${formatDate(payload.start_date)}`);

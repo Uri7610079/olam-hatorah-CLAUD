@@ -26,6 +26,8 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
     address_city: student.address_city ?? "",
     student_type: student.student_type ?? "",
     study_code: student.study_code ?? "",
+    marital_status: student.marital_status ?? "",
+    study_scope: student.study_scope ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +55,8 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
         address_city: values.address_city || null,
         student_type: values.student_type || null,
         study_code: values.study_code || null,
+        marital_status: values.marital_status || null,
+        study_scope: values.marital_status === "married" ? values.study_scope || null : null,
       })
       .eq("id", student.id);
     setSaving(false);
@@ -149,6 +153,30 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           <label className="field-label">עיר</label>
           <input value={values.address_city} onChange={(e) => setValues((v) => ({ ...v, address_city: e.target.value }))} className="input-field" />
         </div>
+      </div>
+      {/* מצב משפחתי והיקף לימוד - נקבעים בפורטל ראשי הקבוצות בהוספת תלמיד, וקובעים את קוד הלימוד */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="student-marital" className="field-label">מצב משפחתי</label>
+          <select id="student-marital" value={values.marital_status}
+            onChange={(e) => setValues((v) => ({ ...v, marital_status: e.target.value, study_scope: e.target.value === "married" ? v.study_scope : "" }))}
+            className="input-field">
+            <option value="">—</option>
+            <option value="single">בחור</option>
+            <option value="married">נשוי</option>
+          </select>
+        </div>
+        {values.marital_status === "married" && (
+          <div>
+            <label htmlFor="student-scope" className="field-label">היקף לימוד</label>
+            <select id="student-scope" value={values.study_scope} onChange={(e) => setValues((v) => ({ ...v, study_scope: e.target.value }))} className="input-field">
+              <option value="">—</option>
+              <option value="full_day">יום שלם</option>
+              <option value="half_day_morning">חצי יום בוקר</option>
+              <option value="half_day_afternoon">חצי יום אחה"צ</option>
+            </select>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>

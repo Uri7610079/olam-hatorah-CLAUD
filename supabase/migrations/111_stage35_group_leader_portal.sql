@@ -415,6 +415,9 @@ begin
 end;
 $$;
 
+-- מיגרציה 112 משנה את סוג ההחזרה. בלי drop, הרצה חוזרת של הקובץ (גרסת שולחן
+-- העבודה מריצה הכל בכל פתיחה) נכשלת כאן.
+drop function if exists portal_students(text, date);
 create or replace function portal_students(p_token text, p_month date)
 returns table (
   student_id uuid, full_name text, external_id text, id_type text,

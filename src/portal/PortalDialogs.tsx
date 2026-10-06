@@ -5,9 +5,9 @@ import { PhoneField } from "@/components/PhoneField";
 import { StatusBadge } from "@/components/StatusBadge";
 import { israeliIdWarning } from "@/lib/israeliId";
 import { ELIGIBILITY, ID_TYPE_LABEL, monthLabel } from "@/lib/portalRequests";
-import { fileToBase64, portalRpc, type PortalGroup, type PortalStudent } from "./portalApi";
+import { fileToBase64, portalRpc, type PortalStudent } from "./portalApi";
 
-function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
@@ -36,7 +36,7 @@ function Dialog({ title, onClose, children }: { title: string; onClose: () => vo
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+export function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <section className="border-t border-line pt-5">
       <h3 className="text-lg font-bold">{title}</h3>
@@ -46,13 +46,13 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-function Feedback({ error, done }: { error?: string | null; done?: string | null }) {
+export function Feedback({ error, done }: { error?: string | null; done?: string | null }) {
   if (error) return <p role="alert" className="mt-3 rounded-control bg-danger-soft p-3 text-base text-danger-ink">{error}</p>;
   if (done) return <p role="status" className="mt-3 rounded-control bg-ok-soft p-3 text-base text-ok-ink">{done}</p>;
   return null;
 }
 
-const errText = (e: unknown) => (e instanceof Error ? e.message : "הפעולה נכשלה");
+export const errText = (e: unknown) => (e instanceof Error ? e.message : "הפעולה נכשלה");
 
 // ===== תלמיד: פרטים, טלפון וכתובת, שם ות.ז, עזיבה =====
 export function StudentDialog({ student, month, onClose, onAsk }: {
@@ -204,88 +204,6 @@ export function StudentDialog({ student, month, onClose, onAsk }: {
           )}
         </Section>
       </div>
-    </Dialog>
-  );
-}
-
-// ===== תלמיד חדש =====
-export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [form, setForm] = useState({
-    groupId: groups.length === 1 ? groups[0].id : "",
-    name: "", idType: "israeli_id", id: "", phone: "", street: "", house: "", city: "",
-    start: new Date().toISOString().slice(0, 10),
-  });
-  const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const idWarning = israeliIdWarning(form.id, form.idType as "israeli_id");
-  const send = useMutation({
-    mutationFn: () => portalRpc("portal_request_new_student", {
-      p_group_id: form.groupId, p_full_name: form.name, p_external_id: form.id, p_id_type: form.idType,
-      p_phone: form.phone, p_street: form.street, p_house_number: form.house, p_city: form.city, p_start_date: form.start,
-    }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-requests"] }),
-  });
-
-  return (
-    <Dialog title="הוספת תלמיד חדש" onClose={onClose}>
-      {send.isSuccess ? (
-        <div className="space-y-4">
-          <Feedback done="נשלח למשרד. התלמיד יופיע ברשימה אחרי האישור." />
-          <button onClick={onClose} className="btn-primary h-11 px-6 text-base">סגירה</button>
-        </div>
-      ) : (
-        <form onSubmit={(e) => { e.preventDefault(); send.mutate(); }} className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label htmlFor="ns-group" className="field-label">קבוצה</label>
-            <select id="ns-group" required value={form.groupId} onChange={(e) => set("groupId")(e.target.value)} className="input-field h-11 text-base">
-              <option value="">— בחירת קבוצה —</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>{[g.name, g.branch, g.organization].filter(Boolean).join(" · ")}</option>
-              ))}
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="ns-name" className="field-label">שם מלא</label>
-            <input id="ns-name" required value={form.name} onChange={(e) => set("name")(e.target.value)} className="input-field h-11 text-base" />
-          </div>
-          <div>
-            <label htmlFor="ns-idtype" className="field-label">סוג מזהה</label>
-            <select id="ns-idtype" value={form.idType} onChange={(e) => set("idType")(e.target.value)} className="input-field h-11 text-base">
-              {Object.entries(ID_TYPE_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="ns-id" className="field-label">מספר</label>
-            <input id="ns-id" required dir="ltr" value={form.id} onChange={(e) => set("id")(e.target.value)} className="input-field h-11 text-right text-base tabular-nums" />
-            {idWarning && <p className="mt-1 text-sm text-warn-ink">{idWarning}</p>}
-          </div>
-          <PhoneField id="ns-phone" label="טלפון" value={form.phone} onChange={set("phone")} />
-          <div>
-            <label htmlFor="ns-start" className="field-label">לומד בקבוצה מתאריך</label>
-            <input id="ns-start" type="date" value={form.start} onChange={(e) => set("start")(e.target.value)} className="input-field h-11 text-base" />
-          </div>
-          <div>
-            <label htmlFor="ns-street" className="field-label">רחוב</label>
-            <input id="ns-street" value={form.street} onChange={(e) => set("street")(e.target.value)} className="input-field h-11 text-base" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="ns-house" className="field-label">מספר בית</label>
-              <input id="ns-house" value={form.house} onChange={(e) => set("house")(e.target.value)} className="input-field h-11 text-base" />
-            </div>
-            <div>
-              <label htmlFor="ns-city" className="field-label">עיר</label>
-              <input id="ns-city" value={form.city} onChange={(e) => set("city")(e.target.value)} className="input-field h-11 text-base" />
-            </div>
-          </div>
-          <div className="sm:col-span-2">
-            <button type="submit" disabled={send.isPending} className="btn-primary h-11 px-6 text-base">
-              {send.isPending ? "שולח…" : "שליחה לאישור המשרד"}
-            </button>
-            <Feedback error={send.isError ? errText(send.error) : null} />
-          </div>
-        </form>
-      )}
     </Dialog>
   );
 }

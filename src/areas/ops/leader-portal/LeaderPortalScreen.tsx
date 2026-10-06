@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, Inbox, ListTodo } from "lucide-react";
+import { Copy, Download, Eye, Inbox, ListTodo } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,7 +21,7 @@ import {
 // להיכנס לפורטל, ומה עודכן. הכל נכתב דרך פונקציות המסד - הן שבודקות
 // הרשאה, מחילות את השינוי, ורושמות ביומן.
 
-type Tab = "requests" | "questions" | "access" | "history";
+type Tab = "requests" | "questions" | "access" | "history" | "settings";
 
 interface RequestRow {
   id: string;
@@ -30,12 +30,14 @@ interface RequestRow {
   payload: Record<string, string | null>;
   previous: Record<string, string | null> | null;
   decision_note: string | null;
+  office_note: string | null;
   created_at: string;
   decided_at: string | null;
   student_id: string | null;
   student: { full_name: string; external_id: string } | null;
   leader: { full_name: string } | null;
   group: { name: string } | null;
+  groupName: string | null;
 }
 
 interface QuestionRow {
@@ -51,6 +53,7 @@ interface QuestionRow {
   student_id: string | null;
   student: { full_name: string; external_id: string } | null;
   leader: { full_name: string } | null;
+  groupName?: string | null;
 }
 
 interface AccessRow {
@@ -71,25 +74,38 @@ interface AccessRow {
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 const errText = (e: unknown) => (e instanceof Error ? e.message : (e as { message?: string })?.message ?? "הפעולה נכשלה");
 
+// הקבוצה הנוכחית של התלמיד - דרך השיוך הפעיל שלו
+const STUDENT_WITH_GROUP = "student:students(full_name, external_id, assignments:student_assignments(is_active, group:groups(name)))";
 const REQUEST_SELECT =
-  "id, kind, status, payload, previous, decision_note, created_at, decided_at, student_id, student:students(full_name, external_id), leader:group_leaders(full_name), group:groups(name)";
+  `id, kind, status, payload, previous, decision_note, office_note, created_at, decided_at, student_id, ${STUDENT_WITH_GROUP}, leader:group_leaders(full_name), group:groups(name)`;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function activeGroupName(student: any): string | null {
+  const s = one(student);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a = (s?.assignments ?? []).find((x: any) => x.is_active);
+  return a ? one(a.group)?.name ?? null : null;
+}
 
 async function fetchRequests(pending: boolean): Promise<RequestRow[]> {
   let q = supabase.from("portal_change_requests").select(REQUEST_SELECT);
   q = pending ? q.eq("status", "pending").order("created_at") : q.neq("status", "pending").order("created_at", { ascending: false }).limit(300);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []).map((r) => ({ ...r, student: one(r.student), leader: one(r.leader), group: one(r.group) })) as RequestRow[];
+  return (data ?? []).map((r) => ({
+    ...r, student: one(r.student), leader: one(r.leader), group: one(r.group),
+    groupName: one(r.group)?.name ?? activeGroupName(r.student),
+  })) as RequestRow[];
 }
 
 async function fetchQuestions(): Promise<QuestionRow[]> {
   const { data, error } = await supabase
     .from("portal_questions")
-    .select("id, body, context, status, answer, answered_at, created_at, attachment_name, task_id, student_id, student:students(full_name, external_id), leader:group_leaders(full_name)")
+    .select(`id, body, context, status, answer, answered_at, created_at, attachment_name, task_id, student_id, ${STUDENT_WITH_GROUP}, leader:group_leaders(full_name)`)
     .order("created_at", { ascending: false })
     .limit(300);
   if (error) throw error;
-  return (data ?? []).map((r) => ({ ...r, student: one(r.student), leader: one(r.leader) })) as QuestionRow[];
+  return (data ?? []).map((r) => ({ ...r, student: one(r.student), leader: one(r.leader), groupName: activeGroupName(r.student) })) as QuestionRow[];
 }
 
 export function LeaderPortalScreen() {
@@ -111,6 +127,7 @@ export function LeaderPortalScreen() {
           { key: "questions", label: "שאלות", badge: openQuestions || undefined },
           { key: "access", label: "גישה לפורטל" },
           { key: "history", label: "יומן עדכונים" },
+          { key: "settings", label: "הגדרות" },
         ]}
         activeTab={tab}
         onChange={setTab}
@@ -120,6 +137,7 @@ export function LeaderPortalScreen() {
       {tab === "questions" && <QuestionsList query={questions} />}
       {tab === "access" && <AccessList />}
       {tab === "history" && <RequestHistory />}
+      {tab === "settings" && <PortalSettings />}
     </div>
   );
 }
@@ -166,9 +184,9 @@ function RequestCard({ r }: { r: RequestRow }) {
   return (
     <article className="card p-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="rounded-control bg-brand-50 px-2 py-0.5 font-semibold text-brand-700">{r.groupName ?? "—"}</span>
         <span className="font-semibold text-ink">{REQUEST_KIND_LABEL[r.kind]}</span>
         <span className="text-ink-muted">· מאת {r.leader?.full_name ?? "—"}</span>
-        {r.group && <span className="text-ink-muted">· קבוצת {r.group.name}</span>}
         <span className="ms-auto text-ink-subtle">{formatDate(r.created_at)}</span>
       </div>
       {r.student && r.student_id && (
@@ -180,12 +198,20 @@ function RequestCard({ r }: { r: RequestRow }) {
       <ul className="mt-2 space-y-0.5 text-sm text-ink">
         {requestChanges(r.kind, r.payload, r.previous).map((line) => <li key={line}>{line}</li>)}
       </ul>
+      {r.office_note && (
+        <p className="mt-2 rounded-control bg-warn-soft p-2 text-sm text-warn-ink">
+          <span className="font-semibold">לתשומת לב המשרד: </span>{r.office_note}
+        </p>
+      )}
+      {r.payload.has_id_photo && <IdPhotoButton requestId={r.id} />}
 
       {canDecide && (
         <div className="mt-3 flex flex-wrap items-end gap-2">
           {!rejecting ? (
             <>
-              <button onClick={() => decide.mutate(true)} disabled={decide.isPending} className="btn-primary">אישור</button>
+              <button onClick={() => decide.mutate(true)} disabled={decide.isPending} className="btn-primary">
+                {r.kind === "new_student" && r.office_note?.includes("כבר קיים") ? "אישור והעברת התלמיד לקבוצה" : "אישור"}
+              </button>
               <button onClick={() => setRejecting(true)} disabled={decide.isPending} className="btn-secondary">דחייה</button>
             </>
           ) : (
@@ -274,6 +300,9 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
   return (
     <article className="card p-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        {q.groupName !== undefined && (
+          <span className="rounded-control bg-brand-50 px-2 py-0.5 font-semibold text-brand-700">{q.groupName ?? "שאלה כללית"}</span>
+        )}
         <span className="font-semibold text-ink">{q.leader?.full_name ?? "—"}</span>
         {q.student && q.student_id ? (
           <span className="text-ink-muted">
@@ -332,6 +361,16 @@ function AccessList() {
       return (data ?? []) as AccessRow[];
     },
   });
+  const groupsQuery = useQuery({
+    queryKey: ["portal-office-leader-groups"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("groups").select("name, group_leader_id").eq("status", "active").not("group_leader_id", "is", null).order("name");
+      if (error) throw error;
+      const byLeader = new Map<string, string[]>();
+      (data ?? []).forEach((g) => byLeader.set(g.group_leader_id as string, [...(byLeader.get(g.group_leader_id as string) ?? []), g.name]));
+      return byLeader;
+    },
+  });
   const [editing, setEditing] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [done, setDone] = useState<string | null>(null);
@@ -378,9 +417,9 @@ function AccessList() {
         <table className="w-full text-sm">
           <thead className="bg-surface-muted text-right text-ink-muted">
             <tr>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold">שם קבוצה</th>
               <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
               <th className="whitespace-nowrap px-3 py-2 font-semibold">נכנס עם</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">קבוצות</th>
               <th className="whitespace-nowrap px-3 py-2 font-semibold">כניסה אחרונה</th>
               <th className="whitespace-nowrap px-3 py-2 font-semibold">מצב</th>
               <th className="px-3 py-2"><span className="sr-only">פעולות</span></th>
@@ -391,12 +430,14 @@ function AccessList() {
               const st = status(a);
               return (
                 <tr key={a.group_leader_id} className="border-t border-line align-top">
+                  <td className="px-3 py-2 font-semibold">
+                    {(groupsQuery.data?.get(a.group_leader_id) ?? []).join(", ") || "—"}
+                  </td>
                   <td className="px-3 py-2 font-medium">
                     {a.full_name}
                     {a.problem && <div className="text-xs font-normal text-danger-ink">{a.problem}</div>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2" dir="ltr">{a.login_identifier ?? "—"}</td>
-                  <td className="px-3 py-2 tabular-nums">{a.active_groups}</td>
                   <td className="whitespace-nowrap px-3 py-2">{a.last_login_at ? formatDate(a.last_login_at) : "טרם נכנס"}</td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <StatusBadge severity={st.severity} label={st.label} />
@@ -452,6 +493,7 @@ function RequestHistory() {
       <table className="w-full text-sm">
         <thead className="bg-surface-muted text-right text-ink-muted">
           <tr>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold">שם קבוצה</th>
             <th className="whitespace-nowrap px-3 py-2 font-semibold">תאריך</th>
             <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
             <th className="whitespace-nowrap px-3 py-2 font-semibold">תלמיד</th>
@@ -463,6 +505,7 @@ function RequestHistory() {
         <tbody>
           {query.data.map((r) => (
             <tr key={r.id} className="border-t border-line align-top">
+              <td className="whitespace-nowrap px-3 py-2 font-semibold">{r.groupName ?? "—"}</td>
               <td className="whitespace-nowrap px-3 py-2">{formatDate(r.created_at)}</td>
               <td className="px-3 py-2">{r.leader?.full_name ?? "—"}</td>
               <td className="px-3 py-2">
@@ -478,6 +521,184 @@ function RequestHistory() {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ===== צילום ת"ז שצורף לבקשה =====
+function IdPhotoButton({ requestId }: { requestId: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [type, setType] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const open = async () => {
+    setErr(null);
+    const { data, error } = await supabase.rpc("portal_request_attachment", { p_request_id: requestId });
+    const file = Array.isArray(data) ? data[0] : data;
+    if (error || !file) { setErr("לא ניתן לפתוח את הצילום"); return; }
+    const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
+    setType(file.file_type ?? "");
+    setUrl(URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" })));
+  };
+  return (
+    <div className="mt-2">
+      {!url ? (
+        <button onClick={open} className="link-action flex items-center gap-1 text-sm">
+          <Eye className="h-4 w-4" aria-hidden="true" />
+          צילום תעודת זהות
+        </button>
+      ) : type.startsWith("image/") ? (
+        <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="צילום תעודת זהות" className="max-h-64 rounded-control border border-line" /></a>
+      ) : (
+        <a href={url} target="_blank" rel="noreferrer" className="link-action text-sm">פתיחת הצילום</a>
+      )}
+      {err && <p className="text-sm text-danger-ink">{err}</p>}
+    </div>
+  );
+}
+
+// ===== הגדרות =====
+const STUDY_CODE_ROWS: { key: string; label: string }[] = [
+  { key: "single", label: "בחור" },
+  { key: "full_day", label: "נשוי - יום שלם" },
+  { key: "half_day_morning", label: "נשוי - חצי יום בוקר" },
+  { key: "half_day_afternoon", label: 'נשוי - חצי יום אחה"צ' },
+];
+
+function PortalSettings() {
+  const qc = useQueryClient();
+  const { hasPermission: canCodes } = useHasPermission("study_codes", "manage");
+  const { hasPermission: canGroups } = useHasPermission("groups", "manage");
+  const [search, setSearch] = useState("");
+
+  const map = useQuery({
+    queryKey: ["portal-study-code-map"],
+    queryFn: async () => {
+      const [m, c] = await Promise.all([
+        supabase.from("portal_study_code_map").select("key, study_code"),
+        supabase.from("study_codes").select("code, description").eq("is_active", true).order("code"),
+      ]);
+      if (m.error) throw m.error;
+      if (c.error) throw c.error;
+      return { map: new Map((m.data ?? []).map((r) => [r.key, r.study_code as string | null])), codes: c.data ?? [] };
+    },
+  });
+  const setCode = useMutation({
+    mutationFn: async ({ key, code }: { key: string; code: string | null }) => {
+      const { error } = await supabase.rpc("portal_set_study_code", { p_key: key, p_code: code });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-study-code-map"] }),
+  });
+
+  const groups = useQuery({
+    queryKey: ["portal-office-group-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("groups")
+        .select("id, name, require_id_photo, leader:group_leaders(full_name), branch:branches(internal_name, organization:organizations(legal_name))")
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data ?? []).map((g: any) => {
+        const b = one(g.branch);
+        return { id: g.id as string, name: g.name as string, require: !!g.require_id_photo,
+          leader: one(g.leader)?.full_name ?? null, branch: b?.internal_name ?? null, org: one(b?.organization)?.legal_name ?? null };
+      });
+    },
+  });
+  const toggle = useMutation({
+    mutationFn: async ({ id, required }: { id: string; required: boolean }) => {
+      const { error } = await supabase.rpc("portal_set_group_id_photo", { p_group_id: id, p_required: required });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-office-group-settings"] }),
+  });
+
+  const q = search.trim();
+  const shownGroups = (groups.data ?? []).filter((g) => !q || g.name.includes(q) || (g.leader ?? "").includes(q));
+  const requiredCount = (groups.data ?? []).filter((g) => g.require).length;
+
+  return (
+    <div className="space-y-8">
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-ink">קוד לימוד לתלמיד חדש</h2>
+          <p className="text-sm text-ink-muted">ראש הקבוצה בוחר מצב משפחתי והיקף לימוד, והקוד נקבע לפי הטבלה הזו. שינוי חל על בקשות חדשות בלבד.</p>
+        </div>
+        {map.isLoading ? <LoadingState rows={2} /> : map.isError ? <ErrorState message={errText(map.error)} /> : (
+          <div className="card max-w-xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody>
+                {STUDY_CODE_ROWS.map((row) => (
+                  <tr key={row.key} className="border-t border-line first:border-t-0">
+                    <td className="whitespace-nowrap px-3 py-2 font-medium">{row.label}</td>
+                    <td className="px-3 py-2">
+                      <select
+                        aria-label={`קוד לימוד: ${row.label}`}
+                        value={map.data?.map.get(row.key) ?? ""}
+                        disabled={!canCodes || setCode.isPending}
+                        onChange={(e) => setCode.mutate({ key: row.key, code: e.target.value || null })}
+                        className="input-field h-9"
+                      >
+                        <option value="">— לא נקבע —</option>
+                        {(map.data?.codes ?? []).map((c) => <option key={c.code} value={c.code}>{c.code} - {c.description}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {setCode.isError && <ErrorState message={errText(setCode.error)} />}
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold text-ink">קבוצות שמחייבות צילום תעודת זהות</h2>
+          <p className="text-sm text-ink-muted">
+            בקבוצה מסומנת, ראש הקבוצה לא יכול לשלוח בקשה להוספת תלמיד בלי לצרף צילום תעודת זהות. מסומנות כרגע: {requiredCount}.
+          </p>
+        </div>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש קבוצה או ראש קבוצה" aria-label="חיפוש קבוצה" className="input-field max-w-xs" />
+        {groups.isLoading ? <LoadingState rows={4} /> : groups.isError ? <ErrorState message={errText(groups.error)} /> : (
+          <div className="card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-muted text-right text-ink-muted">
+                <tr>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">שם קבוצה</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">סניף</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">עמותה</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">חובה צילום ת״ז</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shownGroups.map((g) => (
+                  <tr key={g.id} className="border-t border-line">
+                    <td className="whitespace-nowrap px-3 py-2 font-semibold">{g.name}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{g.leader ?? "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{g.branch ?? "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{g.org ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`חובה צילום ת"ז בקבוצת ${g.name}`}
+                        checked={g.require}
+                        disabled={!canGroups || toggle.isPending}
+                        onChange={(e) => toggle.mutate({ id: g.id, required: e.target.checked })}
+                        className="h-5 w-5 accent-brand-500"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {toggle.isError && <ErrorState message={errText(toggle.error)} />}
+      </section>
     </div>
   );
 }

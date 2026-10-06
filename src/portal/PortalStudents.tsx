@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, UserPlus, MessageCircleQuestion, AlertTriangle } from "lucide-react";
+import { Search, UserPlus, MessageCircleQuestion, AlertTriangle, FileDown, FileUp } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ELIGIBILITY, monthLabel } from "@/lib/portalRequests";
 import { portalRpc, type PortalGroup, type PortalStudent } from "./portalApi";
-import { AskDialog, NewStudentDialog, StudentDialog } from "./PortalDialogs";
+import { AskDialog, StudentDialog } from "./PortalDialogs";
+import { ExcelUploadDialog, NewStudentDialog } from "./PortalNewStudent";
+import { exportStudents } from "./portalExcel";
 
 type Filter = "all" | "not_eligible" | "no_bank";
 
@@ -29,6 +31,7 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
   const [openStudent, setOpenStudent] = useState<PortalStudent | null>(null);
   const [askAbout, setAskAbout] = useState<PortalStudent | null>(null);
   const [adding, setAdding] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const all = useMemo(() => students.data ?? [], [students.data]);
   const counts = useMemo(() => ({
@@ -67,10 +70,25 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
             ))}
           </select>
         </div>
-        <button onClick={() => setAdding(true)} className="btn-secondary flex h-11 items-center gap-2 px-4 text-base">
-          <UserPlus className="h-5 w-5" aria-hidden="true" />
-          הוספת תלמיד חדש
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setAdding(true)} className="btn-secondary flex h-11 items-center gap-2 px-4 text-base">
+            <UserPlus className="h-5 w-5" aria-hidden="true" />
+            הוספת תלמיד חדש
+          </button>
+          <button onClick={() => setUploading(true)} className="btn-secondary flex h-11 items-center gap-2 px-4 text-base">
+            <FileUp className="h-5 w-5" aria-hidden="true" />
+            הוספה מקובץ אקסל
+          </button>
+          <button
+            onClick={() => exportStudents(shown, monthLabel(month))}
+            disabled={shown.length === 0}
+            className="btn-secondary flex h-11 items-center gap-2 px-4 text-base"
+            title="התלמידים שמוצגים כרגע, לפי החודש והסינון"
+          >
+            <FileDown className="h-5 w-5" aria-hidden="true" />
+            הורדה לאקסל
+          </button>
+        </div>
       </div>
 
       {students.data && (
@@ -190,6 +208,7 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
       )}
       {askAbout && <AskDialog student={askAbout} month={month} onClose={() => setAskAbout(null)} />}
       {adding && <NewStudentDialog groups={groups} onClose={() => setAdding(false)} />}
+      {uploading && <ExcelUploadDialog groups={groups} onClose={() => setUploading(false)} />}
     </div>
   );
 }

@@ -65,7 +65,7 @@ export async function portalLogout() {
   portalToken.clear();
 }
 
-export interface PortalGroup { id: string; name: string; branch: string | null; organization: string }
+export interface PortalGroup { id: string; name: string; branch: string | null; organization: string; require_id_photo: boolean }
 export interface PortalMe { name: string; groups: PortalGroup[] }
 
 export interface PortalStudent {
@@ -77,6 +77,11 @@ export interface PortalStudent {
   address_street: string | null;
   address_house_number: string | null;
   address_city: string | null;
+  birth_date: string | null;
+  marital_status: "single" | "married" | null;
+  study_scope: "full_day" | "half_day_morning" | "half_day_afternoon" | null;
+  study_code: string | null;
+  passport_country: string | null;
   group_id: string;
   group_name: string;
   branch_name: string | null;
@@ -121,4 +126,9 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(new Error("לא ניתן לקרוא את הקובץ"));
     reader.readAsDataURL(file);
   });
+}
+
+export interface PortalReference {
+  banks: { code: string; name: string }[];
+  study_codes: Record<string, { code: string | null; description: string | null }>;
 }
