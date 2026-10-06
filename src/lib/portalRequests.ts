@@ -1,4 +1,5 @@
 import type { Severity } from "@/components/StatusBadge";
+import { TALMUD_VISA_TYPES } from "@/lib/talmudCodes";
 
 // בקשות מראשי קבוצות (מיגרציה 111) - התוויות והתיאור במקום אחד, כדי
 // שראש הקבוצה והמשרד יראו את אותה בקשה באותן מילים.
@@ -61,6 +62,12 @@ export function requestChanges(kind: RequestKind, payload: Payload, previous: Pa
   if (kind === "new_student") {
     const country = payload.passport_country ? ` (${payload.passport_country})` : "";
     const lines = [`${payload.full_name} · ${show("id_type", payload.id_type)} ${payload.external_id}${country}`];
+    if (payload.first_name && payload.last_name) lines.push(`שם משפחה: ${payload.last_name} · שם פרטי: ${payload.first_name}`);
+    if (payload.visa_number || payload.visa_type || payload.visa_expiry) {
+      const visa = TALMUD_VISA_TYPES.find((t) => String(t.code) === String(payload.visa_type));
+      lines.push(["אשרה:", visa?.label ?? payload.visa_type, payload.visa_number && `מספר ${payload.visa_number}`,
+        payload.visa_expiry && `בתוקף עד ${formatDate(payload.visa_expiry)}`].filter(Boolean).join(" "));
+    }
     if (payload.birth_date) lines.push(`תאריך לידה: ${formatDate(payload.birth_date)}`);
     if (payload.phone) lines.push(`טלפון: ${payload.phone}`);
     if (payload.marital_status) {

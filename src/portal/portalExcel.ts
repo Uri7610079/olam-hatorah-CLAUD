@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
-import { PASSPORT_COUNTRIES } from "@/lib/passportCountries";
+import { ALL_PASSPORT_COUNTRIES } from "@/lib/passportCountries";
+import { TALMUD_VISA_TYPES } from "@/lib/talmudCodes";
 import { ELIGIBILITY } from "@/lib/portalRequests";
 import {
   EMPTY_NEW_STUDENT, ID_TYPE_OPTIONS, MARITAL_LABEL, SCOPE_LABEL, bankLabel, validateNewStudent,
@@ -43,10 +44,14 @@ interface Column { key: keyof NewStudentInput; header: string; required: boolean
 
 export const TEMPLATE_COLUMNS: Column[] = [
   { key: "groupId", header: "קבוצה", required: true, width: 22, list: "groups", hint: "בחירה מהרשימה" },
-  { key: "fullName", header: "שם מלא", required: true, width: 22, hint: "שם פרטי ושם משפחה" },
+  { key: "lastName", header: "שם משפחה", required: true, width: 16, hint: "" },
+  { key: "firstName", header: "שם פרטי", required: true, width: 14, hint: "" },
   { key: "idType", header: "סוג מזהה", required: true, width: 14, list: "idTypes", hint: "תעודת זהות או דרכון" },
   { key: "externalId", header: "מספר ת.ז / דרכון", required: true, width: 16, text: true, hint: "ת.ז נבדקת לפי ספרת הביקורת" },
   { key: "passportCountry", header: "ארץ הדרכון", required: false, width: 18, list: "countries", hint: "חובה רק לדרכון" },
+  { key: "visaType", header: "סוג אשרה", required: false, width: 22, list: "visas", hint: "רק לדרכון, לא חובה" },
+  { key: "visaNumber", header: "מספר אשרה", required: false, width: 13, text: true, hint: "רק לדרכון, לא חובה" },
+  { key: "visaExpiry", header: "תוקף אשרה", required: false, width: 13, date: true, hint: "רק לדרכון, לא חובה" },
   { key: "birthDate", header: "תאריך לידה", required: true, width: 14, date: true, hint: "גיל 16 עד 67" },
   { key: "phone", header: "טלפון", required: true, width: 14, text: true, hint: "למשל 052-1234567" },
   { key: "maritalStatus", header: "מצב משפחתי", required: true, width: 12, list: "marital", hint: "בחור או נשוי" },
@@ -59,6 +64,9 @@ export const TEMPLATE_COLUMNS: Column[] = [
   { key: "houseNumber", header: "מספר בית", required: false, width: 10, text: true, hint: "" },
   { key: "city", header: "עיר", required: false, width: 14, hint: "" },
 ];
+
+// סוג אשרה עם הקוד: שני סוגים בתבנית של תלמוד נקראים בדיוק "דיפלומט"
+const visaLabel = (t: { code: number; label: string }) => `${t.label} (${t.code})`;
 
 const headerText = (c: Column) => (c.required ? `${c.header} *` : c.header);
 const TEMPLATE_SHEET = "תלמידים חדשים";
@@ -84,7 +92,8 @@ export async function buildTemplate(groups: PortalGroup[], banks: Bank[], codes:
   const sources: Record<string, string[]> = {
     groups: [...groupLabels(groups).values()],
     idTypes: Object.values(ID_TYPE_OPTIONS),
-    countries: [...PASSPORT_COUNTRIES],
+    countries: ALL_PASSPORT_COUNTRIES,
+    visas: TALMUD_VISA_TYPES.map(visaLabel),
     marital: Object.values(MARITAL_LABEL),
     scopes: Object.values(SCOPE_LABEL),
     banks: banks.map(bankLabel),
@@ -138,7 +147,7 @@ export async function buildTemplate(groups: PortalGroup[], banks: Bank[], codes:
     ["איך ממלאים", "שורה לכל תלמיד בגיליון \"תלמידים חדשים\". עמודות בכחול הן חובה. בעמודות עם רשימה - בוחרים מהחץ שבתא."],
     ["אחרי המילוי", "שומרים את הקובץ, ובפורטל לוחצים \"העלאת קובץ\". המערכת מראה מה תקין ומה חסר לפני השליחה."],
     ["תעודת זהות", "9 ספרות. המערכת בודקת את ספרת הביקורת - מספר עם טעות הקלדה לא יתקבל."],
-    ["דרכון", "בוחרים \"דרכון\" בסוג המזהה, וממלאים גם את ארץ הדרכון."],
+    ["דרכון", "בוחרים \"דרכון\" בסוג המזהה, וממלאים גם את ארץ הדרכון. פרטי אשרה (סוג, מספר ותוקף) אינם חובה, אבל אם יש - כדאי למלא."],
     ["תאריך לידה", "גיל התלמיד צריך להיות בין 16 ל-67."],
     ["מצב משפחתי", `בחור${codeText("single")}, או נשוי.`],
     ["היקף לימוד (לנשוי)", `יום שלם${codeText("full_day")}, חצי יום בוקר${codeText("half_day_morning")}, חצי יום אחה"צ${codeText("half_day_afternoon")}.`],
@@ -186,6 +195,15 @@ function toIsoDate(v: unknown): string {
   return s; // משהו אחר - הבדיקה תסביר שהתאריך אינו תקין
 }
 
+/** סוג אשרה מהתא: התווית מהרשימה, או הקוד לבד. משהו אחר - נשאר, והבדיקה תסביר. */
+function visaCode(text: string): string {
+  if (!text) return "";
+  const byLabel = TALMUD_VISA_TYPES.find((t) => visaLabel(t) === text);
+  if (byLabel) return String(byLabel.code);
+  const m = text.match(/^\(?(\d{1,4})\)?$/) ?? text.match(/\((\d{1,4})\)\s*$/);
+  return m ? m[1] : text;
+}
+
 const reverse = <K extends string>(labels: Record<K, string>) =>
   new Map(Object.entries(labels).map(([k, v]) => [String(v).trim(), k as K]));
 
@@ -226,7 +244,8 @@ export async function parseTemplate(
     const input: NewStudentInput = {
       ...EMPTY_NEW_STUDENT,
       groupId,
-      fullName: str("fullName"),
+      firstName: str("firstName"),
+      lastName: str("lastName"),
       idType: (idTypes.get(str("idType")) ?? "") as IdType | "",
       externalId: str("externalId"),
       passportCountry: str("passportCountry"),
@@ -241,6 +260,9 @@ export async function parseTemplate(
       street: str("street"),
       houseNumber: str("houseNumber"),
       city: str("city"),
+      visaType: visaCode(str("visaType")),
+      visaNumber: str("visaNumber"),
+      visaExpiry: str("visaExpiry") ? toIsoDate(get("visaExpiry")) : "",
     };
     const rowNumber = i + 2;
     const requirePhoto = !!groupById.get(groupId)?.require_id_photo;

@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { ErrorState } from "@/components/ErrorState";
+import { ALL_PASSPORT_COUNTRIES } from "@/lib/passportCountries";
+import { TALMUD_VISA_TYPES } from "@/lib/talmudCodes";
 import { formatStudentAddress, ID_TYPE_LABEL, type Student, type StudentIdType } from "./types";
 
 interface StudentDetailsTabProps {
@@ -28,6 +30,19 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
     study_code: student.study_code ?? "",
     marital_status: student.marital_status ?? "",
     study_scope: student.study_scope ?? "",
+    first_name: student.first_name ?? "",
+    last_name: student.last_name ?? "",
+    passport_country: student.passport_country ?? "",
+    visa_number: student.visa_number ?? "",
+    visa_type: student.visa_type != null ? String(student.visa_type) : "",
+    visa_expiry: student.visa_expiry ?? "",
+  });
+  const passport = values.id_type === "passport";
+  // שם פרטי/משפחה: כששניהם מלאים - השם המלא נבנה מהם ("משפחה פרטי")
+  const setNamePart = (k: "first_name" | "last_name", val: string) => setValues((v) => {
+    const next = { ...v, [k]: val };
+    if (next.first_name.trim() && next.last_name.trim()) next.full_name = `${next.last_name.trim()} ${next.first_name.trim()}`;
+    return next;
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +72,12 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
         study_code: values.study_code || null,
         marital_status: values.marital_status || null,
         study_scope: values.marital_status === "married" ? values.study_scope || null : null,
+        first_name: values.first_name.trim() || null,
+        last_name: values.last_name.trim() || null,
+        passport_country: passport ? values.passport_country.trim() || null : null,
+        visa_number: passport ? values.visa_number.trim() || null : null,
+        visa_type: passport && values.visa_type ? Number(values.visa_type) : null,
+        visa_expiry: passport ? values.visa_expiry || null : null,
       })
       .eq("id", student.id);
     setSaving(false);
@@ -129,6 +150,44 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
         <label className="field-label">שם מלא</label>
         <input required value={values.full_name} onChange={(e) => setValues((v) => ({ ...v, full_name: e.target.value }))} className="input-field" />
       </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="student-last" className="field-label">שם משפחה</label>
+          <input id="student-last" value={values.last_name} onChange={(e) => setNamePart("last_name", e.target.value)} className="input-field" />
+        </div>
+        <div>
+          <label htmlFor="student-first" className="field-label">שם פרטי</label>
+          <input id="student-first" value={values.first_name} onChange={(e) => setNamePart("first_name", e.target.value)} className="input-field" />
+        </div>
+      </div>
+      {!values.first_name.trim() && !values.last_name.trim() && (
+        <p className="-mt-2 text-xs text-ink-subtle">בקובץ לתלמוד השם נכתב בשתי עמודות. כל עוד אלה ריקים, השם המלא מפוצל אוטומטית: המילה הראשונה - שם משפחה.</p>
+      )}
+      {passport && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label htmlFor="student-country" className="field-label">ארץ הדרכון</label>
+            <input id="student-country" list="student-countries" value={values.passport_country}
+              onChange={(e) => setValues((v) => ({ ...v, passport_country: e.target.value }))} className="input-field" />
+            <datalist id="student-countries">{ALL_PASSPORT_COUNTRIES.map((c) => <option key={c} value={c} />)}</datalist>
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="student-visa-type" className="field-label">סוג אשרה</label>
+            <select id="student-visa-type" value={values.visa_type} onChange={(e) => setValues((v) => ({ ...v, visa_type: e.target.value }))} className="input-field">
+              <option value="">—</option>
+              {TALMUD_VISA_TYPES.map((t) => <option key={t.code} value={String(t.code)}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="student-visa-number" className="field-label">מספר אשרה</label>
+            <input id="student-visa-number" dir="ltr" value={values.visa_number} onChange={(e) => setValues((v) => ({ ...v, visa_number: e.target.value }))} className="input-field tabular text-right" />
+          </div>
+          <div>
+            <label htmlFor="student-visa-expiry" className="field-label">תוקף אשרה</label>
+            <input id="student-visa-expiry" type="date" value={values.visa_expiry} onChange={(e) => setValues((v) => ({ ...v, visa_expiry: e.target.value }))} className="input-field" />
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="field-label">תאריך לידה</label>

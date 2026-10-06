@@ -1,5 +1,6 @@
 import { isValidIsraeliId } from "@/lib/israeliId";
 import { isValidIsraeliPhone } from "@/lib/israeliPhone";
+import { TALMUD_VISA_TYPES } from "@/lib/talmudCodes";
 
 // תלמיד חדש מהפורטל: השדות, התוויות והבדיקות במקום אחד. משמש גם את הטופס
 // וגם את קליטת קובץ האקסל, כך ששתי הדרכים חוסמות בדיוק את אותו דבר.
@@ -19,7 +20,8 @@ export const ID_TYPE_OPTIONS: Record<IdType, string> = { israeli_id: "תעודת
 
 export interface NewStudentInput {
   groupId: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   idType: IdType | "";
   externalId: string;
   passportCountry: string;
@@ -35,14 +37,24 @@ export interface NewStudentInput {
   houseNumber: string;
   city: string;
   startDate: string;
+  // אשרה - רק לדרכון, לא חובה (מיגרציה 117). סוג = הקוד של תלמוד.
+  visaNumber: string;
+  visaType: string;
+  visaExpiry: string;
 }
 
 export const EMPTY_NEW_STUDENT: NewStudentInput = {
-  groupId: "", fullName: "", idType: "israeli_id", externalId: "", passportCountry: "",
+  groupId: "", firstName: "", lastName: "", idType: "israeli_id", externalId: "", passportCountry: "",
   birthDate: "", phone: "", maritalStatus: "", studyScope: "",
   bankCode: "", bankBranch: "", accountNumber: "", accountHolder: "",
   street: "", houseNumber: "", city: "", startDate: "",
+  visaNumber: "", visaType: "", visaExpiry: "",
 };
+
+/** השם המלא כפי שהוא נשמר במערכת: "משפחה פרטי" */
+export const fullNameOf = (v: Pick<NewStudentInput, "firstName" | "lastName">) => `${v.lastName.trim()} ${v.firstName.trim()}`.trim();
+
+const VISA_CODES = new Set(TALMUD_VISA_TYPES.map((t) => String(t.code)));
 
 export interface Bank { code: string; name: string }
 export interface StudyCodeRef { code: string | null; description: string | null }
@@ -76,7 +88,8 @@ export function validateNewStudent(v: NewStudentInput, ctx: ValidationContext): 
   const today = ctx.today ?? new Date();
 
   if (!v.groupId || !ctx.groupIds.includes(v.groupId)) e.groupId = "יש לבחור קבוצה";
-  if (!v.fullName.trim()) e.fullName = "חסר שם מלא";
+  if (!v.firstName.trim()) e.firstName = "חסר שם פרטי";
+  if (!v.lastName.trim()) e.lastName = "חסר שם משפחה";
 
   const id = v.externalId.trim();
   if (v.idType === "israeli_id") {
@@ -85,6 +98,9 @@ export function validateNewStudent(v: NewStudentInput, ctx: ValidationContext): 
   } else if (v.idType === "passport") {
     if (!id) e.externalId = "חסר מספר דרכון";
     if (!v.passportCountry.trim()) e.passportCountry = "חסרה ארץ הדרכון";
+    if (v.visaType && !VISA_CODES.has(v.visaType.trim())) e.visaType = "סוג האשרה אינו ברשימה";
+    if (v.visaNumber.trim() && !/^[0-9A-Za-z]{1,20}$/.test(v.visaNumber.trim())) e.visaNumber = "ספרות ואותיות לועזיות בלבד";
+    if (v.visaExpiry && (!/^\d{4}-\d{2}-\d{2}$/.test(v.visaExpiry) || Number.isNaN(Date.parse(v.visaExpiry)))) e.visaExpiry = "תאריך לא תקין";
   } else {
     e.idType = "יש לבחור תעודת זהות או דרכון";
   }
@@ -132,9 +148,11 @@ export const bankLabel = (b: Bank) => `${b.name} - ${b.code}`;
 
 /** הפרמטרים של portal_request_new_student */
 export function toRpcArgs(v: NewStudentInput, photo: { name: string; type: string; base64: string } | null) {
+  const passport = v.idType === "passport";
   return {
     p_group_id: v.groupId,
-    p_full_name: v.fullName.trim(),
+    p_first_name: v.firstName.trim(),
+    p_last_name: v.lastName.trim(),
     p_id_type: v.idType,
     p_external_id: v.externalId.trim(),
     p_passport_country: v.idType === "passport" ? v.passportCountry.trim() : null,
@@ -153,5 +171,8 @@ export function toRpcArgs(v: NewStudentInput, photo: { name: string; type: strin
     p_id_photo_name: photo?.name ?? null,
     p_id_photo_type: photo?.type ?? null,
     p_id_photo_base64: photo?.base64 ?? null,
+    p_visa_number: passport && v.visaNumber.trim() ? v.visaNumber.trim() : null,
+    p_visa_type: passport && v.visaType ? Number(v.visaType) : null,
+    p_visa_expiry: passport && v.visaExpiry ? v.visaExpiry : null,
   };
 }

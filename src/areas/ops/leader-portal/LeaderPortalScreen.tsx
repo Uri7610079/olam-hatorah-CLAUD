@@ -14,6 +14,7 @@ import {
   REQUEST_KIND_LABEL, REQUEST_STATUS, formatDate, requestChanges,
   type RequestKind, type RequestStatus,
 } from "@/lib/portalRequests";
+import { TalmudFileTab, countPendingTalmudFile } from "./TalmudFileTab";
 
 // פורטל ראשי הקבוצות - הצד של המשרד (מיגרציה 111).
 //
@@ -21,7 +22,7 @@ import {
 // להיכנס לפורטל, ומה עודכן. הכל נכתב דרך פונקציות המסד - הן שבודקות
 // הרשאה, מחילות את השינוי, ורושמות ביומן.
 
-type Tab = "requests" | "questions" | "access" | "history" | "settings";
+type Tab = "requests" | "talmud" | "questions" | "access" | "history" | "settings";
 
 interface RequestRow {
   id: string;
@@ -137,6 +138,8 @@ export function LeaderPortalScreen() {
   const pending = useQuery({ queryKey: ["portal-office-requests", "pending"], queryFn: () => fetchRequests(true) });
   const questions = useQuery({ queryKey: ["portal-office-questions"], queryFn: fetchQuestions });
   const openQuestions = (questions.data ?? []).filter((q) => q.status === "open").length;
+  const { hasPermission: canExport } = useHasPermission("talmud", "export");
+  const talmudPending = useQuery({ queryKey: ["portal-talmud-file", "count"], queryFn: countPendingTalmudFile, enabled: canExport });
 
   return (
     <div>
@@ -148,6 +151,7 @@ export function LeaderPortalScreen() {
       <Tabs
         tabs={[
           { key: "requests", label: "ממתין לאישור", badge: pending.data?.length || undefined },
+          { key: "talmud", label: "קובץ לתלמוד", badge: talmudPending.data || undefined },
           { key: "questions", label: "שאלות", badge: openQuestions || undefined },
           { key: "access", label: "גישה לפורטל" },
           { key: "history", label: "יומן עדכונים" },
@@ -158,6 +162,7 @@ export function LeaderPortalScreen() {
         ariaLabel="פורטל ראשי קבוצות"
       />
       {tab === "requests" && <PendingRequests query={pending} />}
+      {tab === "talmud" && <TalmudFileTab />}
       {tab === "questions" && <QuestionsList query={questions} />}
       {tab === "access" && <AccessList />}
       {tab === "history" && <RequestHistory />}
@@ -202,6 +207,7 @@ function RequestCard({ r }: { r: RequestRow }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portal-office-requests"] });
       qc.invalidateQueries({ queryKey: ["portal-office-counts"] });
+      qc.invalidateQueries({ queryKey: ["portal-talmud-file"] });
     },
   });
 

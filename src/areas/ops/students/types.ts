@@ -22,6 +22,13 @@ export interface Student {
   study_code: string | null;
   marital_status?: "single" | "married" | null;
   study_scope?: "full_day" | "half_day_morning" | "half_day_afternoon" | null;
+  // לקובץ לתלמוד (מיגרציה 117). בלי שם פרטי/משפחה - השם המלא מפוצל אוטומטית.
+  first_name?: string | null;
+  last_name?: string | null;
+  passport_country?: string | null;
+  visa_number?: string | null;
+  visa_type?: number | null;
+  visa_expiry?: string | null;
   status: StudentStatus;
   exit_date: string | null;
   exit_reason: string | null;

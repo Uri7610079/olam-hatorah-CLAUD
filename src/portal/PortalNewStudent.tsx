@@ -2,11 +2,12 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Paperclip, Upload, CheckCircle2, XCircle } from "lucide-react";
 import { PhoneField } from "@/components/PhoneField";
-import { PASSPORT_COUNTRIES } from "@/lib/passportCountries";
+import { ALL_PASSPORT_COUNTRIES } from "@/lib/passportCountries";
+import { TALMUD_VISA_TYPES } from "@/lib/talmudCodes";
 import { Dialog, Feedback, errText } from "./PortalDialogs";
 import { fileToBase64, portalRpc, type PortalGroup, type PortalReference } from "./portalApi";
 import {
-  EMPTY_NEW_STUDENT, ID_TYPE_OPTIONS, MARITAL_LABEL, MAX_AGE, MIN_AGE, SCOPE_LABEL, bankLabel, hasBankDetails, studyCodeFor, toRpcArgs,
+  EMPTY_NEW_STUDENT, ID_TYPE_OPTIONS, MARITAL_LABEL, MAX_AGE, MIN_AGE, SCOPE_LABEL, bankLabel, fullNameOf, hasBankDetails, studyCodeFor, toRpcArgs,
   validateNewStudent, type Errors, type MaritalStatus, type NewStudentInput, type StudyCodeMap, type StudyScope,
 } from "./newStudentForm";
 import { downloadTemplate, groupLabels, parseTemplate, type ParsedRow } from "./portalExcel";
@@ -78,6 +79,8 @@ export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; o
   const bankRequired = !group?.bank_account_optional || hasBankDetails(v);
   const shown = (k: keyof Errors) => (submitted ? errors[k] : undefined);
   const code = studyCodeFor(codes, v.maritalStatus, v.studyScope);
+  // שם בעל החשבון מתמלא לבד מהשם, אם עוד לא מילאו אותו
+  const fillHolder = () => { if (!v.accountHolder.trim() && v.firstName.trim() && v.lastName.trim()) set("accountHolder")(fullNameOf(v)); };
 
   const send = useMutation({
     mutationFn: () => portalRpc("portal_request_new_student", toRpcArgs(v, photo)),
@@ -98,7 +101,7 @@ export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; o
     return (
       <Dialog title="הוספת תלמיד חדש" onClose={onClose}>
         <div className="space-y-4">
-          <Feedback done={`${v.fullName} נשלח למשרד. התלמיד יופיע ברשימה אחרי האישור.`} />
+          <Feedback done={`${fullNameOf(v)} נשלח למשרד. התלמיד יופיע ברשימה אחרי האישור.`} />
           <div className="flex gap-2">
             <button onClick={() => { setV(blank); setPhoto(null); setSubmitted(false); send.reset(); }} className="btn-primary h-11 px-6 text-base">הוספת תלמיד נוסף</button>
             <button onClick={onClose} className="btn-secondary h-11 px-6 text-base">סגירה</button>
@@ -120,12 +123,13 @@ export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; o
           </select>
         </Field>
 
-        <Field id="ns-name" label="שם מלא" required error={shown("fullName")} wide>
-          <input
-            id="ns-name" value={v.fullName} className="input-field h-11 text-base"
-            onChange={(e) => set("fullName")(e.target.value)}
-            onBlur={() => { if (!v.accountHolder.trim() && v.fullName.trim()) set("accountHolder")(v.fullName.trim()); }}
-          />
+        <Field id="ns-last" label="שם משפחה" required error={shown("lastName")}>
+          <input id="ns-last" value={v.lastName} className="input-field h-11 text-base" autoComplete="off"
+            onChange={(e) => set("lastName")(e.target.value)} onBlur={fillHolder} />
+        </Field>
+        <Field id="ns-first" label="שם פרטי" required error={shown("firstName")}>
+          <input id="ns-first" value={v.firstName} className="input-field h-11 text-base" autoComplete="off"
+            onChange={(e) => set("firstName")(e.target.value)} onBlur={fillHolder} />
         </Field>
 
         <Field id="ns-idtype" label="סוג מזהה" required error={shown("idType")}>
@@ -141,8 +145,25 @@ export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; o
           <Field id="ns-country" label="ארץ הדרכון" required error={shown("passportCountry")} wide>
             <input id="ns-country" list="ns-countries" value={v.passportCountry} onChange={(e) => set("passportCountry")(e.target.value)}
               className="input-field h-11 text-base" placeholder="הקלדה או בחירה מהרשימה" />
-            <datalist id="ns-countries">{PASSPORT_COUNTRIES.map((c) => <option key={c} value={c} />)}</datalist>
+            <datalist id="ns-countries">{ALL_PASSPORT_COUNTRIES.map((c) => <option key={c} value={c} />)}</datalist>
           </Field>
+        )}
+        {v.idType === "passport" && (
+          <>
+            <p className="text-base text-ink-muted sm:col-span-2">פרטי אשרה - לא חובה. אם יש, כדאי למלא: הם נדרשים ברישום בתלמוד.</p>
+            <Field id="ns-visa-type" label="סוג אשרה" error={shown("visaType")} wide>
+              <select id="ns-visa-type" value={v.visaType} onChange={(e) => set("visaType")(e.target.value)} className="input-field h-11 text-base">
+                <option value="">— לא ידוע —</option>
+                {TALMUD_VISA_TYPES.map((t) => <option key={t.code} value={String(t.code)}>{t.label}</option>)}
+              </select>
+            </Field>
+            <Field id="ns-visa-number" label="מספר אשרה" error={shown("visaNumber")}>
+              <input id="ns-visa-number" dir="ltr" value={v.visaNumber} onChange={(e) => set("visaNumber")(e.target.value)} className="input-field h-11 text-right text-base tabular-nums" />
+            </Field>
+            <Field id="ns-visa-expiry" label="תוקף אשרה" error={shown("visaExpiry")}>
+              <input id="ns-visa-expiry" type="date" value={v.visaExpiry} onChange={(e) => set("visaExpiry")(e.target.value)} className="input-field h-11 text-base" />
+            </Field>
+          </>
         )}
 
         <Field id="ns-birth" label={`תאריך לידה (גיל ${MIN_AGE} עד ${MAX_AGE})`} required error={shown("birthDate")}>
@@ -347,7 +368,7 @@ export function ExcelUploadDialog({ groups, onClose }: { groups: PortalGroup[]; 
                     return (
                       <tr key={r.rowNumber} className="border-t border-line align-top">
                         <td className="whitespace-nowrap px-3 py-2">{labels.get(r.input.groupId) ?? "—"}</td>
-                        <td className="px-3 py-2 font-semibold">{r.input.fullName || "—"}</td>
+                        <td className="px-3 py-2 font-semibold">{fullNameOf(r.input) || "—"}</td>
                         <td className="px-3 py-2 tabular-nums text-ink-muted">{r.rowNumber}</td>
                         <td className="px-3 py-2">
                           {result?.status === "sent" || alreadySent(r) ? (

@@ -1,8 +1,10 @@
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import * as XLSX from "xlsx";
 import { AlertTriangle, Send } from "lucide-react";
+import { buildTalmudRow, buildTalmudWorkbook, type TalmudRow } from "@/lib/talmudFile";
+import { downloadXls, loadTalmudSources } from "@/lib/talmudFileData";
+import { TalmudRowStatus } from "./TalmudRowStatus";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
@@ -32,6 +34,9 @@ interface CandidateStudent {
   phone_normalized: string | null;
   status: string;
   already_exported: boolean;
+  branch_id: string | null;
+  /** השורה בקובץ של תלמוד, ומה חסר בה */
+  row: TalmudRow | null;
 }
 
 async function fetchOrgs(): Promise<OrgOption[]> {
@@ -55,7 +60,7 @@ async function fetchCandidates(orgId: string, branchId: string, groupId: string)
   const build = () => {
     let query = supabase
       .from("student_assignments")
-      .select("student_id, students!inner(id, external_id, full_name, phone_normalized, status)")
+      .select("student_id, group_id, branch_id, students!inner(id, external_id, full_name, phone_normalized, status)")
       .eq("is_active", true)
       .eq("organization_id", orgId)
       .in("students.status", ["ready_for_talmud", "sent_to_talmud", "active", "active_with_error"]);
@@ -70,14 +75,17 @@ async function fetchCandidates(orgId: string, branchId: string, groupId: string)
     supabase.from("export_batch_students").select("student_id").in("student_id", chunk).order("id"),
   );
   const exportedSet = new Set((exported ?? []).map((e) => e.student_id));
+  const sources = await loadTalmudSources(data.map((r: any) => ({ studentId: r.student_id, groupId: r.group_id })));
 
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map((r: any, i: number) => ({
     id: r.students.id,
     external_id: r.students.external_id,
     full_name: r.students.full_name,
     phone_normalized: r.students.phone_normalized,
     status: r.students.status,
     already_exported: exportedSet.has(r.students.id),
+    branch_id: r.branch_id,
+    row: sources[i] ? buildTalmudRow(sources[i]!.source) : null,
   }));
 }
 
@@ -115,19 +123,9 @@ function endOfMonthForDateString(dateStr: string): string {
   return end.toISOString().slice(0, 10);
 }
 
-// בונה XLSX טיוטה - מבנה העמודות אינו התבנית המאושרת בפועל של תלמוד/מרכבה (זו טרם
-// התקבלה, ר' יומן ההחלטות באפיון). מסומן בבירור בממשק כטיוטה.
-function buildExportWorkbook(students: CandidateStudent[]): Blob {
-  const sheetData = students.map((s) => ({
-    "מזהה תלמיד": s.external_id,
-    "שם מלא": s.full_name,
-    טלפון: s.phone_normalized ?? "",
-  }));
-  const sheet = XLSX.utils.json_to_sheet(sheetData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, "יצוא לתלמוד");
-  const buffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
-  return new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+// הקובץ בתבנית של משרד החינוך ("רישום תלמידים במערכת תלמוד.xls") - src/lib/talmudFile.ts
+function buildExportFile(students: CandidateStudent[]): ArrayBuffer {
+  return buildTalmudWorkbook(students.filter((s) => s.row).map((s) => s.row!));
 }
 
 export function TalmudExportScreen() {
@@ -203,8 +201,9 @@ export function TalmudExportScreen() {
     setResultFileName(null);
     try {
       const students = selectable.filter((s) => selected.has(s.id));
-      const blob = buildExportWorkbook(students);
-      const fileName = `talmud-export-${periodStart}-${crypto.randomUUID().slice(0, 8)}.xlsx`;
+      const file = buildExportFile(students);
+      const blob = new Blob([file], { type: "application/vnd.ms-excel" });
+      const fileName = `talmud-export-${periodStart}-${crypto.randomUUID().slice(0, 8)}.xls`;
       const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer())))
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
@@ -228,6 +227,7 @@ export function TalmudExportScreen() {
       });
       if (rpcError) throw new Error(rpcError.message);
 
+      downloadXls(file, fileName);
       setResultFileName(fileName);
       setSelected(new Set());
       setOverride(false);
@@ -261,16 +261,19 @@ export function TalmudExportScreen() {
     { key: "id", header: "מזהה", className: "tabular ltr-num", render: (s) => s.external_id },
     { key: "name", header: "שם", render: (s) => s.full_name },
     { key: "status", header: "סטטוס נוכחי", render: (s) => s.status },
+    { key: "file", header: "מצב בקובץ לתלמוד", render: (s) => <TalmudRowStatus row={s.row} /> },
   ];
 
   return (
     <div>
-      <PageHeader title="יצוא תלמידים לתלמוד" description="בחירת תלמידים ליצוא. פורמט הקובץ הוא טיוטה - התבנית המאושרת של תלמוד/מרכבה טרם התקבלה." />
+      <PageHeader title="יצוא תלמידים לתלמוד" description="בחירת תלמידים ליצוא. הקובץ בתבנית של משרד החינוך לקליטת תלמידים מקובץ Excel, והוא יורד למחשב וגם נשמר במערכת." />
 
-      <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink mb-4">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-        <span>עמודות הקובץ (מזהה תלמיד, שם מלא, טלפון) הן הנחה זמנית בלבד, לא הפורמט הרשמי שתלמוד/מרכבה דורשים.</span>
-      </div>
+      {orgId && !branchId && new Set((candidatesQuery.data ?? []).map((s) => s.branch_id)).size > 1 && (
+        <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn-soft p-3 text-sm text-warn-ink mb-4">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>בתלמוד כל סניף נקלט בנפרד, ובקובץ אין עמודת סניף. כדאי לבחור סניף ולהוריד קובץ לכל סניף.</span>
+        </div>
+      )}
 
       <div className="card mb-6 max-w-3xl space-y-4 p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
