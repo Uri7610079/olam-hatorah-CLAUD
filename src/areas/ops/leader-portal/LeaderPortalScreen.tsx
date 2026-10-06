@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, Eye, Inbox, ListTodo } from "lucide-react";
+import { Copy, Download, Eye, Inbox, ListTodo, Paperclip } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
@@ -49,6 +49,7 @@ interface QuestionRow {
   answered_at: string | null;
   created_at: string;
   attachment_name: string | null;
+  answer_attachment_name?: string | null;
   task_id: string | null;
   student_id: string | null;
   student: { full_name: string; external_id: string } | null;
@@ -72,6 +73,29 @@ interface AccessRow {
 }
 
 const one = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? v[0] ?? null : v);
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
+    r.onerror = () => reject(new Error("לא ניתן לקרוא את הקובץ"));
+    r.readAsDataURL(file);
+  });
+}
+
+// פונקציית מסד שמחזירה { file_name, file_type, file_base64 } - והורדה בדפדפן
+async function downloadRpc(fn: string, args: Record<string, unknown>) {
+  const { data, error } = await supabase.rpc(fn, args);
+  const file = Array.isArray(data) ? data[0] : data;
+  if (error || !file) return;
+  const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.file_name || "קובץ";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 const errText = (e: unknown) => (e instanceof Error ? e.message : (e as { message?: string })?.message ?? "הפעולה נכשלה");
 
 // הקבוצה הנוכחית של התלמיד - דרך השיוך הפעיל שלו
@@ -101,7 +125,7 @@ async function fetchRequests(pending: boolean): Promise<RequestRow[]> {
 async function fetchQuestions(): Promise<QuestionRow[]> {
   const { data, error } = await supabase
     .from("portal_questions")
-    .select(`id, body, context, status, answer, answered_at, created_at, attachment_name, task_id, student_id, ${STUDENT_WITH_GROUP}, leader:group_leaders(full_name)`)
+    .select(`id, body, context, status, answer, answer_attachment_name, answered_at, created_at, attachment_name, task_id, student_id, ${STUDENT_WITH_GROUP}, leader:group_leaders(full_name)`)
     .order("created_at", { ascending: false })
     .limit(300);
   if (error) throw error;
@@ -265,6 +289,8 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
   const { hasPermission: canAnswer } = useHasPermission("students", "manage");
   const { hasPermission: canTask } = useHasPermission("tasks", "create");
   const [answer, setAnswer] = useState("");
+  const [answerFile, setAnswerFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["portal-office-questions"] });
     qc.invalidateQueries({ queryKey: ["portal-office-counts"] });
@@ -272,7 +298,11 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
   };
   const send = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc("portal_answer_question", { p_question_id: q.id, p_answer: answer });
+      const file = answerFile ? await fileToBase64(answerFile) : null;
+      const { error } = await supabase.rpc("portal_answer_question", {
+        p_question_id: q.id, p_answer: answer,
+        p_file_name: answerFile?.name ?? null, p_file_type: answerFile?.type ?? null, p_file_base64: file,
+      });
       if (error) throw error;
     },
     onSuccess: refresh,
@@ -322,15 +352,43 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
         </button>
       )}
 
-      {q.answer ? (
-        <p className="mt-3 rounded-control bg-ok-soft p-3 text-sm text-ok-ink">
-          <span className="font-semibold">התשובה ({formatDate(q.answered_at)}):</span> {q.answer}
-        </p>
+      {q.status === "answered" ? (
+        <div className="mt-3 rounded-control bg-ok-soft p-3 text-sm text-ok-ink">
+          <span className="font-semibold">התשובה ({formatDate(q.answered_at)}):</span> {q.answer ?? ""}
+          {q.answer_attachment_name && (
+            <button onClick={() => downloadRpc("portal_answer_attachment", { p_question_id: q.id })} className="link-action mt-1 flex items-center gap-1">
+              <Paperclip className="h-4 w-4" aria-hidden="true" />
+              {q.answer_attachment_name}
+            </button>
+          )}
+        </div>
       ) : canAnswer ? (
         <div className="mt-3 space-y-2">
           <label htmlFor={`ans-${q.id}`} className="field-label">תשובה לראש הקבוצה</label>
           <textarea id={`ans-${q.id}`} rows={3} value={answer} onChange={(e) => setAnswer(e.target.value)} className="input-field" />
-          <button onClick={() => send.mutate()} disabled={send.isPending || !answer.trim()} className="btn-primary">שליחת תשובה</button>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="btn-secondary inline-flex cursor-pointer items-center gap-2">
+              <Paperclip className="h-4 w-4" aria-hidden="true" />
+              {answerFile ? answerFile.name : "צירוף קובץ"}
+              <input
+                type="file"
+                className="sr-only"
+                aria-label="צירוף קובץ לתשובה"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setFileError(f && f.size > 5 * 1024 * 1024 ? "הקובץ גדול מ-5MB" : null);
+                  setAnswerFile(f && f.size <= 5 * 1024 * 1024 ? f : null);
+                }}
+              />
+            </label>
+            {answerFile && (
+              <button type="button" onClick={() => setAnswerFile(null)} className="text-xs text-ink-subtle hover:text-danger">הסרת הקובץ</button>
+            )}
+            <button onClick={() => send.mutate()} disabled={send.isPending || (!answer.trim() && !answerFile)} className="btn-primary">
+              {send.isPending ? "שולח…" : "שליחת תשובה"}
+            </button>
+          </div>
+          {fileError && <p className="text-xs text-danger-ink">{fileError}</p>}
         </div>
       ) : null}
 

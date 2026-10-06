@@ -723,6 +723,8 @@ begin
 end;
 $$;
 
+-- מיגרציה 113 משנה את סוג ההחזרה - בלי drop הרצה חוזרת של הקובץ נכשלת כאן.
+drop function if exists portal_my_questions(text);
 create or replace function portal_my_questions(p_token text)
 returns table (
   id uuid, student_name text, context text, body text, attachment_name text,

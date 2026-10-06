@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Paperclip } from "lucide-react";
+import { Download, Paperclip } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { REQUEST_KIND_LABEL, REQUEST_STATUS, formatDate, requestChanges } from "@/lib/portalRequests";
 import { portalRpc, type PortalQuestion, type PortalRequest } from "./portalApi";
@@ -53,6 +53,21 @@ export function PortalRequests() {
   );
 }
 
+// הקובץ שהמשרד צירף לתשובה. פונקציית המסד מחזירה אותו רק לראש הקבוצה ששאל.
+async function downloadAnswerFile(questionId: string) {
+  const rows = await portalRpc<{ file_name: string | null; file_type: string | null; file_base64: string }[]>(
+    "portal_answer_attachment_for_leader", { p_question_id: questionId });
+  const file = rows?.[0];
+  if (!file) return;
+  const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.file_name || "קובץ";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function PortalQuestions({ onAsk }: { onAsk: () => void }) {
   const q = useQuery({ queryKey: ["portal-questions"], queryFn: () => portalRpc<PortalQuestion[]>("portal_my_questions") });
 
@@ -86,10 +101,16 @@ export function PortalQuestions({ onAsk }: { onAsk: () => void }) {
               {item.attachment_name}
             </p>
           )}
-          {item.answer && (
+          {item.status === "answered" && (
             <div className="mt-4 rounded-control bg-ok-soft p-4 text-ok-ink">
               <p className="text-sm font-semibold">תשובת המשרד · {formatDate(item.answered_at)}</p>
-              <p className="mt-1 whitespace-pre-line text-base">{item.answer}</p>
+              {item.answer && <p className="mt-1 whitespace-pre-line text-base">{item.answer}</p>}
+              {item.answer_attachment_name && (
+                <button onClick={() => downloadAnswerFile(item.id)} className="mt-2 inline-flex items-center gap-2 rounded-control border border-ok/40 bg-surface px-3 py-2 text-base text-ok-ink hover:bg-ok-soft">
+                  <Download className="h-5 w-5" aria-hidden="true" />
+                  הורדת הקובץ: {item.answer_attachment_name}
+                </button>
+              )}
             </div>
           )}
         </article>

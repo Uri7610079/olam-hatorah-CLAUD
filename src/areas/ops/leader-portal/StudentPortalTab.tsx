@@ -18,7 +18,7 @@ export function StudentPortalTab({ studentId }: { studentId: string }) {
           .select("id, kind, status, payload, previous, decision_note, created_at, leader:group_leaders(full_name)")
           .eq("student_id", studentId).order("created_at", { ascending: false }),
         supabase.from("portal_questions")
-          .select("id, body, context, status, answer, answered_at, created_at, attachment_name, task_id, student_id, student:students(full_name, external_id), leader:group_leaders(full_name)")
+          .select("id, body, context, status, answer, answer_attachment_name, answered_at, created_at, attachment_name, task_id, student_id, student:students(full_name, external_id), leader:group_leaders(full_name)")
           .eq("student_id", studentId).order("created_at", { ascending: false }),
       ]);
       if (requests.error) throw requests.error;

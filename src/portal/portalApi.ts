@@ -113,6 +113,7 @@ export interface PortalQuestion {
   attachment_name: string | null;
   status: "open" | "answered";
   answer: string | null;
+  answer_attachment_name: string | null;
   answered_at: string | null;
   created_at: string;
 }
