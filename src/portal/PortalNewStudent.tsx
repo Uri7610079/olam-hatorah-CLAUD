@@ -6,7 +6,7 @@ import { PASSPORT_COUNTRIES } from "@/lib/passportCountries";
 import { Dialog, Feedback, errText } from "./PortalDialogs";
 import { fileToBase64, portalRpc, type PortalGroup, type PortalReference } from "./portalApi";
 import {
-  EMPTY_NEW_STUDENT, ID_TYPE_OPTIONS, MARITAL_LABEL, MAX_AGE, MIN_AGE, SCOPE_LABEL, bankLabel, studyCodeFor, toRpcArgs,
+  EMPTY_NEW_STUDENT, ID_TYPE_OPTIONS, MARITAL_LABEL, MAX_AGE, MIN_AGE, SCOPE_LABEL, bankLabel, hasBankDetails, studyCodeFor, toRpcArgs,
   validateNewStudent, type Errors, type MaritalStatus, type NewStudentInput, type StudyCodeMap, type StudyScope,
 } from "./newStudentForm";
 import { downloadTemplate, groupLabels, parseTemplate, type ParsedRow } from "./portalExcel";
@@ -73,7 +73,9 @@ export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; o
   const group = groups.find((g) => g.id === v.groupId);
   const errors: Errors = validateNewStudent(v, {
     banks, groupIds: groups.map((g) => g.id), requirePhoto: !!group?.require_id_photo, hasPhoto: !!photo,
+    bankOptional: !!group?.bank_account_optional,
   });
+  const bankRequired = !group?.bank_account_optional || hasBankDetails(v);
   const shown = (k: keyof Errors) => (submitted ? errors[k] : undefined);
   const code = studyCodeFor(codes, v.maritalStatus, v.studyScope);
 
@@ -170,8 +172,13 @@ export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; o
           </p>
         )}
 
-        <div className="border-t border-line pt-4 sm:col-span-2"><h3 className="text-lg font-bold">חשבון בנק</h3></div>
-        <Field id="ns-bank" label="בנק" required error={shown("bankCode")} wide>
+        <div className="border-t border-line pt-4 sm:col-span-2">
+          <h3 className="text-lg font-bold">חשבון בנק</h3>
+          {group?.bank_account_optional && (
+            <p className="mt-1 text-base text-ink-muted">בקבוצה זו חשבון בנק אינו חובה. אפשר להשאיר ריק - אבל אם מתחילים למלא, צריך למלא את כל הפרטים.</p>
+          )}
+        </div>
+        <Field id="ns-bank" label="בנק" required={bankRequired} error={shown("bankCode")} wide>
           <div className="flex items-center gap-3">
             <select id="ns-bank" value={v.bankCode} onChange={(e) => set("bankCode")(e.target.value)} className="input-field h-11 flex-1 text-base">
               <option value="">— בחירת בנק —</option>
@@ -180,13 +187,13 @@ export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; o
             {v.bankCode && <span className="whitespace-nowrap rounded-control bg-surface-muted px-3 py-2 text-base tabular-nums">בנק {v.bankCode}</span>}
           </div>
         </Field>
-        <Field id="ns-branch" label="מספר סניף" required error={shown("bankBranch")}>
+        <Field id="ns-branch" label="מספר סניף" required={bankRequired} error={shown("bankBranch")}>
           <input id="ns-branch" dir="ltr" inputMode="numeric" value={v.bankBranch} onChange={(e) => set("bankBranch")(e.target.value)} className="input-field h-11 text-right text-base tabular-nums" />
         </Field>
-        <Field id="ns-account" label="מספר חשבון" required error={shown("accountNumber")}>
+        <Field id="ns-account" label="מספר חשבון" required={bankRequired} error={shown("accountNumber")}>
           <input id="ns-account" dir="ltr" inputMode="numeric" value={v.accountNumber} onChange={(e) => set("accountNumber")(e.target.value)} className="input-field h-11 text-right text-base tabular-nums" />
         </Field>
-        <Field id="ns-holder" label="שם בעל החשבון" required error={shown("accountHolder")} wide>
+        <Field id="ns-holder" label="שם בעל החשבון" required={bankRequired} error={shown("accountHolder")} wide>
           <input id="ns-holder" value={v.accountHolder} onChange={(e) => set("accountHolder")(e.target.value)} className="input-field h-11 text-base" />
         </Field>
 
@@ -256,7 +263,7 @@ export function ExcelUploadDialog({ groups, onClose }: { groups: PortalGroup[]; 
   const checked = (rows ?? []).map((r) => ({
     ...r,
     errors: validateNewStudent(r.input, {
-      banks, groupIds: groups.map((g) => g.id), requirePhoto: r.requirePhoto, hasPhoto: !!photos[r.rowNumber],
+      banks, groupIds: groups.map((g) => g.id), requirePhoto: r.requirePhoto, hasPhoto: !!photos[r.rowNumber], bankOptional: r.bankOptional,
     }),
   }));
   const idKey = (r: ParsedRow) => r.input.externalId.trim().replace(/^0+/, "").toUpperCase();

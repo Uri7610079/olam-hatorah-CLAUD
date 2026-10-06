@@ -65,7 +65,7 @@ export async function portalLogout() {
   portalToken.clear();
 }
 
-export interface PortalGroup { id: string; name: string; branch: string | null; organization: string; require_id_photo: boolean }
+export interface PortalGroup { id: string; name: string; branch: string | null; organization: string; require_id_photo: boolean; bank_account_optional?: boolean }
 export interface PortalMe { name: string; groups: PortalGroup[] }
 
 export interface PortalStudent {

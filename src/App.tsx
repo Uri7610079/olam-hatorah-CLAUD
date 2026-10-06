@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AreaProvider } from "./app/AreaContext";
 import { AuthGate } from "./areas/auth/AuthGate";
 import { Layout } from "./app/Layout";
@@ -12,7 +12,6 @@ import { GuideScreen } from "./areas/admin/GuideScreen";
 import { AdminAuditLog } from "./areas/admin/AdminAuditLog";
 import { OrganizationsListScreen } from "./areas/ops/organizations/OrganizationsListScreen";
 import { OrganizationDetailScreen } from "./areas/ops/organizations/OrganizationDetailScreen";
-import { BranchesGroupsScreen } from "./areas/ops/branches-groups/BranchesGroupsScreen";
 import { StudentsListScreen } from "./areas/ops/students/StudentsListScreen";
 import { StudentDetailScreen } from "./areas/ops/students/StudentDetailScreen";
 import { ImportCenterScreen } from "./areas/ops/import-center/ImportCenterScreen";
@@ -41,6 +40,7 @@ import { DemoDataScreen } from "./areas/admin/DemoDataScreen";
 import { AppearanceScreen } from "./areas/admin/AppearanceScreen";
 import { FoldersScreen } from "./areas/admin/FoldersScreen";
 import { BankScraperScreen } from "./areas/admin/BankScraperScreen";
+import { SettingsScreen } from "./areas/admin/SettingsScreen";
 import { UnassignedBulkAssignScreen } from "./areas/ops/students/UnassignedBulkAssignScreen";
 import { LeaderPortalScreen } from "./areas/ops/leader-portal/LeaderPortalScreen";
 import { TasksHomeScreen } from "./areas/tasks/TasksHomeScreen";
@@ -88,11 +88,17 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/admin/appearance",
   "/admin/folders",
   "/admin/bank-scraper",
+  "/admin/settings",
   "/tasks",
   "/tasks/all",
   "/tasks/whatsapp",
   "/tasks/settings",
 ]);
+
+function RedirectKeepQuery({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+}
 
 export default function App() {
   return (
@@ -109,7 +115,8 @@ export default function App() {
             <Route path="/admin/guide" element={<GuideScreen />} />
             <Route path="/ops/organizations" element={<OrganizationsListScreen />} />
             <Route path="/ops/organizations/:id" element={<OrganizationDetailScreen />} />
-            <Route path="/ops/branches-groups" element={<BranchesGroupsScreen />} />
+            {/* "סניפים וקבוצות" אוחד למסך העמותות (שלב 36). הכתובת הישנה נשמרת להפניה בלבד. */}
+            <Route path="/ops/branches-groups" element={<RedirectKeepQuery to="/ops/organizations" />} />
             <Route path="/ops/students" element={<StudentsListScreen />} />
             <Route path="/ops/students/unassigned" element={<UnassignedBulkAssignScreen />} />
             <Route path="/ops/leader-portal" element={<LeaderPortalScreen />} />
@@ -146,6 +153,7 @@ export default function App() {
             <Route path="/admin/appearance" element={<AppearanceScreen />} />
             <Route path="/admin/folders" element={<FoldersScreen />} />
             <Route path="/admin/bank-scraper" element={<BankScraperScreen />} />
+            <Route path="/admin/settings" element={<SettingsScreen />} />
             <Route path="/tasks" element={<TasksHomeScreen />} />
             <Route path="/tasks/all" element={<TasksAllScreen />} />
             <Route path="/tasks/whatsapp" element={<TasksWhatsAppScreen />} />

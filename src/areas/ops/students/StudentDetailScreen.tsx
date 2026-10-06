@@ -74,6 +74,18 @@ async function hasActiveAssignment(studentId: string): Promise<boolean> {
 }
 
 async function hasVerifiedAccount(studentId: string): Promise<boolean> {
+  // קבוצה שהוגדרה "חשבון בנק אינו חובה" (מיגרציה 115) - תנאי הבנק מתקיים בלי חשבון,
+  // בדיוק כמו ב-student_ready_blocker בשרת.
+  const { data: optional, error: groupError } = await supabase
+    .from("student_assignments")
+    .select("group:groups!inner(bank_account_optional)")
+    .eq("student_id", studentId)
+    .eq("is_active", true)
+    .eq("group.bank_account_optional", true)
+    .limit(1);
+  if (groupError) throw groupError;
+  if ((optional ?? []).length > 0) return true;
+
   const { count, error } = await supabase
     .from("student_bank_accounts")
     .select("id", { count: "exact", head: true })

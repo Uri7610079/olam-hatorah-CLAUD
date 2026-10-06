@@ -33,9 +33,9 @@ async function search(term: string): Promise<SearchResult[]> {
   for (const s of students.data ?? []) results.push({ kind: "student", id: s.id, label: s.full_name, sublabel: s.external_id, href: `/ops/students/${s.id}` });
   for (const g of groups.data ?? []) {
     const orgId = Array.isArray(g.branch) ? g.branch[0]?.organization_id : (g.branch as any)?.organization_id;
-    results.push({ kind: "group", id: g.id, label: g.name, href: orgId ? `/ops/branches-groups?org=${orgId}` : "/ops/branches-groups" });
+    results.push({ kind: "group", id: g.id, label: g.name, href: orgId ? `/ops/organizations?org=${orgId}` : "/ops/organizations" });
   }
-  for (const b of branches.data ?? []) results.push({ kind: "branch", id: b.id, label: b.internal_name, href: `/ops/branches-groups?org=${b.organization_id}` });
+  for (const b of branches.data ?? []) results.push({ kind: "branch", id: b.id, label: b.internal_name, href: `/ops/organizations?org=${b.organization_id}` });
   for (const o of orgs.data ?? []) results.push({ kind: "organization", id: o.id, label: o.legal_name, href: `/ops/organizations/${o.id}` });
   for (const t of tasks.data ?? []) results.push({ kind: "task", id: t.id, label: t.title, href: `/tasks/all?open=${t.id}` });
   return results;

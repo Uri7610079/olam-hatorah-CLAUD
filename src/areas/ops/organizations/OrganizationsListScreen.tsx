@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Building2, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
@@ -12,6 +12,7 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { Organization } from "./types";
 import { OrganizationForm, EMPTY_ORGANIZATION_FORM, type OrganizationFormValues } from "./OrganizationForm";
+import { BranchesGroupsManager } from "./BranchesGroupsManager";
 
 async function fetchOrganizations(): Promise<Organization[]> {
   const { data, error } = await supabase
@@ -27,6 +28,19 @@ export function OrganizationsListScreen() {
   const queryClient = useQueryClient();
   const { hasPermission: canManage } = useHasPermission("organizations", "manage");
   const query = useQuery({ queryKey: ["organizations"], queryFn: fetchOrganizations });
+
+  // מסך אחד לעמותות, סניפים וקבוצות (שלב 36): לחיצה על עמותה פותחת מתחת לרשימה את
+  // הסניפים והקבוצות שלה. העמותה שנבחרה נשמרת בכתובת (?org=), כך שקישור מכל מקום
+  // במערכת - כולל הכתובת הישנה של "סניפים וקבוצות" - מגיע ישר אליה.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedOrgId = searchParams.get("org") ?? "";
+  const selectedOrg = (query.data ?? []).find((o) => o.id === selectedOrgId) ?? null;
+  const selectOrg = (id: string) => {
+    setSearchParams(id === selectedOrgId ? {} : { org: id });
+    if (id !== selectedOrgId) {
+      setTimeout(() => document.getElementById("org-branches-groups")?.scrollIntoView({ block: "start", behavior: "smooth" }), 50);
+    }
+  };
 
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -79,11 +93,8 @@ export function OrganizationsListScreen() {
     {
       key: "legal_name",
       header: "שם",
-      render: (o) => (
-        <Link to={`/ops/organizations/${o.id}`} className="link-action font-medium">
-          {o.legal_name}
-        </Link>
-      ),
+      // לחיצה על השם בוחרת את העמותה (כמו לחיצה על כל השורה); לכרטיס - הקישור בעמודה האחרונה
+      render: (o) => <span className="font-medium text-ink">{o.legal_name}</span>,
     },
     { key: "org_number", header: "מספר עמותה", className: "tabular ltr-num", render: (o) => o.org_number ?? "—" },
     {
@@ -94,13 +105,27 @@ export function OrganizationsListScreen() {
       ),
     },
     { key: "phone", header: "טלפון", className: "ltr-num", render: (o) => o.contact_phone ?? "—" },
+    {
+      key: "branches",
+      header: "",
+      render: (o) => (
+        <div className="flex gap-3">
+          <button onClick={(e) => { e.stopPropagation(); selectOrg(o.id); }} className="link-action whitespace-nowrap text-xs">
+            {o.id === selectedOrgId ? "הסתרת סניפים וקבוצות" : "סניפים וקבוצות"}
+          </button>
+          <Link to={`/ops/organizations/${o.id}`} onClick={(e) => e.stopPropagation()} className="link-action whitespace-nowrap text-xs">
+            כרטיס עמותה
+          </Link>
+        </div>
+      ),
+    },
   ];
 
   return (
     <div>
       <PageHeader
-        title="עמותות"
-        description="ניהול עמותות, חשבונות ובעלי תפקידים."
+        title="עמותות, סניפים וקבוצות"
+        description="בחרי עמותה כדי לראות ולנהל את הסניפים והקבוצות שלה. פרטים, חשבונות ובעלי תפקידים - בכרטיס העמותה."
         primaryAction={
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
@@ -126,10 +151,30 @@ export function OrganizationsListScreen() {
         columns={columns}
         rows={filtered}
         rowKey={(o) => o.id}
+        rowClassName={(o) => (o.id === selectedOrgId ? "!bg-brand-50 ring-2 ring-inset ring-brand-500" : undefined)}
+        onRowClick={(o) => selectOrg(o.id)}
         loading={query.isLoading}
         emptyTitle="אין עמותות עדיין"
         emptyIcon={Building2}
       />
+
+      <section id="org-branches-groups" className="mt-8 scroll-mt-4">
+        {selectedOrgId ? (
+          <>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
+              <h2 className="text-base font-semibold text-ink">סניפים וקבוצות{selectedOrg ? ` — ${selectedOrg.legal_name}` : ""}</h2>
+              <Link to={`/ops/organizations/${selectedOrgId}`} className="link-action text-xs">
+                לכרטיס העמותה (פרטים, חשבונות, בעלי תפקידים)
+              </Link>
+            </div>
+            <BranchesGroupsManager orgId={selectedOrgId} />
+          </>
+        ) : (
+          <p className="rounded-md border border-dashed border-line p-4 text-sm text-ink-muted">
+            לחצי על עמותה ברשימה כדי לראות ולנהל את הסניפים והקבוצות שלה, ולהוסיף קבוצה.
+          </p>
+        )}
+      </section>
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">

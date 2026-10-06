@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   Users,
   Building2,
-  Network,
   Upload,
   Send,
   CheckSquare,
@@ -76,20 +75,13 @@ export const SCREENS: ScreenDef[] = [
     icon: Contact,
   },
   {
+    // עמותות + סניפים וקבוצות במסך אחד (שלב 36). /ops/branches-groups מפנה לכאן.
     path: "/ops/organizations",
     area: "ops",
-    navLabel: "עמותות",
-    title: "עמותות",
+    navLabel: "עמותות, סניפים וקבוצות",
+    title: "עמותות, סניפים וקבוצות",
     builtInStage: "שלב 3",
     icon: Building2,
-  },
-  {
-    path: "/ops/branches-groups",
-    area: "ops",
-    navLabel: "סניפים וקבוצות",
-    title: "סניפים וקבוצות",
-    builtInStage: "שלב 3",
-    icon: Network,
   },
   {
     path: "/ops/import-center",
@@ -266,6 +258,15 @@ export const SCREENS: ScreenDef[] = [
   },
 
   // ניהול
+  {
+    path: "/admin/settings",
+    area: "admin",
+    navLabel: "הגדרות",
+    title: "הגדרות",
+    description: "קבוצות שבהן חשבון בנק אינו חובה",
+    builtInStage: "שלב 36",
+    icon: SlidersHorizontal,
+  },
   {
     path: "/admin/users",
     area: "admin",

@@ -142,7 +142,7 @@ export async function buildTemplate(groups: PortalGroup[], banks: Bank[], codes:
     ["תאריך לידה", "גיל התלמיד צריך להיות בין 16 ל-67."],
     ["מצב משפחתי", `בחור${codeText("single")}, או נשוי.`],
     ["היקף לימוד (לנשוי)", `יום שלם${codeText("full_day")}, חצי יום בוקר${codeText("half_day_morning")}, חצי יום אחה"צ${codeText("half_day_afternoon")}.`],
-    ["חשבון בנק", "בנק מהרשימה, מספר סניף, מספר חשבון ושם בעל החשבון - כפי שרשום בבנק."],
+    ["חשבון בנק", "בנק מהרשימה, מספר סניף, מספר חשבון ושם בעל החשבון - כפי שרשום בבנק. בקבוצה שהמשרד הגדיר שחשבון בנק אינו חובה - אפשר להשאיר את ארבעתם ריקים."],
     ["צילום תעודת זהות", "בקבוצות שבהן הוא חובה - מצרפים אותו בפורטל אחרי העלאת הקובץ, לכל תלמיד."],
   ];
   rows.forEach(([a, b], i) => {
@@ -166,7 +166,7 @@ export async function downloadTemplate(groups: PortalGroup[], banks: Bank[], cod
 }
 
 // ===== קריאת קובץ שמולא =====
-export interface ParsedRow { rowNumber: number; input: NewStudentInput; errors: Errors; requirePhoto: boolean }
+export interface ParsedRow { rowNumber: number; input: NewStudentInput; errors: Errors; requirePhoto: boolean; bankOptional: boolean }
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -244,10 +244,11 @@ export async function parseTemplate(
     };
     const rowNumber = i + 2;
     const requirePhoto = !!groupById.get(groupId)?.require_id_photo;
+    const bankOptional = !!groupById.get(groupId)?.bank_account_optional;
     out.push({
-      rowNumber, input, requirePhoto,
+      rowNumber, input, requirePhoto, bankOptional,
       errors: validateNewStudent(input, {
-        banks: ctx.banks, groupIds: ctx.groups.map((g) => g.id), requirePhoto, hasPhoto: ctx.hasPhoto(rowNumber),
+        banks: ctx.banks, groupIds: ctx.groups.map((g) => g.id), requirePhoto, hasPhoto: ctx.hasPhoto(rowNumber), bankOptional,
       }),
     });
   });

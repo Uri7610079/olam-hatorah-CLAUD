@@ -236,7 +236,7 @@ export function StudentsListScreen() {
       key: "branch",
       header: "סניף",
       render: (s) => s.assignment?.branch && s.assignment.organization
-        ? <Link to={`/ops/branches-groups?org=${s.assignment.organization.id}&branch=${s.assignment.branch.id}`} className="link-action">
+        ? <Link to={`/ops/organizations?org=${s.assignment.organization.id}&branch=${s.assignment.branch.id}`} className="link-action">
             {s.assignment.branch.internal_name}
           </Link>
         : "—",
@@ -245,7 +245,7 @@ export function StudentsListScreen() {
       key: "group",
       header: "קבוצה",
       render: (s) => s.assignment?.group && s.assignment.branch && s.assignment.organization
-        ? <Link to={`/ops/branches-groups?org=${s.assignment.organization.id}&branch=${s.assignment.branch.id}&group=${s.assignment.group.id}`} className="link-action">
+        ? <Link to={`/ops/organizations?org=${s.assignment.organization.id}&branch=${s.assignment.branch.id}&group=${s.assignment.group.id}`} className="link-action">
             {s.assignment.group.name}
           </Link>
         : "—",

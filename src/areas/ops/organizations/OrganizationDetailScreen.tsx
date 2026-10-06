@@ -22,7 +22,7 @@ const TABS: TabDef<TabKey>[] = [
   { key: "details", label: "פרטים" },
   { key: "officeholders", label: "בעלי תפקידים" },
   { key: "accounts", label: "חשבונות" },
-  { key: "branches", label: "סניפים" },
+  { key: "branches", label: "סניפים וקבוצות" },
   { key: "documents", label: "מסמכים" },
   { key: "history", label: "היסטוריה" },
 ];
@@ -51,7 +51,7 @@ export function OrganizationDetailScreen() {
     <div>
       <PageHeader
         title={org.legal_name}
-        breadcrumbs={[{ label: "עמותות", href: "/ops/organizations" }, { label: org.legal_name }]}
+        breadcrumbs={[{ label: "עמותות, סניפים וקבוצות", href: "/ops/organizations" }, { label: org.legal_name }]}
         primaryAction={
           <StatusBadge severity={org.status === "active" ? "ok" : "neutral"} label={org.status === "active" ? "פעילה" : "סגורה"} />
         }

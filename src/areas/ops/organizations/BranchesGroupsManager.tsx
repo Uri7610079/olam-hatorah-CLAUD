@@ -1,20 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { fetchAll } from "@/lib/fetchAll";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Network, Users, Download } from "lucide-react";
+import { Network, Users, Download, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { exportRowsToExcel } from "@/lib/reportExport";
-import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
-
-interface OrgOption {
-  id: string;
-  legal_name: string;
-}
 
 interface BranchRow {
   id: string;
@@ -35,6 +29,8 @@ interface GroupRow {
   group_leader_id: string | null;
   group_leader_name: string | null;
   default_distribution_method: string | null;
+  require_id_photo: boolean;
+  bank_account_optional: boolean;
 }
 
 const DISTRIBUTION_LABEL: Record<string, string> = {
@@ -43,12 +39,6 @@ const DISTRIBUTION_LABEL: Record<string, string> = {
   percentages: "אחוזים",
   manual: "ידנית",
 };
-
-async function fetchActiveOrganizations(): Promise<OrgOption[]> {
-  const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
-  if (error) throw error;
-  return data ?? [];
-}
 
 async function fetchBranches(orgId: string): Promise<BranchRow[]> {
   const { data, error } = await supabase
@@ -69,7 +59,7 @@ async function fetchGroupLeaders(): Promise<GroupLeaderOption[]> {
 async function fetchGroups(branchId: string): Promise<GroupRow[]> {
   const { data, error } = await supabase
     .from("groups")
-    .select("id, name, status, group_leader_id, default_distribution_method, leader:group_leaders(full_name)")
+    .select("id, name, status, group_leader_id, default_distribution_method, require_id_photo, bank_account_optional, leader:group_leaders(full_name)")
     .eq("branch_id", branchId)
     .order("name");
   if (error) throw error;
@@ -132,16 +122,24 @@ async function fetchAllGroups(orgId: string): Promise<AllGroupRow[]> {
 }
 
 const EMPTY_BRANCH_FORM = { talmud_branch_code: "", internal_name: "", address: "", responsible_person: "", phone_system_id: "" };
-const EMPTY_GROUP_FORM = { name: "", group_leader_id: "", opened_at: "", default_distribution_method: "" };
+const EMPTY_GROUP_FORM = {
+  branch_id: "",
+  name: "",
+  group_leader_id: "",
+  opened_at: "",
+  default_distribution_method: "",
+  require_id_photo: false,
+  bank_account_optional: false,
+};
 
-export function BranchesGroupsScreen() {
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+// ניהול הסניפים והקבוצות של עמותה אחת. עד שלב 36 זה היה מסך נפרד ("סניפים וקבוצות");
+// מאז הוא מוצג בתוך מסך העמותות, מתחת לעמותה שנבחרה, ובלשונית "סניפים וקבוצות"
+// בכרטיס העמותה. הקישורים הישנים (?org=&branch=&group=) ממשיכים לעבוד.
+export function BranchesGroupsManager({ orgId }: { orgId: string }) {
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { hasPermission: canManageBranches } = useHasPermission("branches", "manage");
   const { hasPermission: canManageGroups } = useHasPermission("groups", "manage");
-
-  const orgId = searchParams.get("org") ?? "";
   // הגעה מקישור במסך התלמידים: הסניף נפתח, והקבוצה מסומנת
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(searchParams.get("branch"));
   const highlightGroupId = searchParams.get("group");
@@ -181,7 +179,6 @@ export function BranchesGroupsScreen() {
     );
   };
 
-  const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchActiveOrganizations });
   const branchesQuery = useQuery({ queryKey: ["branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
   const leadersQuery = useQuery({ queryKey: ["group-leaders"], queryFn: fetchGroupLeaders });
   const groupsQuery = useQuery({
@@ -213,11 +210,6 @@ export function BranchesGroupsScreen() {
   const [leaderSubmitting, setLeaderSubmitting] = useState(false);
   const [leaderError, setLeaderError] = useState<string | null>(null);
 
-  const handleOrgChange = (nextOrgId: string) => {
-    setSearchParams(nextOrgId ? { org: nextOrgId } : {});
-    setSelectedBranchId(null);
-  };
-
   const submitBranch = async (e: FormEvent) => {
     e.preventDefault();
     setBranchSubmitting(true);
@@ -247,7 +239,11 @@ export function BranchesGroupsScreen() {
 
   const submitGroup = async (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedBranchId) return;
+    const branchId = groupForm.branch_id;
+    if (!branchId) {
+      setGroupError("יש לבחור סניף");
+      return;
+    }
     setGroupSubmitting(true);
     setGroupError(null);
     // group_leader_id לא נשלח כאן: קבוצה נוצרת תמיד בלי ראש קבוצה, ואם נבחר אחד בטופס
@@ -256,16 +252,18 @@ export function BranchesGroupsScreen() {
     const { data, error } = await supabase
       .from("groups")
       .insert({
-        branch_id: selectedBranchId,
-        name: groupForm.name,
+        branch_id: branchId,
+        name: groupForm.name.trim(),
         opened_at: groupForm.opened_at || null,
         default_distribution_method: groupForm.default_distribution_method || null,
+        require_id_photo: groupForm.require_id_photo,
+        bank_account_optional: groupForm.bank_account_optional,
       })
       .select("id")
       .single();
     if (error) {
       setGroupSubmitting(false);
-      setGroupError(error.message);
+      setGroupError(error.message.includes("duplicate") ? "כבר יש קבוצה בשם הזה בסניף הזה." : error.message);
       return;
     }
     if (groupForm.group_leader_id && data) {
@@ -277,19 +275,34 @@ export function BranchesGroupsScreen() {
       if (leaderError) {
         setGroupSubmitting(false);
         setGroupError(`הקבוצה נוצרה, אך שיוך ראש הקבוצה נכשל: ${leaderError.message}`);
-        queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
+        refreshGroups();
         return;
       }
     }
     setGroupSubmitting(false);
     setGroupForm(EMPTY_GROUP_FORM);
     setShowAddGroup(false);
-    queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
+    // הסניף של הקבוצה החדשה נפתח, כדי שהיא תיראה מיד ברשימה
+    setSelectedBranchId(branchId);
+    refreshGroups();
+  };
+
+  const refreshGroups = () => {
+    queryClient.invalidateQueries({ queryKey: ["groups"] });
+    queryClient.invalidateQueries({ queryKey: ["all-groups", orgId] });
+    queryClient.invalidateQueries({ queryKey: ["groups-for-settings"] });
+  };
+
+  const openAddGroup = (branchId: string | null) => {
+    setGroupForm({ ...EMPTY_GROUP_FORM, branch_id: branchId ?? "" });
+    setGroupError(null);
+    setShowAddGroup(true);
+    setTimeout(() => document.getElementById("add-group-form")?.scrollIntoView({ block: "start", behavior: "smooth" }), 0);
   };
 
   const closeGroup = async (id: string) => {
     const { error } = await supabase.from("groups").update({ status: "closed" }).eq("id", id);
-    if (!error) queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
+    if (!error) refreshGroups();
   };
 
   const [changingLeaderGroupId, setChangingLeaderGroupId] = useState<string | null>(null);
@@ -434,6 +447,19 @@ export function BranchesGroupsScreen() {
       render: (r) => (r.default_distribution_method ? DISTRIBUTION_LABEL[r.default_distribution_method] : "—"),
     },
     {
+      key: "settings",
+      header: "הגדרות",
+      render: (r) =>
+        r.require_id_photo || r.bank_account_optional ? (
+          <div className="flex flex-wrap gap-1">
+            {r.require_id_photo && <StatusBadge severity="neutral" label="חובה צילום ת״ז" />}
+            {r.bank_account_optional && <StatusBadge severity="neutral" label="בנק לא חובה" />}
+          </div>
+        ) : (
+          "—"
+        ),
+    },
+    {
       key: "status",
       header: "סטטוס",
       render: (r) => <StatusBadge severity={r.status === "active" ? "ok" : "neutral"} label={r.status === "active" ? "פעילה" : "סגורה"} />,
@@ -452,33 +478,10 @@ export function BranchesGroupsScreen() {
 
   const selectedBranch = branchesQuery.data?.find((b) => b.id === selectedBranchId);
 
+  const activeBranches = (branchesQuery.data ?? []).filter((b) => b.status === "active");
+
   return (
     <div>
-      <PageHeader
-        title="סניפים וקבוצות"
-        description="ניהול סניפים וקבוצות בתוך עמותה."
-        primaryAction={
-          <div className="flex flex-col items-start">
-            <button onClick={() => navigate("/ops/import-center")} className="btn-secondary">
-              יבוא מאקסל
-            </button>
-            <span className="mt-0.5 text-xs text-ink-subtle">יבוא עמותות/סניפים/קבוצות - כולל סניפים וקבוצות</span>
-          </div>
-        }
-      />
-
-      <div className="mb-6 max-w-sm">
-        <label className="field-label">עמותה</label>
-        <select value={orgId} onChange={(e) => handleOrgChange(e.target.value)} className="input-field">
-          <option value="">— בחרי עמותה —</option>
-          {(orgsQuery.data ?? []).map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.legal_name}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {!orgId ? (
         <ErrorState message="יש לבחור עמותה כדי לראות ולנהל את הסניפים שלה." />
       ) : (
@@ -486,7 +489,7 @@ export function BranchesGroupsScreen() {
           {/* רשימה אחת לכל הקבוצות של העמותה, חוצת סניפים. קיימת כי
               מעבר סניף-אחרי-סניף אינו נותן תמונה כוללת, ובעיקר: אותו שם
               קבוצה חוזר בכמה סניפים ונראה בדיוק כמו כפילות. */}
-          <div className="mb-4">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="btn-secondary flex items-center gap-1.5 text-xs"
@@ -495,7 +498,163 @@ export function BranchesGroupsScreen() {
               <Network className="h-3.5 w-3.5" aria-hidden="true" />
               {showAllGroups ? "הסתרת כל הקבוצות" : "כל הקבוצות בכל הסניפים"}
             </button>
+            {canManageGroups && (
+              <button type="button" className="btn-primary flex items-center gap-1.5 text-xs" onClick={() => openAddGroup(selectedBranchId)}>
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                הוספת קבוצה
+              </button>
+            )}
           </div>
+
+          {showAddGroup && (
+            <form id="add-group-form" onSubmit={submitGroup} className="card mb-6 max-w-2xl space-y-4 p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-ink">קבוצה חדשה</h3>
+                <button type="button" onClick={() => setShowAddGroup(false)} className="link-action text-xs">
+                  ביטול
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="field-label" htmlFor="ng-branch">סניף *</label>
+                  <select
+                    id="ng-branch"
+                    required
+                    value={groupForm.branch_id}
+                    onChange={(e) => setGroupForm((f) => ({ ...f, branch_id: e.target.value }))}
+                    className="input-field"
+                  >
+                    <option value="">— בחרי סניף —</option>
+                    {activeBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.talmud_branch_code} · {b.internal_name}
+                      </option>
+                    ))}
+                  </select>
+                  {activeBranches.length === 0 && <p className="mt-1 text-xs text-warn-ink">אין לעמותה סניף פעיל - צריך להוסיף סניף קודם.</p>}
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="ng-name">שם קבוצה *</label>
+                  <input
+                    id="ng-name"
+                    required
+                    value={groupForm.name}
+                    onChange={(e) => setGroupForm((f) => ({ ...f, name: e.target.value }))}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="ng-leader">ראש קבוצה</label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      id="ng-leader"
+                      value={groupForm.group_leader_id}
+                      onChange={(e) => setGroupForm((f) => ({ ...f, group_leader_id: e.target.value }))}
+                      className="input-field"
+                    >
+                      <option value="">— ללא —</option>
+                      {(leadersQuery.data ?? []).map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.full_name}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => setShowAddLeader((v) => !v)} className="link-action shrink-0 text-xs">
+                      ראש קבוצה חדש
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="ng-opened">תאריך פתיחה</label>
+                  <input
+                    id="ng-opened"
+                    type="date"
+                    value={groupForm.opened_at}
+                    onChange={(e) => setGroupForm((f) => ({ ...f, opened_at: e.target.value }))}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="ng-method">שיטת חלוקה ברירת מחדל</label>
+                  <select
+                    id="ng-method"
+                    value={groupForm.default_distribution_method}
+                    onChange={(e) => setGroupForm((f) => ({ ...f, default_distribution_method: e.target.value }))}
+                    className="input-field"
+                  >
+                    <option value="">— לא נקבע —</option>
+                    {Object.entries(DISTRIBUTION_LABEL).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {showAddLeader && (
+                <div className="rounded-control border border-line bg-surface-muted p-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <input
+                      placeholder="שם ראש קבוצה"
+                      value={newLeaderName}
+                      onChange={(e) => setNewLeaderName(e.target.value)}
+                      className="input-field"
+                    />
+                    <input
+                      placeholder="טלפון (לא חובה)"
+                      value={newLeaderPhone}
+                      onChange={(e) => setNewLeaderPhone(e.target.value)}
+                      className="input-field"
+                    />
+                  </div>
+                  {leaderError && <ErrorState message={leaderError} />}
+                  <button
+                    type="button"
+                    onClick={submitNewLeader}
+                    disabled={!newLeaderName || leaderSubmitting}
+                    className="btn-secondary mt-2 text-xs"
+                  >
+                    {leaderSubmitting ? "שומרת…" : "יצירת ראש קבוצה"}
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2 border-t border-line pt-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={groupForm.require_id_photo}
+                    onChange={(e) => setGroupForm((f) => ({ ...f, require_id_photo: e.target.checked }))}
+                  />
+                  <span>
+                    חובה לצרף צילום תעודת זהות
+                    <span className="block text-xs text-ink-subtle">כשראש הקבוצה מוסיף תלמיד חדש מהפורטל.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={groupForm.bank_account_optional}
+                    onChange={(e) => setGroupForm((f) => ({ ...f, bank_account_optional: e.target.checked }))}
+                  />
+                  <span>
+                    חשבון בנק אינו חובה
+                    <span className="block text-xs text-ink-subtle">
+                      תלמיד בקבוצה יעבור ל"מוכן לתלמוד" גם בלי חשבון בנק. תשלום עדיין דורש חשבון תקין.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {groupError && <ErrorState message={groupError} />}
+              <button type="submit" disabled={groupSubmitting} className="btn-primary">
+                {groupSubmitting ? "שומרת…" : "שמירת הקבוצה"}
+              </button>
+            </form>
+          )}
 
           {showAllGroups && (
             <div className="mb-6">
@@ -654,105 +813,12 @@ export function BranchesGroupsScreen() {
                     ייצוא לאקסל
                   </button>
                   {canManageGroups && (
-                    <button onClick={() => setShowAddGroup((v) => !v)} className="btn-secondary text-xs">
-                      {showAddGroup ? "סגירה" : "קבוצה חדשה"}
+                    <button onClick={() => openAddGroup(selectedBranchId)} className="btn-secondary text-xs">
+                      קבוצה חדשה בסניף הזה
                     </button>
                   )}
                 </div>
               </div>
-
-              {showAddGroup && (
-                <form onSubmit={submitGroup} className="card mb-3 max-w-xl space-y-3 p-4">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="field-label">שם קבוצה</label>
-                      <input
-                        required
-                        value={groupForm.name}
-                        onChange={(e) => setGroupForm((f) => ({ ...f, name: e.target.value }))}
-                        className="input-field"
-                      />
-                    </div>
-                    <div>
-                      <label className="field-label">ראש קבוצה</label>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={groupForm.group_leader_id}
-                          onChange={(e) => setGroupForm((f) => ({ ...f, group_leader_id: e.target.value }))}
-                          className="input-field"
-                        >
-                          <option value="">— ללא —</option>
-                          {(leadersQuery.data ?? []).map((l) => (
-                            <option key={l.id} value={l.id}>
-                              {l.full_name}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setShowAddLeader((v) => !v)} className="link-action shrink-0 text-xs">
-                          חדש
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="field-label">תאריך פתיחה</label>
-                      <input
-                        type="date"
-                        value={groupForm.opened_at}
-                        onChange={(e) => setGroupForm((f) => ({ ...f, opened_at: e.target.value }))}
-                        className="input-field"
-                      />
-                    </div>
-                    <div>
-                      <label className="field-label">שיטת חלוקה ברירת מחדל</label>
-                      <select
-                        value={groupForm.default_distribution_method}
-                        onChange={(e) => setGroupForm((f) => ({ ...f, default_distribution_method: e.target.value }))}
-                        className="input-field"
-                      >
-                        <option value="">— לא נקבע —</option>
-                        {Object.entries(DISTRIBUTION_LABEL).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {showAddLeader && (
-                    <div className="rounded-control border border-line bg-surface-muted p-3">
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <input
-                          placeholder="שם ראש קבוצה"
-                          value={newLeaderName}
-                          onChange={(e) => setNewLeaderName(e.target.value)}
-                          className="input-field"
-                        />
-                        <input
-                          placeholder="טלפון (לא חובה)"
-                          value={newLeaderPhone}
-                          onChange={(e) => setNewLeaderPhone(e.target.value)}
-                          className="input-field"
-                        />
-                      </div>
-                      {leaderError && <ErrorState message={leaderError} />}
-                      <button
-                        type="button"
-                        onClick={submitNewLeader}
-                        disabled={!newLeaderName || leaderSubmitting}
-                        className="btn-secondary mt-2 text-xs"
-                      >
-                        {leaderSubmitting ? "שומרת…" : "יצירת ראש קבוצה"}
-                      </button>
-                    </div>
-                  )}
-
-                  {groupError && <ErrorState message={groupError} />}
-                  <button type="submit" disabled={groupSubmitting} className="btn-primary">
-                    {groupSubmitting ? "שומרת…" : "הוספה"}
-                  </button>
-                </form>
-              )}
 
               <DataTable
                 columns={groupColumns}

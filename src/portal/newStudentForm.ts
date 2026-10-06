@@ -53,6 +53,8 @@ export interface ValidationContext {
   groupIds: string[];
   requirePhoto: boolean;
   hasPhoto: boolean;
+  // קבוצה שהמשרד הגדיר "חשבון בנק אינו חובה" (מיגרציה 115)
+  bankOptional?: boolean;
   today?: Date;
 }
 
@@ -100,13 +102,23 @@ export function validateNewStudent(v: NewStudentInput, ctx: ValidationContext): 
   if (!v.maritalStatus) e.maritalStatus = "יש לבחור בחור או נשוי";
   else if (v.maritalStatus === "married" && !v.studyScope) e.studyScope = "יש לבחור היקף לימוד";
 
-  if (!ctx.banks.some((b) => b.code === v.bankCode)) e.bankCode = "יש לבחור בנק";
-  if (!/^[0-9]{1,4}$/.test(v.bankBranch.trim())) e.bankBranch = v.bankBranch.trim() ? "ספרות בלבד" : "חסר מספר סניף";
-  if (!/^[0-9]{2,13}$/.test(v.accountNumber.trim())) e.accountNumber = v.accountNumber.trim() ? "ספרות בלבד" : "חסר מספר חשבון";
-  if (!v.accountHolder.trim()) e.accountHolder = "חסר שם בעל החשבון";
+  // בקבוצה שבה בנק אינו חובה אפשר להשאיר הכול ריק. אבל מי שהתחיל למלא - ממלא עד
+  // הסוף, כדי שלא יישמר חצי חשבון. שם בעל החשבון לא נחשב "התחיל", כי הטופס ממלא
+  // אותו לבד משם התלמיד. אותו כלל בדיוק בשרת (portal_request_new_student).
+  if (!ctx.bankOptional || hasBankDetails(v)) {
+    if (!ctx.banks.some((b) => b.code === v.bankCode)) e.bankCode = "יש לבחור בנק";
+    if (!/^[0-9]{1,4}$/.test(v.bankBranch.trim())) e.bankBranch = v.bankBranch.trim() ? "ספרות בלבד" : "חסר מספר סניף";
+    if (!/^[0-9]{2,13}$/.test(v.accountNumber.trim())) e.accountNumber = v.accountNumber.trim() ? "ספרות בלבד" : "חסר מספר חשבון";
+    if (!v.accountHolder.trim()) e.accountHolder = "חסר שם בעל החשבון";
+  }
 
   if (ctx.requirePhoto && !ctx.hasPhoto) e.photo = "בקבוצה זו חובה לצרף צילום תעודת זהות";
   return e;
+}
+
+/** האם התחילו למלא פרטי בנק (בנק, סניף או מספר חשבון). */
+export function hasBankDetails(v: NewStudentInput): boolean {
+  return Boolean(v.bankCode || v.bankBranch.trim() || v.accountNumber.trim());
 }
 
 /** קוד הלימוד שיירשם, לפי מצב משפחתי והיקף. */

@@ -97,7 +97,7 @@ function routeFor(areaPrefix: string, type: ExceptionType): string {
   // תלמוד: מה שחסר הוא תלמיד או סניף, ושם מזינים אותם.
   // כאן לא חסר נתון - צריך להריץ את ההשלמה, והכפתור נמצא במסך זכאות.
   if (type === "talmud_row_recoverable") return "/ops/talmud/eligibility";
-  if (type === "talmud_branch_missing") return "/ops/branches-groups";
+  if (type === "talmud_branch_missing") return "/ops/organizations";
   if (type === "talmud_student_unassigned") return "/ops/students/unassigned";
   if (type === "talmud_student_missing" || type === "talmud_students_missing_no_amount") return "/ops/students";
   const domain = TYPE_DOMAIN[type];
