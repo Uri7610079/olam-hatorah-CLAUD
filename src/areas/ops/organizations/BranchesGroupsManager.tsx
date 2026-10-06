@@ -149,8 +149,23 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
   }, [searchParams]);
   useEffect(() => {
     if (!highlightGroupId) return;
-    const t = setTimeout(() => document.querySelector(".highlight-group-row")?.scrollIntoView({ block: "center", behavior: "smooth" }), 600);
-    return () => clearTimeout(t);
+    // השורה קיימת רק אחרי שרשימת הקבוצות נטענה מהמסד - ממתינים לה (עד 10 שניות),
+    // במקום לנחש זמן קבוע ולפספס כשהטעינה איטית.
+    // גלילה מיידית ולא "חלקה": גלילה חלקה היא אנימציה, ודפדפן עוצר אנימציות
+    // בחלון שאינו בחזית. ועוד גלילה אחת אחרי שנייה - חלקים שנטענים מעל השורה
+    // (סניפים, ספירות) דוחפים אותה למטה אחרי הגלילה הראשונה.
+    let tries = 0;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const scrollTo = () => document.querySelector(".highlight-group-row")?.scrollIntoView({ block: "center" });
+    const t = setInterval(() => {
+      const row = document.querySelector(".highlight-group-row");
+      if (row || ++tries > 50) {
+        clearInterval(t);
+        scrollTo();
+        settle = setTimeout(scrollTo, 1000);
+      }
+    }, 200);
+    return () => { clearInterval(t); clearTimeout(settle); };
   }, [highlightGroupId, selectedBranchId]);
 
   // כמה תלמידים פעילים בכל סניף וקבוצה - לקישור "תלמידים (N)"
