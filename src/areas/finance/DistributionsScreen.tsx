@@ -594,7 +594,7 @@ export function DistributionsScreen() {
                               <td className="px-3 py-2">{s.full_name}</td>
                               <td className="px-3 py-2">
                                 {s.status === "inactive" && <StatusBadge severity="critical" label="לא פעיל" />}
-                                {!s.verified && s.status !== "inactive" && <StatusBadge severity="medium" label="חשבון לא מאומת" />}
+                                {!s.verified && s.status !== "inactive" && <StatusBadge severity="medium" label="אין חשבון בנק תקין" />}
                               </td>
                               <td className="px-3 py-2">
                                 {selectedIds.has(s.id) &&
@@ -679,7 +679,7 @@ export function DistributionsScreen() {
       <ConfirmDialog
         open={confirmApprove}
         title="אישור אצוות חלוקה"
-        description="השרת יבדוק שוב תלמיד לא פעיל/ללא חשבון מאומת ויתרה זמינה לפני אישור בפועל."
+        description="השרת יבדוק שוב תלמיד לא פעיל/ללא חשבון בנק תקין ויתרה זמינה לפני אישור בפועל."
         onConfirm={() => {
           setConfirmApprove(false);
           runAction("approve_distribution_batch", { p_batch_id: selectedBatchId });

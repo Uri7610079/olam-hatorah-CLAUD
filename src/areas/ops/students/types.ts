@@ -80,6 +80,8 @@ export interface StudentBankAccount {
   student_relationship: "self" | "parent" | "guardian" | "other" | null;
   supporting_document_path: string | null;
   verification_status: "pending" | "verified" | "rejected";
+  // תוצאת בדיקת ספרת הביקורת (מיגרציה 114). null בחשבון שעוד לא נבדק.
+  check_digit_result: "valid" | "invalid" | "unknown" | null;
   is_active: boolean;
   opened_at: string | null;
   closed_at: string | null;
@@ -92,8 +94,15 @@ export const RELATIONSHIP_LABEL: Record<NonNullable<StudentBankAccount["student_
   other: "אחר",
 };
 
-export const VERIFICATION_LABEL: Record<StudentBankAccount["verification_status"], string> = {
-  pending: "ממתין לאימות",
-  verified: "מאומת",
-  rejected: "נדחה",
-};
+// מאז מיגרציה 114 אין אימות ידני: המצב נקבע לפי בדיקת ספרת הביקורת, ואישור ידני
+// נשאר רק כעקיפה לחשבון שהבדיקה פסלה.
+export function bankAccountStateLabel(r: Pick<StudentBankAccount, "verification_status" | "check_digit_result">): {
+  label: string;
+  severity: "ok" | "medium" | "critical";
+} {
+  if (r.verification_status === "rejected") return { label: "מספר שגוי - חסום לתשלום", severity: "critical" };
+  if (r.verification_status === "pending") return { label: "ממתין לבדיקה", severity: "medium" };
+  if (r.check_digit_result === "invalid") return { label: "אושר ידנית למרות הבדיקה", severity: "medium" };
+  if (r.check_digit_result === "unknown") return { label: "אין בדיקה לבנק הזה", severity: "ok" };
+  return { label: "מספר תקין", severity: "ok" };
+}

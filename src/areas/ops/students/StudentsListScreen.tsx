@@ -80,6 +80,14 @@ const STATUS_SEVERITY: Record<Student["status"], Severity> = {
   inactive: "neutral",
 };
 
+interface BulkAdvanceResult {
+  advanced: number;
+  missing_phone: number;
+  missing_assignment: number;
+  missing_bank: number;
+  invalid_bank: number;
+}
+
 const EMPTY_FORM = { id_type: "israeli_id" as StudentIdType, external_id: "", full_name: "", phone: "" };
 
 export function StudentsListScreen() {
@@ -112,6 +120,9 @@ export function StudentsListScreen() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkAdvanceResult | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   useEscapeToClose(showCreate, () => setShowCreate(false));
   const [savingFilterName, setSavingFilterName] = useState("");
@@ -164,6 +175,23 @@ export function StudentsListScreen() {
     setForm(EMPTY_FORM);
     queryClient.invalidateQueries({ queryKey: ["students"] });
     if (data) navigate(`/ops/students/${data.id}`);
+  };
+
+  // אישור קבוצתי: כל תלמיד בטיוטה שיש לו טלפון, שיוך פעיל וחשבון בנק תקין עובר
+  // ל"מוכן לתלמוד". השאר נשארים, ומוצג כמה ולמה. (בדרך כלל זה כבר קורה לבד ברגע
+  // שהפרט האחרון נכנס - הלחצן הוא לבדיקה חוזרת ולתמונת מצב.)
+  const runBulkAdvance = async () => {
+    setBulkRunning(true);
+    setBulkError(null);
+    setBulkResult(null);
+    const { data, error } = await supabase.rpc("bulk_advance_ready_students");
+    setBulkRunning(false);
+    if (error) {
+      setBulkError(error.message);
+      return;
+    }
+    setBulkResult((Array.isArray(data) ? data[0] : data) as BulkAdvanceResult);
+    queryClient.invalidateQueries({ queryKey: ["students"] });
   };
 
   const exportStudents = () => {
@@ -240,6 +268,11 @@ export function StudentsListScreen() {
               ייצוא לאקסל
             </button>
             {canManage && (
+              <button onClick={runBulkAdvance} disabled={bulkRunning} className="btn-secondary">
+                {bulkRunning ? "בודקת…" : "אישור כל המוכנים לתלמוד"}
+              </button>
+            )}
+            {canManage && (
               <button onClick={() => setShowImport((v) => !v)} className="btn-secondary">
                 {showImport ? "סגירת יבוא" : "יבוא מאקסל"}
               </button>
@@ -252,6 +285,29 @@ export function StudentsListScreen() {
           </div>
         }
       />
+
+      {bulkError && <div className="mb-4"><ErrorState message={bulkError} /></div>}
+      {bulkResult && (
+        <div className="card mb-4 flex items-start justify-between gap-3 p-4 text-sm">
+          <div className="space-y-1">
+            <p className="font-medium">
+              {bulkResult.advanced > 0 ? `${bulkResult.advanced} תלמידים עברו ל"מוכן לתלמוד".` : "אין תלמידים חדשים שמוכנים לתלמוד."}
+            </p>
+            {(() => {
+              const left = [
+                bulkResult.missing_phone > 0 && `${bulkResult.missing_phone} בלי טלפון`,
+                bulkResult.missing_assignment > 0 && `${bulkResult.missing_assignment} בלי שיוך לקבוצה`,
+                bulkResult.missing_bank > 0 && `${bulkResult.missing_bank} בלי חשבון בנק`,
+                bulkResult.invalid_bank > 0 && `${bulkResult.invalid_bank} עם מספר חשבון שגוי`,
+              ].filter(Boolean);
+              return left.length > 0 ? <p className="text-ink-muted">נשארו בטיוטה: {left.join(" · ")}.</p> : null;
+            })()}
+          </div>
+          <button onClick={() => setBulkResult(null)} className="text-ink-subtle hover:text-ink" aria-label="סגירה">
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       {showImport && canManage && <StudentsImportPanel />}
 

@@ -36,7 +36,7 @@ function buildItems(c: OpsCounts): ExceptionCounter[] {
     },
     {
       key: "missing-details",
-      label: "תלמידים פעילים חסרי טלפון, חשבון מאומת או שיוך",
+      label: "תלמידים פעילים חסרי טלפון, חשבון בנק תקין או שיוך",
       count: c.missing_phone_bank_or_assignment,
       severity: c.missing_phone_bank_or_assignment > 0 ? "high" : "ok",
       href: "/ops/students",

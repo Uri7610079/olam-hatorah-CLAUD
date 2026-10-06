@@ -360,7 +360,7 @@ export function ReturnsScreen() {
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="field-label">חשבון בנק חדש (מאומת בלבד)</label>
+                    <label className="field-label">חשבון בנק חדש (תקין בלבד)</label>
                     <select value={retryAccountId} onChange={(e) => setRetryAccountId(e.target.value)} className="input-field">
                       <option value="">— בחרי —</option>
                       {(accountsQuery.data ?? []).map((a) => (
@@ -369,7 +369,7 @@ export function ReturnsScreen() {
                         </option>
                       ))}
                     </select>
-                    {(accountsQuery.data ?? []).length === 0 && <p className="mt-1 text-xs text-warn">אין לתלמיד זה חשבון בנק מאומת ופעיל.</p>}
+                    {(accountsQuery.data ?? []).length === 0 && <p className="mt-1 text-xs text-warn">אין לתלמיד זה חשבון בנק תקין ופעיל.</p>}
                   </div>
                   <div>
                     <label className="field-label">שורת תשלום חוזר (מס״ב)</label>

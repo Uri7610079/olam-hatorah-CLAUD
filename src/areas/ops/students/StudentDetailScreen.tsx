@@ -36,7 +36,7 @@ const STEPS: StepDef[] = [
   { key: "draft", label: "טיוטה" },
   { key: "details", label: "פרטים והושלמו" },
   { key: "assignment", label: "שיוך פעיל" },
-  { key: "bank", label: "חשבון מאומת" },
+  { key: "bank", label: "חשבון בנק תקין" },
   { key: "ready_for_talmud", label: "מוכן לתלמוד" },
   { key: "sent_to_talmud", label: "נשלח לתלמוד" },
   { key: "active", label: "פעיל" },
@@ -160,7 +160,7 @@ export function StudentDetailScreen() {
             const missing: string[] = [];
             if (!hasDetails) missing.push("פרטים מלאים");
             if (!hasAssignment) missing.push("שיוך פעיל");
-            if (!hasBank) missing.push("חשבון בנק מאומת");
+            if (!hasBank) missing.push("חשבון בנק תקין");
             return (
               <button
                 onClick={advance}

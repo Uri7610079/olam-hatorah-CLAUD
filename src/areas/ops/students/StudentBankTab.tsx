@@ -8,7 +8,8 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SensitiveValue } from "@/components/SensitiveValue";
 import { ErrorState } from "@/components/ErrorState";
-import { RELATIONSHIP_LABEL, VERIFICATION_LABEL, type StudentBankAccount } from "./types";
+import { checkIsraeliBankAccount } from "@/lib/israeliBankAccount";
+import { RELATIONSHIP_LABEL, bankAccountStateLabel, type StudentBankAccount } from "./types";
 
 interface StudentBankTabProps {
   studentId: string;
@@ -18,7 +19,7 @@ async function fetchBankAccounts(studentId: string): Promise<StudentBankAccount[
   const { data, error } = await supabase
     .from("student_bank_accounts_view")
     .select(
-      "id, student_id, bank_name, bank_branch_code, account_number_masked, account_holder_name, student_relationship, supporting_document_path, verification_status, is_active, opened_at, closed_at",
+      "id, student_id, bank_name, bank_branch_code, account_number_masked, account_holder_name, student_relationship, supporting_document_path, verification_status, check_digit_result, is_active, opened_at, closed_at",
     )
     .eq("student_id", studentId)
     .order("opened_at", { ascending: false });
@@ -26,7 +27,21 @@ async function fetchBankAccounts(studentId: string): Promise<StudentBankAccount[
   return data ?? [];
 }
 
+interface BankOption {
+  code: string;
+  name: string;
+}
+
+// בחירה מרשימה ולא הקלדה חופשית - כמו בחשבון עמותה. בלי קוד בנק אין בדיקת ספרת
+// ביקורת, וקובץ מס"ב יוצא בלי קוד.
+async function fetchBanks(): Promise<BankOption[]> {
+  const { data, error } = await supabase.from("banks").select("code, name").eq("is_active", true).order("code");
+  if (error) throw error;
+  return data ?? [];
+}
+
 const EMPTY_FORM = {
+  bank_code: "",
   bank_name: "",
   bank_branch_code: "",
   account_number: "",
@@ -39,6 +54,7 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
   const { hasPermission: canManage } = useHasPermission("students", "manage");
   const { hasPermission: canReveal } = useHasPermission("bank_accounts", "view_sensitive");
   const query = useQuery({ queryKey: ["student-bank-accounts", studentId], queryFn: () => fetchBankAccounts(studentId) });
+  const banksQuery = useQuery({ queryKey: ["banks"], queryFn: fetchBanks });
 
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -46,7 +62,19 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["student-bank-accounts", studentId] });
+  // חשבון תקין יכול להעביר את התלמיד ל"מוכן לתלמוד" אוטומטית (מיגרציה 114), ולכן
+  // מרעננים גם את התלמיד עצמו ואת הרשימה - לא רק את טבלת החשבונות.
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["student-bank-accounts", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["student-has-verified-account", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["student", studentId] });
+    queryClient.invalidateQueries({ queryKey: ["students"] });
+  };
+
+  // אותה בדיקה שהשרת יריץ בשמירה - כדי שטעות הקלדה תיראה לפני השמירה ולא אחריה.
+  const formCheck = form.bank_code && form.account_number.trim()
+    ? checkIsraeliBankAccount(form.bank_code, form.bank_branch_code, form.account_number)
+    : null;
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
@@ -88,8 +116,10 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
     refresh();
   };
 
-  const setVerification = async (id: string, status: "verified" | "rejected") => {
-    const { error } = await supabase.rpc("set_student_bank_account_verification", { p_account_id: id, p_status: status });
+  // עקיפה בלבד: חשבון שהבדיקה פסלה, ומישהו במשרד יודע שהוא נכון.
+  const approveAnyway = async (id: string) => {
+    if (!window.confirm("הבדיקה מצאה שמספר החשבון שגוי. לאשר אותו בכל זאת? העברה לחשבון שגוי תחזור מהבנק.")) return;
+    const { error } = await supabase.rpc("set_student_bank_account_verification", { p_account_id: id, p_status: "verified" });
     if (!error) refresh();
   };
 
@@ -132,27 +162,20 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
     },
     {
       key: "verification",
-      header: "אימות",
-      render: (r) => (
-        <StatusBadge
-          severity={r.verification_status === "verified" ? "ok" : r.verification_status === "rejected" ? "critical" : "medium"}
-          label={VERIFICATION_LABEL[r.verification_status]}
-        />
-      ),
+      header: "בדיקת מספר",
+      render: (r) => {
+        const state = bankAccountStateLabel(r);
+        return <StatusBadge severity={state.severity} label={state.label} />;
+      },
     },
     {
       key: "actions",
       header: "",
       render: (r) =>
-        canManage && r.verification_status === "pending" ? (
-          <div className="flex gap-3">
-            <button onClick={() => setVerification(r.id, "verified")} className="link-action text-xs">
-              אימות
-            </button>
-            <button onClick={() => setVerification(r.id, "rejected")} className="text-xs text-danger underline hover:text-danger-ink">
-              דחייה
-            </button>
-          </div>
+        canManage && r.is_active && r.verification_status === "rejected" ? (
+          <button onClick={() => approveAnyway(r.id)} className="link-action text-xs">
+            אישור למרות זאת
+          </button>
         ) : null,
     },
   ];
@@ -169,8 +192,24 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
         <form onSubmit={handleAdd} className="card mb-4 max-w-xl space-y-3 p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">בנק</label>
-              <input value={form.bank_name} onChange={(e) => setForm((f) => ({ ...f, bank_name: e.target.value }))} className="input-field" />
+              <label className="field-label" htmlFor="student-bank-select">בנק</label>
+              <select
+                id="student-bank-select"
+                value={form.bank_code}
+                onChange={(e) => {
+                  const code = e.target.value;
+                  const bank = (banksQuery.data ?? []).find((b) => b.code === code);
+                  setForm((f) => ({ ...f, bank_code: code, bank_name: bank?.name ?? "" }));
+                }}
+                className="input-field"
+              >
+                <option value="">— בחרי בנק —</option>
+                {(banksQuery.data ?? []).map((b) => (
+                  <option key={b.code} value={b.code}>
+                    {b.code} · {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="field-label">סניף</label>
@@ -203,6 +242,14 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
               <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="input-field" />
             </div>
           </div>
+          {formCheck === "invalid" && (
+            <p className="rounded-md border border-danger/30 bg-danger-soft p-2 text-xs text-danger-ink">
+              מספר החשבון לא עובר את בדיקת ספרת הביקורת של הבנק - כנראה טעות הקלדה. כדאי לבדוק את המספר ואת הסניף.
+              אפשר לשמור בכל זאת, אבל החשבון יסומן כשגוי ולא יקבל תשלום.
+            </p>
+          )}
+          {formCheck === "valid" && <p className="text-xs text-ok-ink">מספר החשבון עובר את בדיקת ספרת הביקורת.</p>}
+          {formCheck === "unknown" && <p className="text-xs text-ink-subtle">לבנק הזה אין בדיקת ספרת ביקורת ידועה - החשבון יישמר כתקין.</p>}
           {error && <ErrorState message={error} />}
           <button type="submit" disabled={submitting} className="btn-primary">
             {submitting ? "שומרת…" : "הוספה"}
