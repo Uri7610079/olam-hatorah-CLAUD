@@ -101,6 +101,21 @@ export const IMPORT_SIGNATURES: ImportSignature[] = [
     ],
   },
   {
+    // "רשימת תלמידים לפי חודש דיווח" מתלמוד - זכאי / אינו זכאי לכל תלמיד, בלי סכומים.
+    // שונה מ"זכאות חודשית" (דוח דרישת תשלום) למעלה. ר' talmudEligibilityList.ts.
+    key: "talmud_eligibility_list",
+    label: "דוח זכאים מתלמוד",
+    area: "תפעול שוטף",
+    target: { kind: "import-center-tab", tab: "eligibilityList" },
+    variants: [
+      {
+        name: "רשימת תלמידים לפי חודש דיווח",
+        required: ["מצב זכאות", "ת.ז. / דרכון", "סוג זיהוי"],
+        optional: ["שם פרטי", "שם משפחה", "סוג לימוד", "תאריך התחלה"],
+      },
+    ],
+  },
+  {
     key: "talmud_errors",
     label: "שגיאות תלמוד",
     area: "תפעול שוטף",

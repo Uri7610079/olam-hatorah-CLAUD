@@ -136,28 +136,33 @@ export function isLegacyXls(file: File): boolean {
 }
 
 async function parseCsv(file: File, headerRowIndexOverride?: number): Promise<ParsedFile> {
-  const text = await file.text();
-  const raw = Papa.parse<string[]>(text, { skipEmptyLines: true });
-  return buildParsedFile(raw.data, headerRowIndexOverride);
+  return buildParsedFile(await readFileMatrix(file), headerRowIndexOverride);
 }
 
 async function parseXlsx(file: File, headerRowIndexOverride?: number): Promise<ParsedFile> {
+  return buildParsedFile(await readFileMatrix(file), headerRowIndexOverride);
+}
+
+/**
+ * הקובץ כמו שהוא: כל השורות, בלי לחפש שורת כותרות. לדוחות שבנויים מכמה חלקים
+ * (למשל "דוח זכאים" מתלמוד - חלק נפרד לכל סניף, כל אחד עם כותרות משלו), שבהם
+ * "שורת כותרות אחת" פשוט לא קיימת.
+ */
+export async function readFileMatrix(file: File): Promise<string[][]> {
+  if (!isXlsx(file)) {
+    const text = await file.text();
+    return Papa.parse<string[]>(text, { skipEmptyLines: true }).data;
+  }
   const buffer = await file.arrayBuffer();
 
   // ר' הערה למעלה - קובץ ".xls"/".xlsx" שהוא בפועל טבלת HTML (למשל ייצוא ממערכת תלמוד)
   // חייב לעבור פרסור HTML, לא את הפרסר הבינארי הרגיל (שם היה מייצר טקסט מקולקל בשקט,
   // בלי שגיאה גלויה - בדיוק מה שקרה בפועל).
-  if (looksLikeHtmlExport(buffer)) {
-    const html = decodeAsText(buffer);
-    const matrix = parseHtmlTableToMatrix(html);
-    return buildParsedFile(matrix, headerRowIndexOverride);
-  }
+  if (looksLikeHtmlExport(buffer)) return parseHtmlTableToMatrix(decodeAsText(buffer));
 
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-  const firstSheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[firstSheetName];
-  const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, range: 0, defval: "", raw: false });
-  return buildParsedFile(matrix, headerRowIndexOverride);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, range: 0, defval: "", raw: false });
 }
 
 // hash תוכן הקובץ (לא השם) - מונע יבוא כפול גם אם הקובץ הועלה בשם אחר.
