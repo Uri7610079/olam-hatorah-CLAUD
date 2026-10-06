@@ -38,12 +38,15 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
     noBank: all.filter((s) => !s.has_bank_account).length,
   }), [all]);
 
-  const shown = all.filter((s) => {
-    if (filter === "not_eligible" && s.eligibility !== "not_eligible") return false;
-    if (filter === "no_bank" && s.has_bank_account) return false;
-    const q = search.trim();
-    return !q || s.full_name.includes(q) || s.external_id.includes(q);
-  });
+  const shown = all
+    .filter((s) => {
+      if (filter === "not_eligible" && s.eligibility !== "not_eligible") return false;
+      if (filter === "no_bank" && s.has_bank_account) return false;
+      const q = search.trim();
+      return !q || s.full_name.includes(q) || s.external_id.includes(q);
+    })
+    // שם הקבוצה בעמודה הראשונה - ולכן התלמידים של כל קבוצה מוצגים יחד
+    .sort((a, b) => a.group_name.localeCompare(b.group_name, "he") || a.full_name.localeCompare(b.full_name, "he"));
 
   // ראש קבוצה בכמה סניפים או עמותות - שם הקבוצה לבדו לא מספיק כדי לדעת איזו
   const multiGroup = new Set(all.map((s) => s.group_id)).size > 1;
@@ -127,9 +130,9 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
           <table className="w-full text-base">
             <thead className="bg-surface-muted text-right text-sm text-ink-muted">
               <tr>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold">שם קבוצה</th>
                 <th className="px-4 py-3 font-semibold">שם</th>
                 <th className="px-4 py-3 font-semibold">ת״ז</th>
-                {multiGroup && <th className="px-4 py-3 font-semibold">קבוצה</th>}
                 <th className="px-4 py-3 font-semibold">זכאות</th>
                 <th className="px-4 py-3 font-semibold">סיבה</th>
                 <th className="px-4 py-3"><span className="sr-only">פעולות</span></th>
@@ -138,6 +141,12 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
             <tbody>
               {shown.map((s) => (
                 <tr key={s.student_id} className="border-t border-line align-top">
+                  <td className="whitespace-nowrap px-4 py-3">
+                    {s.group_name}
+                    {multiGroup && (
+                      <div className="text-sm text-ink-muted">{[s.branch_name, s.organization_name].filter(Boolean).join(" · ")}</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-semibold">
                     {s.full_name}
                     <div className="mt-1 flex flex-wrap gap-1.5 text-xs font-normal">
@@ -147,12 +156,6 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 tabular-nums">{s.external_id}</td>
-                  {multiGroup && (
-                    <td className="px-4 py-3">
-                      {s.group_name}
-                      <div className="text-sm text-ink-muted">{[s.branch_name, s.organization_name].filter(Boolean).join(" · ")}</div>
-                    </td>
-                  )}
                   <td className="whitespace-nowrap px-4 py-3">
                     <StatusBadge severity={ELIGIBILITY[s.eligibility].severity} label={ELIGIBILITY[s.eligibility].label} />
                   </td>
