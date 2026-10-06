@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { fetchAll } from "@/lib/fetchAll";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Network, Users, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -141,7 +142,44 @@ export function BranchesGroupsScreen() {
   const { hasPermission: canManageGroups } = useHasPermission("groups", "manage");
 
   const orgId = searchParams.get("org") ?? "";
-  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  // הגעה מקישור במסך התלמידים: הסניף נפתח, והקבוצה מסומנת
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(searchParams.get("branch"));
+  const highlightGroupId = searchParams.get("group");
+  useEffect(() => {
+    const b = searchParams.get("branch");
+    if (b) setSelectedBranchId(b);
+  }, [searchParams]);
+  useEffect(() => {
+    if (!highlightGroupId) return;
+    const t = setTimeout(() => document.querySelector(".highlight-group-row")?.scrollIntoView({ block: "center", behavior: "smooth" }), 600);
+    return () => clearTimeout(t);
+  }, [highlightGroupId, selectedBranchId]);
+
+  // כמה תלמידים פעילים בכל סניף וקבוצה - לקישור "תלמידים (N)"
+  const studentCountsQuery = useQuery({
+    queryKey: ["student-counts-by-place", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const rows = await fetchAll(() =>
+        supabase.from("student_assignments").select("branch_id, group_id").eq("organization_id", orgId).eq("is_active", true).order("id"),
+      );
+      const byBranch = new Map<string, number>();
+      const byGroup = new Map<string, number>();
+      rows.forEach((r) => {
+        byBranch.set(r.branch_id, (byBranch.get(r.branch_id) ?? 0) + 1);
+        byGroup.set(r.group_id, (byGroup.get(r.group_id) ?? 0) + 1);
+      });
+      return { byBranch, byGroup };
+    },
+  });
+  const studentsLink = (kind: "branch" | "group", id: string) => {
+    const n = (kind === "branch" ? studentCountsQuery.data?.byBranch : studentCountsQuery.data?.byGroup)?.get(id) ?? 0;
+    return (
+      <Link to={`/ops/students?${kind}=${id}`} className="link-action whitespace-nowrap text-xs" onClick={(e) => e.stopPropagation()}>
+        תלמידים ({n})
+      </Link>
+    );
+  };
 
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchActiveOrganizations });
   const branchesQuery = useQuery({ queryKey: ["branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
@@ -340,6 +378,7 @@ export function BranchesGroupsScreen() {
           <button onClick={() => setSelectedBranchId(r.id)} className="link-action text-xs">
             קבוצות
           </button>
+          {studentsLink("branch", r.id)}
           {canManageBranches && r.status === "active" && (
             <button onClick={() => closeBranch(r.id)} className="text-xs text-danger underline hover:text-danger-ink">
               סגירה
@@ -352,6 +391,7 @@ export function BranchesGroupsScreen() {
 
   const groupColumns: DataTableColumn<GroupRow>[] = [
     { key: "name", header: "שם קבוצה", render: (r) => r.name },
+    { key: "students", header: "תלמידים", render: (r) => studentsLink("group", r.id) },
     {
       key: "leader",
       header: "ראש קבוצה",
@@ -498,6 +538,7 @@ export function BranchesGroupsScreen() {
                   { key: "branch", header: "סניף", className: "tabular", render: (g: AllGroupRow) => g.branch_code },
                   { key: "branchName", header: "שם הסניף", render: (g: AllGroupRow) => g.branch_name },
                   { key: "leader", header: "ראש קבוצה", render: (g: AllGroupRow) => g.leader_name ?? "—" },
+                  { key: "students", header: "תלמידים", render: (g: AllGroupRow) => studentsLink("group", g.id) },
                   {
                     key: "status",
                     header: "סטטוס",
@@ -717,6 +758,7 @@ export function BranchesGroupsScreen() {
                 columns={groupColumns}
                 rows={groupsQuery.data ?? []}
                 rowKey={(r) => r.id}
+                rowClassName={(r) => (r.id === highlightGroupId ? "highlight-group-row !bg-brand-50 ring-2 ring-inset ring-brand-500" : undefined)}
                 loading={groupsQuery.isLoading}
                 emptyTitle="אין קבוצות בסניף זה"
                 emptyIcon={Users}

@@ -1,6 +1,12 @@
 export type StudentIdType = "israeli_id" | "passport" | "other";
 export type StudentStatus = "draft" | "ready_for_talmud" | "sent_to_talmud" | "active" | "active_with_error" | "inactive";
 
+export interface StudentPlacement {
+  organization: { id: string; legal_name: string } | null;
+  branch: { id: string; internal_name: string; talmud_branch_code: string } | null;
+  group: { id: string; name: string } | null;
+}
+
 export interface Student {
   id: string;
   id_type: StudentIdType;
@@ -20,6 +26,8 @@ export interface Student {
   exit_date: string | null;
   exit_reason: string | null;
   created_at: string;
+  /** השיוך הפעיל (עמותה, סניף, קבוצה) - מגיע רק ממסך הרשימה */
+  assignment?: StudentPlacement | null;
 }
 
 // עיצוב כתובת קריאה משלושת השדות המפוצלים - פונקציה משותפת אחת כדי שההיגיון לא ייסטה
