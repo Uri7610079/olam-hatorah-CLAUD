@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight, ChevronLeft, Columns3 } from "lucide-react";
 import { EmptyState } from "./EmptyState";
 import { LoadingState } from "./LoadingState";
+import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "./ColumnFilter";
+import { textOf, type CellValue, type ColumnFilterState, type FilterColumn } from "@/lib/columnFilters";
 
 export interface DataTableColumn<T> {
   key: string;
@@ -17,6 +19,12 @@ export interface DataTableColumn<T> {
   // המילה הארוכה ביותר - עמודה צרה וגבוהה שקשה לקרוא. עמודה אחת לכל
   // היותר; אם סומנו כמה, הראשונה מנצחת.
   grow?: boolean;
+  // סינון ומיון בכותרת (כמו באקסל). ברירת המחדל: הטקסט שהתא מציג. עמודה
+  // שהתא שלה הוא רכיב בלי טקסט ישיר נותנת filterValue; תאריך/סכום מוצג
+  // שממוינים לפי ערך אחר - sortValue. filterable: false - בלי סינון בכלל.
+  filterValue?: (row: T) => string | number | null | undefined;
+  sortValue?: (row: T) => CellValue;
+  filterable?: boolean;
 }
 
 export interface DataTablePagination {
@@ -41,6 +49,36 @@ interface DataTableProps<T> {
   // הדגשת שורה שלמה לפי תוכנה (למשל שורה עם פער סכומים בבדיקת הזכאות). אופציונלי -
   // טבלה שלא מעבירה את זה מקבלת בדיוק את אותו className כמו קודם.
   rowClassName?: (row: T) => string | undefined;
+  // סינון ומיון בכותרות העמודות. פעיל כברירת מחדל - חוץ מטבלה שעוברת עמודים
+  // בשרת (pagination), כי שם רק חלק מהשורות כאן וסינון היה מטעה.
+  headerFilters?: boolean;
+  // מצב הסינון מבחוץ - למסך שצריך את השורות המסוננות (למשל לייצוא לאקסל)
+  filterState?: [ColumnFilterState, (s: ColumnFilterState) => void];
+  // חלוקה לעמודים בדפדפן, אחרי הסינון. לטבלה עם הרבה שורות.
+  clientPageSize?: number;
+}
+
+const NO_FILTER_KEYS = new Set(["actions", "select"]);
+
+/** העמודות שאפשר לסנן בהן, עם הטקסט של כל תא (נשמר, כדי לא לחשב שוב) */
+export function filterColumnsFor<T>(columns: DataTableColumn<T>[], rows: T[]): FilterColumn<T>[] {
+  const out: FilterColumn<T>[] = [];
+  for (const col of columns) {
+    if (col.filterable === false || NO_FILTER_KEYS.has(col.key) || !col.header.trim()) continue;
+    const cache = new WeakMap<object, string>();
+    const text = (row: T) => {
+      const own = col.filterValue;
+      if (own) { const v = own(row); return v === null || v === undefined ? "" : String(v); }
+      if (typeof row !== "object" || row === null) return textOf(col.render(row));
+      let t = cache.get(row as object);
+      if (t === undefined) { t = textOf(col.render(row)); cache.set(row as object, t); }
+      return t;
+    };
+    // עמודה שאין בה טקסט בכלל (תיבות סימון, כפתורים) - בלי סינון
+    if (rows.length && !rows.slice(0, 200).some((r) => text(r))) continue;
+    out.push({ key: col.key, text, sortValue: col.sortValue });
+  }
+  return out;
 }
 
 // טבלה בסיסית לפי עקרונות ה-UX באפיון: עמודות מעטות כברירת מחדל, pagination אמיתי
@@ -57,7 +95,25 @@ export function DataTable<T>({
   columnPicker = false,
   pagination,
   rowClassName,
+  headerFilters,
+  filterState,
+  clientPageSize,
 }: DataTableProps<T>) {
+  const filtersOn = headerFilters ?? !pagination;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const filterColumns = useMemo(() => (filtersOn ? filterColumnsFor(columns, rows) : []), [filtersOn, rows, columns.map((c) => c.key).join("|")]);
+  const ctrl = useColumnFilters(rows, filterColumns, filterState);
+  const shownRows = filtersOn ? ctrl.rows : rows;
+  const [clientPage, setClientPage] = useState(0);
+  // סינון או מיון חדש - חזרה לעמוד הראשון
+  useEffect(() => setClientPage(0), [ctrl.state, rows]);
+  const clientPages = clientPageSize ? Math.max(1, Math.ceil(shownRows.length / clientPageSize)) : 1;
+  const pageRows = clientPageSize ? shownRows.slice(clientPage * clientPageSize, (clientPage + 1) * clientPageSize) : shownRows;
+  const paging: DataTablePagination | undefined = pagination
+    ?? (clientPageSize && shownRows.length > clientPageSize
+      ? { page: clientPage, pageSize: clientPageSize, totalCount: shownRows.length, onPageChange: (p) => setClientPage(Math.min(Math.max(p, 0), clientPages - 1)) }
+      : undefined);
+
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set(columnPicker ? columns.filter((c) => c.hiddenByDefault).map((c) => c.key) : []));
   const [showPicker, setShowPicker] = useState(false);
 
@@ -110,7 +166,7 @@ export function DataTable<T>({
     });
   };
 
-  const totalPages = pagination ? Math.max(1, Math.ceil(pagination.totalCount / pagination.pageSize)) : 1;
+  const totalPages = paging ? Math.max(1, Math.ceil(paging.totalCount / paging.pageSize)) : 1;
 
   return (
     <div>
@@ -135,6 +191,7 @@ export function DataTable<T>({
         </div>
       )}
 
+      {filtersOn && <ColumnFilterSummary ctrl={ctrl} />}
       {loading ? (
         <LoadingState rows={5} />
       ) : rows.length === 0 ? (
@@ -159,7 +216,7 @@ export function DataTable<T>({
                     // מאשר עמודת טקסט צרה וגבוהה.
                     className={`whitespace-nowrap px-4 py-3 font-medium ${col.key === growKey ? "w-full min-w-[22rem]" : ""} ${stickyCell(col.key, true)}`}
                   >
-                    {col.header}
+                    {filtersOn ? <ColumnHeader ctrl={ctrl} colKey={col.key}>{col.header}</ColumnHeader> : col.header}
                   </th>
                 ))}
                 {/* עמודת סרק שסופגת את הרוחב העודף.
@@ -172,7 +229,12 @@ export function DataTable<T>({
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {rows.map((row) => (
+              {pageRows.length === 0 && (
+                <tr className="bg-surface">
+                  <td colSpan={visibleColumns.length + 1} className="px-4 py-6 text-center text-ink-muted">אין שורות שמתאימות לסינון</td>
+                </tr>
+              )}
+              {pageRows.map((row) => (
                 <tr
                   key={rowKey(row)}
                   onClick={() => onRowClick?.(row)}
@@ -208,23 +270,23 @@ export function DataTable<T>({
         </div>
       )}
 
-      {pagination && !loading && rows.length > 0 && (
+      {paging && !loading && rows.length > 0 && (
         <div className="mt-2 flex items-center justify-between text-xs text-ink-subtle">
           <span>
-            סה"כ {pagination.totalCount.toLocaleString("he-IL")} · עמוד {pagination.page + 1} מתוך {totalPages}
+            סה"כ {paging.totalCount.toLocaleString("he-IL")} · עמוד {paging.page + 1} מתוך {totalPages}
           </span>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => pagination.onPageChange(pagination.page - 1)}
-              disabled={pagination.page <= 0}
+              onClick={() => paging.onPageChange(paging.page - 1)}
+              disabled={paging.page <= 0}
               className="rounded p-1 hover:bg-surface-muted disabled:opacity-30"
               aria-label="עמוד קודם"
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
-              onClick={() => pagination.onPageChange(pagination.page + 1)}
-              disabled={pagination.page + 1 >= totalPages}
+              onClick={() => paging.onPageChange(paging.page + 1)}
+              disabled={paging.page + 1 >= totalPages}
               className="rounded p-1 hover:bg-surface-muted disabled:opacity-30"
               aria-label="עמוד הבא"
             >

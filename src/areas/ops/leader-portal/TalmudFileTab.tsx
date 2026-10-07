@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { TalmudRowStatus } from "../talmud/TalmudRowStatus";
+import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "@/components/ColumnFilter";
+import type { FilterColumn } from "@/lib/columnFilters";
 
 // "קובץ לתלמוד": תלמידים שנוספו או עזבו דרך הפורטל ואושרו, וצריך לרשום אותם גם
 // בתלמוד. המשרד מוריד קובץ בתבנית של משרד החינוך וקולט אותו בתלמוד (מיגרציה 117).
@@ -158,9 +160,18 @@ function Section({ items, done, onMarked }: { items: Item[]; done: boolean; onMa
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const missingCount = items.filter((i) => !i.row || i.row.missing.length).length;
-  // רק מה שמוצג עכשיו - אחרי סימון חלק מהשורות כבר לא ברשימה
-  const chosen = items.filter((i) => selected.has(i.request.id) && i.row);
-  const selectable = items.filter((i) => i.row);
+  const columns: FilterColumn<Item>[] = [
+    { key: "group", text: (i) => i.groupName ?? "" },
+    { key: "student", text: (i) => i.studentName },
+    { key: "kind", text: (i) => (i.request.kind === "new_student" ? "תלמיד חדש" : "עזב") },
+    { key: "date", text: (i) => formatDate(done ? i.request.talmud_file_at : i.request.decided_at), sortValue: (i) => (done ? i.request.talmud_file_at : i.request.decided_at) ?? "" },
+    { key: "leader", text: (i) => i.request.leader?.full_name ?? "" },
+    { key: "state", text: (i) => (!i.row ? "התלמיד לא נמצא" : i.row.missing.length ? "חסר נתון" : i.row.notes.length ? "לבדיקה" : "תקין") },
+  ];
+  const ctrl = useColumnFilters(items, columns);
+  // רק מה שמוצג עכשיו: אחרי סינון בכותרות, ואחרי סימון חלק מהשורות כבר לא ברשימה
+  const chosen = ctrl.rows.filter((i) => selected.has(i.request.id) && i.row);
+  const selectable = ctrl.rows.filter((i) => i.row);
 
   const toggle = (id: string) => {
     const next = new Set(selected);
@@ -202,6 +213,7 @@ function Section({ items, done, onMarked }: { items: Item[]; done: boolean; onMa
         </button>
       </header>
       {message && <p className={`px-4 pt-3 text-sm ${message.ok ? "text-ok-ink" : "text-danger-ink"}`}>{message.text}</p>}
+      <div className="px-4 pt-3"><ColumnFilterSummary ctrl={ctrl} /></div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-right text-ink-muted">
@@ -210,16 +222,16 @@ function Section({ items, done, onMarked }: { items: Item[]; done: boolean; onMa
                 <input type="checkbox" aria-label="בחירת הכול" checked={selectable.length > 0 && chosen.length === selectable.length}
                   onChange={(e) => setSelected(new Set(e.target.checked ? selectable.map((i) => i.request.id) : []))} />
               </th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">שם קבוצה</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">תלמיד</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">סוג</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">{done ? "ירד בקובץ" : "אושר"}</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
-              <th className="px-3 py-2 font-semibold">מצב השורה</th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="group">שם קבוצה</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="student">תלמיד</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="kind">סוג</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="date">{done ? "ירד בקובץ" : "אושר"}</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="leader">ראש קבוצה</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="state">מצב השורה</ColumnHeader></th>
             </tr>
           </thead>
           <tbody>
-            {items.map((i) => (
+            {ctrl.rows.map((i) => (
               <tr key={i.request.id} className="border-t border-line align-top">
                 <td className="px-3 py-2">
                   <input type="checkbox" disabled={!i.row} checked={selected.has(i.request.id)} onChange={() => toggle(i.request.id)} aria-label={`בחירת ${i.studentName}`} />

@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, UserPlus, MessageCircleQuestion, AlertTriangle, FileDown, FileUp } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "@/components/ColumnFilter";
+import type { FilterColumn } from "@/lib/columnFilters";
 import { ELIGIBILITY, monthLabel } from "@/lib/portalRequests";
 import { portalRpc, type PortalGroup, type PortalStudent } from "./portalApi";
 import { AskDialog, StudentDialog } from "./PortalDialogs";
@@ -41,7 +43,7 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
     noBank: all.filter((s) => !s.has_bank_account).length,
   }), [all]);
 
-  const shown = all
+  const base = all
     .filter((s) => {
       if (filter === "not_eligible" && s.eligibility !== "not_eligible") return false;
       if (filter === "no_bank" && s.has_bank_account) return false;
@@ -53,6 +55,17 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
 
   // ראש קבוצה בכמה סניפים או עמותות - שם הקבוצה לבדו לא מספיק כדי לדעת איזו
   const multiGroup = new Set(all.map((s) => s.group_id)).size > 1;
+
+  // סינון ומיון בכותרות העמודות, כמו באקסל
+  const filterColumns: FilterColumn<PortalStudent>[] = [
+    { key: "group", text: (s) => multiGroup ? [s.group_name, s.branch_name, s.organization_name].filter(Boolean).join(" · ") : s.group_name },
+    { key: "name", text: (s) => s.full_name },
+    { key: "id", text: (s) => s.external_id },
+    { key: "eligibility", text: (s) => ELIGIBILITY[s.eligibility].label },
+    { key: "reason", text: (s) => s.eligibility === "not_eligible" ? (s.reasons.length ? s.reasons.join(" · ") : "הסיבה טרם התקבלה מתלמוד") : "" },
+  ];
+  const ctrl = useColumnFilters(base, filterColumns);
+  const shown = ctrl.rows;
 
   return (
     <div className="space-y-5">
@@ -137,6 +150,7 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
         </div>
       </div>
 
+      <ColumnFilterSummary ctrl={ctrl} />
       {students.isLoading || months.isLoading ? (
         <p className="py-10 text-center text-ink-muted">טוען את רשימת התלמידים…</p>
       ) : students.isError ? (
@@ -148,11 +162,11 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
           <table className="w-full text-base">
             <thead className="bg-surface-muted text-right text-sm text-ink-muted">
               <tr>
-                <th className="whitespace-nowrap px-4 py-3 font-semibold">שם קבוצה</th>
-                <th className="px-4 py-3 font-semibold">שם</th>
-                <th className="px-4 py-3 font-semibold">ת״ז</th>
-                <th className="px-4 py-3 font-semibold">זכאות</th>
-                <th className="px-4 py-3 font-semibold">סיבה</th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold"><ColumnHeader ctrl={ctrl} colKey="group">שם קבוצה</ColumnHeader></th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold"><ColumnHeader ctrl={ctrl} colKey="name">שם</ColumnHeader></th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold"><ColumnHeader ctrl={ctrl} colKey="id">ת״ז</ColumnHeader></th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold"><ColumnHeader ctrl={ctrl} colKey="eligibility">זכאות</ColumnHeader></th>
+                <th className="whitespace-nowrap px-4 py-3 font-semibold"><ColumnHeader ctrl={ctrl} colKey="reason">סיבה</ColumnHeader></th>
                 <th className="px-4 py-3"><span className="sr-only">פעולות</span></th>
               </tr>
             </thead>

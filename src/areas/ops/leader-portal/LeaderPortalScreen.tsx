@@ -15,6 +15,8 @@ import {
   type RequestKind, type RequestStatus,
 } from "@/lib/portalRequests";
 import { TalmudFileTab, countPendingTalmudFile } from "./TalmudFileTab";
+import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "@/components/ColumnFilter";
+import type { FilterColumn } from "@/lib/columnFilters";
 
 // פורטל ראשי הקבוצות - הצד של המשרד (מיגרציה 111).
 //
@@ -414,6 +416,13 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
 }
 
 // ===== גישה לפורטל =====
+function accessStatus(a: AccessRow) {
+  return !a.enabled ? { label: "חסום", severity: "high" as const }
+    : a.locked_until ? { label: `נעול עד ${new Date(a.locked_until).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`, severity: "medium" as const }
+    : a.problem ? { label: "דורש טיפול", severity: "medium" as const }
+    : { label: "פעיל", severity: "ok" as const };
+}
+
 function AccessList() {
   const qc = useQueryClient();
   const { hasPermission: canManage } = useHasPermission("groups", "manage");
@@ -460,14 +469,19 @@ function AccessList() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-office-access"] }),
   });
 
+  const groupsOf = (a: AccessRow) => (groupsQuery.data?.get(a.group_leader_id) ?? []).join(", ");
+  const accessColumns: FilterColumn<AccessRow>[] = [
+    { key: "group", text: groupsOf },
+    { key: "leader", text: (a) => a.full_name },
+    { key: "login", text: (a) => a.login_identifier ?? "" },
+    { key: "last", text: (a) => (a.last_login_at ? formatDate(a.last_login_at) : "טרם נכנס"), sortValue: (a) => a.last_login_at ?? "" },
+    { key: "status", text: (a) => accessStatus(a).label },
+  ];
+  const ctrl = useColumnFilters(query.data ?? [], accessColumns);
+
   if (query.isLoading) return <LoadingState rows={4} />;
   if (query.isError) return <ErrorState message={errText(query.error)} />;
-
-  const status = (a: AccessRow) =>
-    !a.enabled ? { label: "חסום", severity: "high" as const }
-    : a.locked_until ? { label: `נעול עד ${new Date(a.locked_until).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`, severity: "medium" as const }
-    : a.problem ? { label: "דורש טיפול", severity: "medium" as const }
-    : { label: "פעיל", severity: "ok" as const };
+  const status = accessStatus;
 
   return (
     <div className="space-y-3">
@@ -477,20 +491,21 @@ function AccessList() {
       </p>
       {done && <p className="rounded-control bg-ok-soft p-2 text-sm text-ok-ink">{done}</p>}
       {(setPw.isError || setAccess.isError) && <ErrorState message={errText(setPw.error ?? setAccess.error)} />}
+      <ColumnFilterSummary ctrl={ctrl} />
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-surface-muted text-right text-ink-muted">
             <tr>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">שם קבוצה</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">נכנס עם</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">כניסה אחרונה</th>
-              <th className="whitespace-nowrap px-3 py-2 font-semibold">מצב</th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="group">שם קבוצה</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="leader">ראש קבוצה</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="login">נכנס עם</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="last">כניסה אחרונה</ColumnHeader></th>
+              <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="status">מצב</ColumnHeader></th>
               <th className="px-3 py-2"><span className="sr-only">פעולות</span></th>
             </tr>
           </thead>
           <tbody>
-            {(query.data ?? []).map((a) => {
+            {ctrl.rows.map((a) => {
               const st = status(a);
               return (
                 <tr key={a.group_leader_id} className="border-t border-line align-top">
@@ -549,25 +564,37 @@ function AccessList() {
 // ===== יומן =====
 function RequestHistory() {
   const query = useQuery({ queryKey: ["portal-office-requests", "history"], queryFn: () => fetchRequests(false) });
+  const historyColumns: FilterColumn<RequestRow>[] = [
+    { key: "group", text: (r) => r.groupName ?? "" },
+    { key: "date", text: (r) => formatDate(r.created_at), sortValue: (r) => r.created_at },
+    { key: "leader", text: (r) => r.leader?.full_name ?? "" },
+    { key: "student", text: (r) => r.student?.full_name ?? r.payload.full_name ?? "" },
+    { key: "kind", text: (r) => REQUEST_KIND_LABEL[r.kind] },
+    { key: "change", text: (r) => requestChanges(r.kind, r.payload, r.previous).join(" · ") },
+    { key: "status", text: (r) => REQUEST_STATUS[r.status].label },
+  ];
+  const ctrl = useColumnFilters(query.data ?? [], historyColumns);
   if (query.isLoading) return <LoadingState rows={4} />;
   if (query.isError) return <ErrorState message={errText(query.error)} />;
   if (!query.data?.length) return <EmptyState title="עדיין אין עדכונים" icon={Inbox} />;
   return (
+    <>
+    <ColumnFilterSummary ctrl={ctrl} />
     <div className="card overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-surface-muted text-right text-ink-muted">
           <tr>
-            <th className="whitespace-nowrap px-3 py-2 font-semibold">שם קבוצה</th>
-            <th className="whitespace-nowrap px-3 py-2 font-semibold">תאריך</th>
-            <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
-            <th className="whitespace-nowrap px-3 py-2 font-semibold">תלמיד</th>
-            <th className="whitespace-nowrap px-3 py-2 font-semibold">סוג</th>
-            <th className="whitespace-nowrap px-3 py-2 font-semibold">שינוי</th>
-            <th className="whitespace-nowrap px-3 py-2 font-semibold">מצב</th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="group">שם קבוצה</ColumnHeader></th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="date">תאריך</ColumnHeader></th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="leader">ראש קבוצה</ColumnHeader></th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="student">תלמיד</ColumnHeader></th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="kind">סוג</ColumnHeader></th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="change">שינוי</ColumnHeader></th>
+            <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="status">מצב</ColumnHeader></th>
           </tr>
         </thead>
         <tbody>
-          {query.data.map((r) => (
+          {ctrl.rows.map((r) => (
             <tr key={r.id} className="border-t border-line align-top">
               <td className="whitespace-nowrap px-3 py-2 font-semibold">{r.groupName ?? "—"}</td>
               <td className="whitespace-nowrap px-3 py-2">{formatDate(r.created_at)}</td>
@@ -586,6 +613,7 @@ function RequestHistory() {
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { MultiSelect } from "@/components/MultiSelect";
 import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
 import { PhoneField } from "@/components/PhoneField";
@@ -12,23 +12,20 @@ import { useEscapeToClose } from "@/lib/useEscapeToClose";
 import { exportRowsToExcel } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
-import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { DataTable, filterColumnsFor, type DataTableColumn } from "@/components/DataTable";
+import { fetchAll } from "@/lib/fetchAll";
+import { EMPTY_FILTER_STATE, applyColumnFilters, type ColumnFilterState } from "@/lib/columnFilters";
 import { StatusBadge, type Severity } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { formatStudentAddress, ID_TYPE_LABEL, STATUS_LABEL, type Student, type StudentIdType } from "./types";
 import { StudentsImportPanel } from "./StudentsImportPanel";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 50;
 const SCREEN_KEY = "students-list";
 
-interface FetchResult {
-  rows: Student[];
-  totalCount: number;
-}
-
-// חיפוש וסינון בצד שרת + pagination אמיתי - "אלפי תלמידים, pagination וחיפוש צד שרת"
-// באפיון (§9, נפח). זו הטבלה הכי גדולת-נפח במערכת, ולכן הראשונה שמקבלת את היכולת הזו
-// (שאר הטבלאות הקטנות יותר ממשיכות עם הדפוס הישן - סינון בצד לקוח על כל הנתונים).
+// כל התלמידים נטענים, והחיפוש, הסינון (גם בכותרות העמודות, כמו באקסל), המיון
+// והחלוקה לעמודים נעשים בדפדפן. כשהשרת חילק לעמודים, סינון בכותרת היה מסנן
+// רק את 25 השורות שעל המסך, וייצוא לאקסל הוציא רק אותן.
 // סינון לפי מקום: עמותה, סניף או קבוצה - דרך השיוך הפעיל. מגיע מהקישור
 // "תלמידים" במסך סניפים וקבוצות.
 export type PlaceFilter = { kind: "org" | "branch" | "group"; id: string } | null;
@@ -38,37 +35,25 @@ const PLACE_COLUMN = { org: "organization_id", branch: "branch_id", group: "grou
 // התלמידים - תלמיד בלי שיוך פעיל עדיין מופיע, עם "—".
 const PLACEMENT = "assignment:student_assignments(is_active, organization:organizations(id, legal_name), branch:branches(id, internal_name, talmud_branch_code), group:groups(id, name))";
 
-async function fetchStudents(search: string, statusFilter: string[], page: number, place: PlaceFilter): Promise<FetchResult> {
+async function fetchStudents(place: PlaceFilter): Promise<Student[]> {
   // סינון לפי מקום דורש שיוך פעיל במקום הזה - inner, בשם נפרד מזה שבתצוגה
   const filterEmbed = place ? ", placefilter:student_assignments!inner(is_active, organization_id, branch_id, group_id)" : "";
-  let query = supabase
-    .from("students")
-    .select(
-      `id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address_street, address_house_number, address_city, student_type, study_code, status, exit_date, exit_reason, created_at, ${PLACEMENT}${filterEmbed}`,
-      { count: "exact" },
-    )
-    .eq("assignment.is_active", true)
-    .order("full_name")
-    .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-  if (place) query = query.eq("placefilter.is_active", true).eq(`placefilter.${PLACE_COLUMN[place.kind]}`, place.id);
-
-  if (search.trim()) {
-    const term = search.trim();
-    query = query.or(`full_name.ilike.%${term}%,external_id.ilike.%${term}%`);
-  }
-  // eq לסטטוס אחד, in לכמה. ריק = ללא סינון כלל.
-  if (statusFilter.length === 1) query = query.eq("status", statusFilter[0]);
-  else if (statusFilter.length > 1) query = query.in("status", statusFilter);
-
-  const { data, error, count } = await query;
-  if (error) throw error;
+  const data = await fetchAll(() => {
+    let query = supabase
+      .from("students")
+      .select(
+        `id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address_street, address_house_number, address_city, student_type, study_code, status, exit_date, exit_reason, created_at, ${PLACEMENT}${filterEmbed}`,
+      )
+      .eq("assignment.is_active", true);
+    if (place) query = query.eq("placefilter.is_active", true).eq(`placefilter.${PLACE_COLUMN[place.kind]}`, place.id);
+    return query.order("full_name").order("id");
+  });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = (data ?? []).map(({ placefilter: _f, assignment, ...s }: any) => {
+  return data.map(({ placefilter: _f, assignment, ...s }: any) => {
     const a = Array.isArray(assignment) ? assignment[0] : assignment;
     const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
     return { ...s, assignment: a ? { organization: one(a.organization), branch: one(a.branch), group: one(a.group) } : null } as Student;
   });
-  return { rows, totalCount: count ?? 0 };
 }
 
 const STATUS_SEVERITY: Record<Student["status"], Severity> = {
@@ -114,7 +99,7 @@ export function StudentsListScreen() {
   });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [page, setPage] = useState(0);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilterState>(EMPTY_FILTER_STATE);
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -127,7 +112,14 @@ export function StudentsListScreen() {
   useEscapeToClose(showCreate, () => setShowCreate(false));
   const [savingFilterName, setSavingFilterName] = useState("");
 
-  const query = useQuery({ queryKey: ["students", search, statusFilter.join(","), page, place?.kind, place?.id], queryFn: () => fetchStudents(search, statusFilter, page, place) });
+  const query = useQuery({ queryKey: ["students", "all", place?.kind, place?.id], queryFn: () => fetchStudents(place) });
+  // חיפוש וסטטוס - על כל הרשימה. eq לסטטוס אחד, כמה - כל אחד מהם. ריק = הכל.
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return (query.data ?? []).filter((s) =>
+      (!statusFilter.length || statusFilter.includes(s.status)) &&
+      (!term || s.full_name.toLowerCase().includes(term) || s.external_id.toLowerCase().includes(term)));
+  }, [query.data, search, statusFilter]);
   const savedFilters = useSavedFilters(SCREEN_KEY);
 
   const applySavedFilter = (id: string) => {
@@ -138,7 +130,6 @@ export function StudentsListScreen() {
     // עדיין צריך לעבוד למי ששמר אותו.
     const savedStatus = f.filters.statusFilter;
     setStatusFilter(Array.isArray(savedStatus) ? savedStatus.map(String) : savedStatus ? [String(savedStatus)] : []);
-    setPage(0);
   };
 
   const saveCurrentFilter = async () => {
@@ -195,7 +186,9 @@ export function StudentsListScreen() {
   };
 
   const exportStudents = () => {
-    const rows = (query.data?.rows ?? []).map((s) => ({
+    // בדיוק מה שמוצג: אחרי החיפוש, הסטטוס, והסינון והמיון בכותרות
+    const shown = applyColumnFilters(rows, filterColumnsFor(columns, rows), columnFilters);
+    const out = shown.map((s) => ({
       מזהה: `${ID_TYPE_LABEL[s.id_type]} ${s.external_id}`,
       שם: s.full_name,
       טלפון: s.phone_raw ?? "",
@@ -209,7 +202,7 @@ export function StudentsListScreen() {
       "מספר בית": s.address_house_number ?? "",
       עיר: s.address_city ?? "",
     }));
-    exportRowsToExcel(rows, "תלמידים", `students-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportRowsToExcel(out, "תלמידים", `students-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const columns: DataTableColumn<Student>[] = [
@@ -313,10 +306,7 @@ export function StudentsListScreen() {
 
       <SearchAndFilters
         searchValue={search}
-        onSearchChange={(v) => {
-          setSearch(v);
-          setPage(0);
-        }}
+        onSearchChange={setSearch}
         searchPlaceholder="חיפוש לפי שם או מספר מזהה…"
         advancedFilters={
           <div className="flex flex-wrap items-center gap-2">
@@ -324,10 +314,7 @@ export function StudentsListScreen() {
               className="w-48"
               options={Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))}
               value={statusFilter}
-              onChange={(v) => {
-                setStatusFilter(v);
-                setPage(0);
-              }}
+              onChange={setStatusFilter}
               emptyMeaning="כל הסטטוסים"
             />
             {savedFilters.filters.length > 0 && (
@@ -357,9 +344,9 @@ export function StudentsListScreen() {
         <div className="mb-3 flex items-center gap-2">
           <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 text-sm text-brand-700">
             מסונן לפי {place.kind === "org" ? "עמותה" : place.kind === "branch" ? "סניף" : "קבוצת"} {placeName.data || "…"}
-            {query.data && <span className="text-brand-700/70">· {query.data.totalCount} תלמידים</span>}
+            {query.data && <span className="text-brand-700/70">· {query.data.length} תלמידים</span>}
             <button
-              onClick={() => { setSearchParams({}); setPage(0); }}
+              onClick={() => setSearchParams({})}
               aria-label="ביטול הסינון"
               className="rounded-full p-0.5 hover:bg-brand-100"
             >
@@ -371,13 +358,14 @@ export function StudentsListScreen() {
       {query.isError && <ErrorState message="שגיאה בטעינת רשימת התלמידים." />}
       <DataTable
         columns={columns}
-        rows={query.data?.rows ?? []}
+        rows={rows}
         rowKey={(s) => s.id}
         loading={query.isLoading}
         emptyTitle="אין תלמידים עדיין"
         emptyIcon={Users}
         columnPicker
-        pagination={{ page, pageSize: PAGE_SIZE, totalCount: query.data?.totalCount ?? 0, onPageChange: setPage }}
+        clientPageSize={PAGE_SIZE}
+        filterState={[columnFilters, setColumnFilters]}
       />
 
       {showCreate && (
