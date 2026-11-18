@@ -178,7 +178,21 @@ export default async function handler(req, res) {
   // בדיקת הגדרה: אורך המפתח וטביעה קצרה של הסוד (לא המפתח ולא הסוד) - להשוואה מול מיגרציה 120
   if (req.method === "GET" && req.query?.check !== undefined) {
     const k = keyText();
-    return res.status(200).json({ configured: Boolean(k), keyLength: k.length, fingerprint: k ? crypto.createHash("sha256").update(workerSecret()).digest("hex").slice(0, 8) : null });
+    // האם השרת מגיע לתלמוד, ואם לא - למה (חסימה, תעודת אבטחה, זמן)
+    let talmud;
+    try {
+      const t0 = Date.now();
+      const r = await fetch("https://talmud.edu.gov.il/Login.aspx", { redirect: "manual", signal: AbortSignal.timeout(15000) });
+      talmud = { ok: true, status: r.status, ms: Date.now() - t0 };
+    } catch (e) {
+      talmud = { ok: false, error: String(e?.message ?? e).slice(0, 120), cause: String(e?.cause?.code ?? e?.cause?.message ?? "").slice(0, 120) };
+    }
+    return res.status(200).json({
+      configured: Boolean(k), keyLength: k.length,
+      fingerprint: k ? crypto.createHash("sha256").update(workerSecret()).digest("hex").slice(0, 8) : null,
+      region: process.env.VERCEL_REGION ?? null,
+      talmud,
+    });
   }
   if (req.method !== "POST") return res.status(405).json({ error: "POST בלבד" });
   if (!keyText()) {
