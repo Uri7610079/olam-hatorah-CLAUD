@@ -1,0 +1,105 @@
+# plan      every push to main that touches a migration, and on demand:
+#           lists what would run. Changes nothing.
+# apply     on demand only, only when `confirm` equals the project ref.
+# baseline  on demand only: records versions as applied without running SQL.
+#
+# Secret: SUPABASE_ACCESS_TOKEN only. The pinned CLI links with the token and
+# logs in to the database with a temporary role - no database password.
+# After this is live, migrations are never run by hand in the SQL Editor.
+#
+# This project: migration files are named NNN_name.sql (001, 002, ...), not
+# 14-digit timestamps. New files continue the numbering (124_, 125_, ...).
+# Runs only in ZEEV6191/olam-hatorah---- (the client mirror has no secret).
+name: supabase-migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/*.sql"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan = show only | apply = run on the live database | baseline = mark versions as applied"
+        type: choice
+        options: [plan, apply, baseline]
+        default: plan
+      confirm:
+        description: "apply/baseline: type the project ref to confirm"
+        required: false
+        default: ""
+      versions:
+        description: "baseline only: versions to mark as applied, separated by spaces"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.repository == 'ZEEV6191/olam-hatorah----'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROJECT_REF: tddqcwnpdghewxbeqsxo
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      MODE: ${{ github.event_name == 'push' && 'plan' || inputs.mode }}
+      CONFIRM: ${{ inputs.confirm }}
+      VERSIONS: ${{ inputs.versions }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check inputs
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::Missing repository secret SUPABASE_ACCESS_TOKEN."
+            exit 1
+          fi
+          # Owner gate: collaborators with Write can dispatch workflows.
+          if [ "$MODE" != "plan" ] && [ "$GITHUB_TRIGGERING_ACTOR" != "ZEEV6191" ]; then
+            echo "::error::Mode '$MODE' may be run only by ZEEV6191, not '$GITHUB_TRIGGERING_ACTOR'."
+            exit 1
+          fi
+          if [ "$MODE" != "plan" ] && [ "$CONFIRM" != "$PROJECT_REF" ]; then
+            echo "::error::Mode '$MODE' changes the live project. Type the project ref in 'confirm'."
+            exit 1
+          fi
+          if [ "$MODE" = "baseline" ] && ! printf '%s' "$VERSIONS" | grep -Eq '^[0-9]+( [0-9]+)*$'; then
+            echo "::error::'versions' must be numeric versions separated by single spaces."
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.0
+
+      - name: Link the project
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: History before
+        run: supabase migration list
+
+      - name: Plan
+        if: env.MODE == 'plan'
+        run: supabase db push --dry-run
+
+      - name: Baseline
+        if: env.MODE == 'baseline'
+        run: supabase migration repair --status applied $VERSIONS
+
+      - name: Apply
+        if: env.MODE == 'apply'
+        run: supabase db push --yes
+
+      - name: History after
+        if: env.MODE != 'plan'
+        run: supabase migration list
+
+      - name: Nothing left to apply
+        if: env.MODE == 'apply'
+        run: supabase db push --dry-run

@@ -1,0 +1,4 @@
+# Minimal Supabase CLI config, used only by the migrations workflow
+# (.github/workflows/supabase-migrations.yml). project_id is a local name,
+# not the live project ref (the ref lives in the workflow).
+project_id = "olam-hatorah"
