@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { StudentBagatzNote } from "../talmud/TalmudReportRowsView";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
@@ -197,6 +198,8 @@ export function StudentDetailScreen() {
         </div>
       )}
       {actionError && <div className="mb-4"><ErrorState message={actionError} /></div>}
+
+      <StudentBagatzNote studentId={student.id} />
 
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} ariaLabel="לשוניות תלמיד" />
 

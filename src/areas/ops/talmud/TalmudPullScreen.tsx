@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Download, KeyRound, Loader2, MessageSquareText, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -11,13 +12,14 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
 import { TalmudCertificatesTab } from "./TalmudCertificatesTab";
+import { TalmudReportRowsView } from "./TalmudReportRowsView";
 
 // משיכה מתלמוד (מיגרציה 118): המזכיר לוחץ, המערכת נכנסת לתלמוד בשם כל עמותה
 // עם הסיסמה השמורה, והוא מקליד רק את קוד ה-SMS. ההתקדמות עצמה נעשית בשרת
 // (api/talmud-pull.js), צעד אחד בכל קריאה - והמסך הזה הוא שקורא לצעד הבא כל
 // כמה שניות, כל עוד יש משיכה פעילה. לכן צריך להשאיר את המסך פתוח עד הסוף.
 
-type Tab = "pull" | "certificates" | "users";
+type Tab = "pull" | "certificates" | "bagatz" | "users";
 
 interface StatusRow {
   job_id: string;
@@ -70,13 +72,14 @@ export function TalmudPullScreen() {
         description="המערכת נכנסת לתלמוד בשם כל עמותה ומורידה את הדוחות. צריך רק להקליד את קוד ה-SMS שמגיע."
       />
       <Tabs
-        tabs={[{ key: "pull", label: "משיכה" }, { key: "certificates", label: "אישורי לימודים" }, { key: "users", label: "משתמשי תלמוד" }]}
+        tabs={[{ key: "pull", label: "משיכה" }, { key: "certificates", label: "אישורי לימודים" }, { key: "bagatz", label: 'בג"ץ' }, { key: "users", label: "משתמשי תלמוד" }]}
         activeTab={tab}
         onChange={setTab}
         ariaLabel="משיכה מתלמוד"
       />
       {tab === "pull" && <PullTab onNeedUsers={() => setTab("users")} />}
       {tab === "certificates" && <TalmudCertificatesTab onStarted={() => setTab("pull")} />}
+      {tab === "bagatz" && <TalmudReportRowsView reportKey="bagatz" />}
       {tab === "users" && <UsersTab />}
     </div>
   );
@@ -204,6 +207,11 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
                 <span className="text-sm text-ink-muted">יש להשאיר את המסך פתוח עד הסוף.</span>
                 <button onClick={() => cancel.mutate(rows[0].job_id)} className="btn-secondary ms-auto text-sm">ביטול המשיכה</button>
               </>
+            )}
+            {!active && rows[0].job_kind === "reports" && rows.some((r) => r.files_done > 0) && (
+              <Link to="/ops/import-center?tab=talmudPulled" className="btn-primary ms-auto text-sm">
+                לקליטת הקבצים במרכז היבוא ←
+              </Link>
             )}
           </div>
           {stepError && <ErrorState message={stepError} />}

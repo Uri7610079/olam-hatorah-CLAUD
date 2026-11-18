@@ -8,6 +8,7 @@ import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { TalmudReportRowsView } from "./TalmudReportRowsView";
 import { ErrorState } from "@/components/ErrorState";
 
 interface OrgOption {
@@ -306,6 +307,16 @@ export function RetroScreen() {
 
       {orgId && (
         <DataTable columns={columns} rows={retroQuery.data ?? []} rowKey={(r) => r.id} loading={retroQuery.isLoading} emptyTitle="אין רטרו רשום" emptyIcon={RotateCcw} />
+      )}
+
+      {/* מתלמוד (משיכה מתלמוד → קליטה, מיגרציה 121): מה תלמוד שילם, ואיך הוא הסביר הפרשים וקיזוזים */}
+      {orgId && (
+        <>
+          <h2 className="mb-2 mt-8 text-sm font-semibold text-ink-muted">תשלומים מתלמוד לפי סניף</h2>
+          <TalmudReportRowsView reportKey="institute_payments" organizationId={orgId} />
+          <h2 className="mb-2 mt-8 text-sm font-semibold text-ink-muted">הסבר תשלומים וקיזוזים מתלמוד</h2>
+          <TalmudReportRowsView reportKey="payment_explanation" organizationId={orgId} />
+        </>
       )}
     </div>
   );

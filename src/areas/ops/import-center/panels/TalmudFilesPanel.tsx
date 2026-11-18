@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { findExistingImport } from "./FolderInboxPanel";
+import { STORED_REPORT_KEYS, nonEntitlementToErrorsFile, type StoredReportKey } from "@/lib/talmudReports";
 
 // "קבצים מתלמוד": הדוחות שירדו במשיכה מתלמוד (מיגרציה 118), מזוהים ומוכנים לקליטה.
 // כמו "קבצים מהתיקייה" - הזיהוי והניתוב אוטומטיים, והקליטה עצמה עוברת במסך היבוא
@@ -15,6 +16,7 @@ import { findExistingImport } from "./FolderInboxPanel";
 
 interface PulledFile {
   id: string;
+  organization_id: string;
   legal_name: string;
   report_key: string;
   report_label: string;
@@ -83,7 +85,10 @@ async function loadEntries(): Promise<Entry[]> {
   return out;
 }
 
-export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string, file: File) => void }) {
+type RouteMeta = { orgId?: string | null; month?: string | null; reportKey?: string | null };
+const isStored = (key: string): key is StoredReportKey => (STORED_REPORT_KEYS as string[]).includes(key);
+
+export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string, file: File, meta?: RouteMeta) => void }) {
   const navigate = useNavigate();
   const query = useQuery({ queryKey: ["talmud-files-for-import"], queryFn: loadEntries });
 
@@ -107,12 +112,25 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
     );
   }
 
-  const go = (entry: Entry) => {
+  const go = async (entry: Entry) => {
     if (entry.state.kind !== "detected") return;
+    const meta = { orgId: entry.pulled.organization_id, month: entry.pulled.month };
+    // סיבות אי זכאות → מרכז השגיאות: אותו קובץ בצורה שקליטת השגיאות מכירה
+    if (entry.pulled.report_key === "non_entitlement") {
+      onRouteToTab("errors", await nonEntitlementToErrorsFile(entry.file), meta);
+      return;
+    }
+    // תשלומים למוסד / בג"ץ / הסבר תשלומים → הקליטה החדשה (מיגרציה 121)
+    if (isStored(entry.pulled.report_key)) {
+      onRouteToTab("talmudReport", entry.file, { ...meta, reportKey: entry.pulled.report_key });
+      return;
+    }
     const target = entry.state.candidate.signature.target;
-    if (target.kind === "import-center-tab") onRouteToTab(target.tab, entry.file);
+    if (target.kind === "import-center-tab") onRouteToTab(target.tab, entry.file, meta);
     else navigate(target.path);
   };
+  const importable = (entry: Entry) => entry.state.kind === "detected"
+    && (entry.pulled.report_key === "non_entitlement" || isStored(entry.pulled.report_key) || entry.state.candidate.signature.target.kind === "import-center-tab");
 
   const pending = query.data.filter((e) => e.state.kind !== "imported");
   const imported = query.data.filter((e) => e.state.kind === "imported");
@@ -144,11 +162,13 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
                   זוהה כ<span className="font-semibold text-ink">{entry.state.candidate.signature.label}</span>
                   <span className="text-ink-subtle"> · {entry.state.rowCount} שורות</span>
                 </p>
-                {entry.state.candidate.signature.target.kind === "route" && entry.state.candidate.signature.target.path === "/ops/talmud/pull" ? (
+                {importable(entry) ? (
+                  <button onClick={() => void go(entry)} className="btn-primary text-xs">
+                    {entry.pulled.report_key === "non_entitlement" ? "המשך ליבוא (למרכז השגיאות)" : "המשך ליבוא"}
+                  </button>
+                ) : entry.state.candidate.signature.target.kind === "route" ? (
                   <p className="text-xs text-ink-subtle">{entry.state.candidate.signature.target.hint}</p>
-                ) : (
-                  <button onClick={() => go(entry)} className="btn-primary text-xs">המשך ליבוא</button>
-                )}
+                ) : null}
               </>
             )}
             {entry.state.kind === "mismatch" && (

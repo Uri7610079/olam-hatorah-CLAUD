@@ -85,18 +85,26 @@ async function fetchBatchById(id: string): Promise<EligibilityBatchSummary> {
 interface EligibilityImportPanelProps {
   // קובץ שהגיע מלשונית "זיהוי אוטומטי" - נבחר שם כבר, ולכן נכנס לניתוח כאילו נבחר כאן.
   initialFile?: File | null;
+  initialOrgId?: string | null;
+  initialMonth?: string | null;
 }
 
 // פאנל יבוא זכאות חודשית עבור מרכז היבוא - אותה לוגיקה בדיוק כמו EligibilityScreen
 // (analyzeFile/createImportBatch/commit_eligibility_batch), רק בלי לשוניות התצוגה
 // (זכאות לחודש / חסרים) שאינן יבוא. המסך המקורי נשאר כפי שהוא, זו נקודת גישה נוספת.
-export function EligibilityImportPanel({ initialFile }: EligibilityImportPanelProps) {
+export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth }: EligibilityImportPanelProps) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permissionLoading } = useHasPermission("talmud", "import");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  // קובץ שהגיע ממשיכה מתלמוד: העמותה והחודש כבר ידועים - ממלאים אותם במקום לבקש
+  useEffect(() => {
+    if (initialOrgId) setOrgId(initialOrgId);
+    if (initialMonth) setMonth(initialMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrgId, initialMonth]);
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ClassifiedRow[] | null>(null);
   const [legacyWarning, setLegacyWarning] = useState(false);

@@ -81,18 +81,26 @@ async function fetchBatchById(id: string): Promise<ErrorsBatchSummary> {
 interface ErrorsImportPanelProps {
   // קובץ שהגיע מלשונית "זיהוי אוטומטי" - נבחר שם כבר, ולכן נכנס לניתוח כאילו נבחר כאן.
   initialFile?: File | null;
+  initialOrgId?: string | null;
+  initialMonth?: string | null;
 }
 
 // פאנל יבוא דוח שגויי תלמוד עבור מרכז היבוא - אותה לוגיקה בדיוק כמו ErrorsCenterScreen
 // (analyzeFile/createImportBatch/commit_errors_batch), בלי טבלת השגיאות/הטיפול הסטטוסי
 // שאינה חלק מפעולת היבוא עצמה. המסך המקורי נשאר כפי שהוא, זו נקודת גישה נוספת.
-export function ErrorsImportPanel({ initialFile }: ErrorsImportPanelProps) {
+export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: ErrorsImportPanelProps) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permLoading } = useHasPermission("talmud", "import");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  // קובץ שהגיע ממשיכה מתלמוד: העמותה והחודש כבר ידועים - ממלאים אותם במקום לבקש
+  useEffect(() => {
+    if (initialOrgId) setOrgId(initialOrgId);
+    if (initialMonth) setMonth(initialMonth);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrgId, initialMonth]);
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ClassifiedRow[] | null>(null);
