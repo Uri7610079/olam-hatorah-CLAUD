@@ -78,8 +78,23 @@ const update = (jobOrgId, status, extra = {}) =>
     p_message: extra.message ?? null, p_files_total: extra.filesTotal ?? null, p_state: extra.state ?? null,
   });
 
+// תלמוד חוסם שרתי ענן (נבדק 2026-11-18: מ-Vercel, גם בארה"ב וגם בפרנקפורט, החיבור
+// לא נענה), אבל לא מחשבים רגילים. לכן העבודה עצמה רצה במחשב רגיל
+// (talmud-worker/run.mjs), ושרת שלא מגיע לתלמוד לא לוקח משימה - אחרת היה "תופס"
+// עמותה ומסמן אותה כנכשלת.
+export function canReachTalmud(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ host: "talmud.edu.gov.il", port: 443 });
+    const done = (ok) => { sock.destroy(); resolve(ok); };
+    sock.setTimeout(timeoutMs, () => done(false));
+    sock.on("connect", () => done(true));
+    sock.on("error", () => done(false));
+  });
+}
+
 /** צעד אחד. מחזיר תיאור קצר של מה שנעשה (לבדיקה). */
 export async function step() {
+  if (!(await canReachTalmud())) return { idle: true, unreachable: true };
   const rows = await rpc("talmud_worker_next", {});
   const job = Array.isArray(rows) ? rows[0] : rows;
   if (!job) return { idle: true };
