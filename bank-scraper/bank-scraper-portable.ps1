@@ -73,7 +73,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 # ההרצה נראית בדיוק כמו קודם - אותו פלט, אותן שגיאות. סבב שלם התבזבז על
 # ניתוח הרצה של קוד ישן, בלי שלאיש הייתה דרך לדעת. עכשיו אפשר לראות במבט
 # אחד אם ההעתקה נקלטה.
-$ScraperVersion = '2026-08-19.4  (משיכה מהמערכת העסקית + ניסיון חוזר על ניווט)'
+$ScraperVersion = '2026-11-18.1  (כניסה עסקית: לחיצה על "כניסה" לפי הטקסט + Enter כגיבוי)'
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runtime = Join-Path $Root 'runtime'
@@ -471,15 +471,57 @@ function applyBusinessPortal(scraper, args) {
 
     // כפתור השליחה: פונקציה במקום מחרוזת (הספרייה תומכת בשתיהן), עם מועמדים
     // ונפילה מסודרת להודעה במקום קריסה.
+    //
+    // נתפס בשטח (2026-11-18): הסיסמה מולאה אבל "כניסה" לא נלחץ. מועמד לפי מחלקה
+    // (‎.sendBtn‎ וכו') יכול לתפוס כפתור נסתר או לא פעיל, ואז "נלחץ" בלי שום תוצאה.
+    // לכן: (1) קודם כל כפתור *גלוי* שהטקסט שלו הוא "כניסה" - זה מה שהמשתמשת רואה;
+    // (2) אחר כך המועמדים הישנים, אבל רק גלויים ולא מושבתים; (3) ואם אחרי כמה
+    // שניות עדיין עומדים בעמוד הכניסה - Enter בשדה הסיסמה, שכל טופס מכבד.
     const submitCandidates = [typeof o.submitButtonSelector === 'string' ? o.submitButtonSelector : '.sendBtn', 'button[type=submit]', 'input[type=submit]', '.login-button', 'button.btn-primary'];
     o.submitButtonSelector = async () => {
-      for (const sel of submitCandidates) {
-        try {
-          const el = await page.$(sel);
-          if (el) { await el.click(); console.log('  [עסקי] נלחץ כפתור הכניסה דרך ' + sel); return; }
-        } catch (e) { /* ממשיכים למועמד הבא */ }
+      let clicked = false;
+      try {
+        clicked = await page.evaluate(() => {
+          const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+          const words = ['כניסה', 'התחברות', 'היכנס', 'כניסה לחשבון'];
+          const all = Array.prototype.slice.call(document.querySelectorAll('button, input[type=submit], input[type=button], a, [role=button]'));
+          const el = all.find((e) => visible(e) && !e.disabled && words.includes(((e.innerText || e.value || '') + '').replace(/\s+/g, ' ').trim()));
+          if (!el) return false;
+          el.click();
+          return true;
+        });
+        if (clicked) console.log('  [עסקי] נלחץ כפתור "כניסה" לפי הטקסט שעליו');
+      } catch (e) { /* ממשיכים לדרך הבאה */ }
+
+      if (!clicked) {
+        for (const sel of submitCandidates) {
+          try {
+            const el = await page.$(sel);
+            if (!el) continue;
+            const usable = await el.evaluate((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !e.disabled; });
+            if (!usable) continue;
+            await el.click();
+            clicked = true;
+            console.log('  [עסקי] נלחץ כפתור הכניסה דרך ' + sel);
+            break;
+          } catch (e) { /* ממשיכים למועמד הבא */ }
+        }
       }
-      console.log('  [עסקי] לא נמצא כפתור כניסה - לחצו "כניסה" ידנית בחלון.');
+
+      // רשת ביטחון: אם אחרי 4 שניות שדה הסיסמה עדיין בעמוד, הכניסה לא נשלחה.
+      await new Promise((r) => setTimeout(r, 4000));
+      try {
+        const pw = await page.$('input[type=password]');
+        const stillThere = pw && await pw.evaluate((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
+        if (stillThere) {
+          await pw.focus();
+          await page.keyboard.press('Enter');
+          console.log('  [עסקי] עדיין בעמוד הכניסה - נשלח Enter משדה הסיסמה');
+          clicked = true;
+        }
+      } catch (e) { /* הדף כבר עבר - סימן טוב */ }
+
+      if (!clicked) console.log('  [עסקי] לא נמצא כפתור כניסה - לחצו "כניסה" ידנית בחלון.');
     };
 
     return o;
