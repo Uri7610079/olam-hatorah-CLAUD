@@ -5,6 +5,11 @@
       "schedule": "0 1 * * *"
     }
   ],
+  "functions": {
+    "api/talmud-pull.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

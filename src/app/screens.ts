@@ -34,6 +34,7 @@ import {
   CalendarClock,
   UserSquare2,
   Contact,
+  CloudDownload,
 } from "lucide-react";
 import type { Area } from "./AreaContext";
 
@@ -98,6 +99,14 @@ export const SCREENS: ScreenDef[] = [
     title: "יצוא תלמידים לתלמוד",
     builtInStage: "שלב 6",
     icon: Send,
+  },
+  {
+    path: "/ops/talmud/pull",
+    area: "ops",
+    navLabel: "משיכה מתלמוד",
+    title: "משיכה מתלמוד",
+    builtInStage: "שלב 38",
+    icon: CloudDownload,
   },
   {
     path: "/ops/talmud/eligibility",

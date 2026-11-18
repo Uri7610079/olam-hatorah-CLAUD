@@ -17,6 +17,7 @@ import { StudentDetailScreen } from "./areas/ops/students/StudentDetailScreen";
 import { ImportCenterScreen } from "./areas/ops/import-center/ImportCenterScreen";
 import { StudyCodesScreen } from "./areas/admin/StudyCodesScreen";
 import { TalmudExportScreen } from "./areas/ops/talmud/TalmudExportScreen";
+import { TalmudPullScreen } from "./areas/ops/talmud/TalmudPullScreen";
 import { EligibilityScreen } from "./areas/ops/talmud/EligibilityScreen";
 import { ErrorsCenterScreen } from "./areas/ops/talmud/ErrorsCenterScreen";
 import { RetroScreen } from "./areas/ops/talmud/RetroScreen";
@@ -61,6 +62,7 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/ops/leader-portal",
   "/ops/import-center",
   "/ops/talmud/export",
+  "/ops/talmud/pull",
   "/ops/talmud/eligibility",
   "/ops/talmud/errors",
   "/ops/talmud/retro",
@@ -124,6 +126,7 @@ export default function App() {
             <Route path="/ops/import-center" element={<ImportCenterScreen />} />
             <Route path="/admin/study-codes" element={<StudyCodesScreen />} />
             <Route path="/ops/talmud/export" element={<TalmudExportScreen />} />
+            <Route path="/ops/talmud/pull" element={<TalmudPullScreen />} />
             <Route path="/ops/talmud/eligibility" element={<EligibilityScreen />} />
             <Route path="/ops/talmud/errors" element={<ErrorsCenterScreen />} />
             <Route path="/ops/talmud/retro" element={<RetroScreen />} />
