@@ -212,6 +212,26 @@ export function MasavScreen() {
     setSelectedBatchId(data as unknown as string);
   };
 
+  // "הכנה ואישור" (125): יצירה, הגשה לבדיקה, בדיקה, הגשה לאישור ואישור - בלחיצה אחת.
+  // נעצרת לפני האישור אם שורה כלשהי נפסלה. הפקת הקובץ והשידור לבנק נשארים ידניים.
+  const [prepareMessage, setPrepareMessage] = useState<string | null>(null);
+  const prepareBatch = async () => {
+    if (!orgId || !bankAccountId || !periodMonth) return;
+    setBusy(true);
+    setError(null);
+    setPrepareMessage(null);
+    const { data, error: err } = await supabase.rpc("prepare_masav_batch", { p_organization_id: orgId, p_organization_bank_account_id: bankAccountId, p_period_month: periodMonth });
+    setBusy(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    const r = data as { batch_id: string; message: string };
+    setPrepareMessage(r.message);
+    queryClient.invalidateQueries({ queryKey: ["masav-batches", orgId] });
+    setSelectedBatchId(r.batch_id);
+  };
+
   const runAction = async (rpc: string, params: Record<string, unknown>) => {
     setBusy(true);
     setError(null);
@@ -336,10 +356,17 @@ export function MasavScreen() {
       </div>
 
       {orgId && canManage && (
-        <div className="mb-4">
-          <button onClick={createBatch} disabled={!bankAccountId || busy} className="btn-primary">
-            {busy ? "יוצרת…" : "יצירת אצוות מס״ב"}
-          </button>
+        <div className="mb-4 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={prepareBatch} disabled={!bankAccountId || busy} className="btn-primary">
+              {busy ? "מכינה…" : "הכנה ואישור"}
+            </button>
+            <button onClick={createBatch} disabled={!bankAccountId || busy} className="btn-secondary">
+              יצירה בלבד (שלב אחר שלב)
+            </button>
+          </div>
+          <p className="text-xs text-ink-subtle">"הכנה ואישור" יוצר את האצווה, מריץ את כל הבדיקות ומאשר אם הכול תקין. אם שורה כלשהי נפסלה - האצווה נעצרת לבדיקה. הפקת הקובץ והשידור לבנק - ידניים, כמו קודם.</p>
+          {prepareMessage && <p className="rounded-control border border-line bg-surface-muted p-2.5 text-sm text-ink">{prepareMessage}</p>}
         </div>
       )}
 

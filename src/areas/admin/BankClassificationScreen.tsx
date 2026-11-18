@@ -542,6 +542,7 @@ const EMPTY_RULE_FORM = {
   suggestedTypeId: "",
   confidenceLevel: "medium" as Confidence,
   priority: "0",
+  donationGroupId: "",
 };
 
 function RecognitionRulesPanel() {
@@ -555,6 +556,18 @@ function RecognitionRulesPanel() {
   const [form, setForm] = useState(EMPTY_RULE_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // תרומה שזוהתה לפי הכלל נרשמת לקבוצה הזו ומאושרת לבד (125). בלי קבוצה - ממתינה לשיוך.
+  const groupsQuery = useQuery({
+    queryKey: ["recognition-donation-groups", form.orgId],
+    enabled: !!form.orgId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("groups").select("id, name, branch:branches!inner(internal_name, organization_id)").eq("branch.organization_id", form.orgId).eq("status", "active").order("name");
+      if (error) throw error;
+      return (data ?? []) as unknown as { id: string; name: string; branch: { internal_name: string } | { internal_name: string }[] }[];
+    },
+  });
+  const isDonationType = (typesQuery.data ?? []).find((t) => t.id === form.suggestedTypeId)?.code === "donation";
 
   const bankAccountsQuery = useQuery({ queryKey: ["recognition-org-accounts", form.orgId], queryFn: () => fetchOrgBankAccounts(form.orgId), enabled: !!form.orgId });
 
@@ -581,6 +594,7 @@ function RecognitionRulesPanel() {
       suggested_type_id: form.suggestedTypeId,
       confidence_level: form.confidenceLevel,
       priority: Number(form.priority) || 0,
+      donation_group_id: isDonationType && form.donationGroupId ? form.donationGroupId : null,
     });
     setSubmitting(false);
     if (err) {
@@ -785,6 +799,20 @@ function RecognitionRulesPanel() {
               </select>
             </div>
           </div>
+
+          {isDonationType && (
+            <div className="max-w-md">
+              <label className="field-label">קבוצה שהתרומה הולכת אליה (לא חובה)</label>
+              <select value={form.donationGroupId} onChange={(e) => setForm((f) => ({ ...f, donationGroupId: e.target.value }))} className="input-field" disabled={!form.orgId}>
+                <option value="">{form.orgId ? "— ללא: התרומה תמתין לשיוך —" : "— יש לבחור עמותה למעלה —"}</option>
+                {(groupsQuery.data ?? []).map((g) => {
+                  const br = Array.isArray(g.branch) ? g.branch[0] : g.branch;
+                  return <option key={g.id} value={g.id}>{g.name}{br ? ` · ${br.internal_name}` : ""}</option>;
+                })}
+              </select>
+              <p className="mt-1 text-xs text-ink-subtle">כשנבחרה קבוצה, תרומה שתואמת לכלל נרשמת לקבוצה ומאושרת לבד. בלי קבוצה - היא נוצרת וממתינה לשיוך.</p>
+            </div>
+          )}
 
           {error && <ErrorState message={error} />}
           <button type="submit" disabled={submitting || !form.suggestedTypeId} className="btn-primary">
