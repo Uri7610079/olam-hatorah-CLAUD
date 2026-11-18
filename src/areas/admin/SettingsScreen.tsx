@@ -8,6 +8,7 @@ import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
+import { AutomationSettingsSection } from "./AutomationSettingsSection";
 
 interface GroupOption {
   id: string;
@@ -182,6 +183,8 @@ export function SettingsScreen() {
           אפשר לסמן את זה גם כשמוסיפים קבוצה חדשה, במסך <Link to="/ops/organizations" className="link-action">עמותות, סניפים וקבוצות</Link>.
         </p>
       </section>
+
+      <AutomationSettingsSection />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { findExistingImport } from "./FolderInboxPanel";
+import { TalmudAutoImportPanel } from "@/areas/ops/talmud/TalmudAutoImportPanel";
 import { STORED_REPORT_KEYS, nonEntitlementToErrorsFile, type StoredReportKey } from "@/lib/talmudReports";
 
 // "קבצים מתלמוד": הדוחות שירדו במשיכה מתלמוד (מיגרציה 118), מזוהים ומוכנים לקליטה.
@@ -146,6 +147,8 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
         בודקים את התצוגה המקדימה ומאשרים. קובץ שכבר נקלט מסומן ולא ייקלט פעמיים.
         מתחילים ב"רשימת תלמידים": היא פותחת כרטיס לכל תלמיד שרשום בתלמוד ואינו במערכת, ומעדכנת את הפרטים של הקיימים לפי תלמוד.
       </p>
+
+      {pending.length > 0 && <TalmudAutoImportPanel jobId={null} auto={false} />}
 
       {pending.length === 0 && (
         <p className="flex items-center gap-1.5 rounded-control border border-line bg-surface-muted p-2.5 text-sm text-ink-muted">

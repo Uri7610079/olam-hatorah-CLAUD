@@ -272,7 +272,7 @@ export const SCREENS: ScreenDef[] = [
     area: "admin",
     navLabel: "הגדרות",
     title: "הגדרות",
-    description: "קבוצות שבהן חשבון בנק אינו חובה",
+    description: "פעולות אוטומטיות, וקבוצות שבהן חשבון בנק אינו חובה",
     builtInStage: "שלב 36",
     icon: SlidersHorizontal,
   },

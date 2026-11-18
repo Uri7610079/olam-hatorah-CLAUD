@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TalmudAutoImportPanel } from "./TalmudAutoImportPanel";
 import { CheckCircle2, Download, KeyRound, Loader2, MessageSquareText, XCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
@@ -218,6 +219,9 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
           <div className="space-y-2">
             {rows.map((r) => <OrgRow key={r.job_org_id} r={r} />)}
           </div>
+          {!active && rows[0].job_kind === "reports" && rows.some((r) => r.files_done > 0) && (
+            <TalmudAutoImportPanel jobId={rows[0].job_id} auto />
+          )}
           <PulledFiles jobId={rows[0].job_id} refreshKey={rows.reduce((n, r) => n + r.files_done, 0)} autoSave={rows[0].job_kind === "certificates"} />
         </section>
       )}
