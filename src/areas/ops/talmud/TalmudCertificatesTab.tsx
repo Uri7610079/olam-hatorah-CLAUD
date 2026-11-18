@@ -4,7 +4,7 @@ import { FileText, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { fetchAllIn } from "@/lib/fetchAll";
 import { ErrorState } from "@/components/ErrorState";
-import { parseIds } from "@/lib/talmudPull";
+import { parseIds, toTalmudId } from "@/lib/talmudPull";
 
 // אישורי לימודים מתלמוד (מיגרציה 119): מדביקים רשימת מספרי ת.ז., המערכת מוצאת
 // לכל תלמיד את העמותה שלו, נכנסת לתלמוד בשם העמותה (סיסמה שמורה + SMS), ומורידה
@@ -14,6 +14,7 @@ import { parseIds } from "@/lib/talmudPull";
 interface Org { organization_id: string; legal_name: string; username: string | null; has_password: boolean }
 
 interface Row {
+  /** המספר כפי שיישלח לתלמוד: ת.ז. ב-9 ספרות, דרכון כמו שהוא */
   externalId: string;
   name: string | null;
   orgId: string | null;
@@ -26,18 +27,22 @@ async function findStudents(ids: string[]): Promise<Row[]> {
   // אפס מוביל: "012345678" ו-"12345678" הם אותו תלמיד
   const variants = [...new Set(ids.flatMap((id) => [id, stripZeros(id), /^\d+$/.test(id) ? id.padStart(9, "0") : id]))];
   const found = await fetchAllIn(variants, (chunk) => supabase.from("students")
-    .select("external_id, full_name, assignment:student_assignments(is_active, organization:organizations(id, legal_name))")
+    .select("external_id, id_type, full_name, assignment:student_assignments(is_active, organization:organizations(id, legal_name))")
     .in("external_id", chunk).order("id"));
-  const byKey = new Map<string, { full_name: string; org: { id: string; legal_name: string } | null }>();
-  for (const s of found as unknown as { external_id: string; full_name: string; assignment: { is_active: boolean; organization: { id: string; legal_name: string } | { id: string; legal_name: string }[] | null }[] }[]) {
+  const byKey = new Map<string, { external_id: string; id_type: string; full_name: string; org: { id: string; legal_name: string } | null }>();
+  for (const s of found as unknown as { external_id: string; id_type: string; full_name: string; assignment: { is_active: boolean; organization: { id: string; legal_name: string } | { id: string; legal_name: string }[] | null }[] }[]) {
     const active = (s.assignment ?? []).find((a) => a.is_active);
     const org = active ? (Array.isArray(active.organization) ? active.organization[0] : active.organization) : null;
-    byKey.set(stripZeros(s.external_id), { full_name: s.full_name, org: org ?? null });
+    byKey.set(stripZeros(s.external_id), { external_id: s.external_id, id_type: s.id_type, full_name: s.full_name, org: org ?? null });
   }
-  return ids.map((id) => {
+  const rows = ids.map((id) => {
     const s = byKey.get(stripZeros(id));
-    return { externalId: id, name: s?.full_name ?? null, orgId: s?.org?.id ?? null, orgName: s?.org?.legal_name ?? null };
+    // תלמוד מזהה ת.ז. רק ב-9 ספרות - מוסיפים אפסים בהתחלה. דרכון נשלח כמו שהוא.
+    const talmudId = s ? toTalmudId(s.external_id, s.id_type) : toTalmudId(id);
+    return { externalId: talmudId, name: s?.full_name ?? null, orgId: s?.org?.id ?? null, orgName: s?.org?.legal_name ?? null };
   });
+  // "12345678" ו-"012345678" שהודבקו שניהם - אותו תלמיד, פעם אחת
+  return rows.filter((r, i) => rows.findIndex((x) => x.externalId === r.externalId) === i);
 }
 
 export function TalmudCertificatesTab({ onStarted }: { onStarted: () => void }) {

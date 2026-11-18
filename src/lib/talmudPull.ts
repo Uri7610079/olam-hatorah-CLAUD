@@ -49,3 +49,17 @@ export function parseIds(text: string): string[] {
   const tokens = text.split(/[\s,;|]+/).map((t) => t.replace(/[^0-9A-Za-z]/g, "")).filter((t) => t.length >= 4);
   return [...new Set(tokens)];
 }
+
+/**
+ * מספר הזהות כפי שתלמוד מזהה אותו (כלל לכל עבודה מול תלמוד):
+ * תעודת זהות - תמיד 9 ספרות, עם אפסים בהתחלה ("12345678" → "012345678").
+ * דרכון - כמו שהוא, גם קצר מ-9 או עם אותיות.
+ * idType לא ידוע (מספר שלא נמצא במערכת): ספרות בלבד = תעודת זהות.
+ */
+export function toTalmudId(externalId: string, idType?: string | null): string {
+  const id = String(externalId ?? "").trim();
+  if (idType === "passport") return id;
+  const digits = id.replace(/\D/g, "");
+  if (idType === "israeli_id" || (!idType && /^\d+$/.test(id))) return digits.length < 9 ? digits.padStart(9, "0") : digits;
+  return id;
+}
