@@ -7,10 +7,16 @@
   ],
   "functions": {
     "api/talmud-pull.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "regions": [
+        "fra1"
+      ]
     }
   },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }
