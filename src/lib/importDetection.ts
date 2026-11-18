@@ -16,6 +16,9 @@ export interface ImportVariant {
   name?: string;
   required: string[];
   optional?: string[];
+  // עמודה שאם היא בקובץ - זו לא הצורה הזו. לדוחות של תלמוד יש עמודות משותפות
+  // (Textbox145, StudentIdentity), ובלי זה דוח אחד היה מזוהה כדוח אחר.
+  forbidden?: string[];
 }
 
 export interface ImportSignature {
@@ -89,6 +92,8 @@ export const IMPORT_SIGNATURES: ImportSignature[] = [
         // דוחות אחרים מתלמוד שגם הם מכילים ת"ז וסכום.
         name: "דוח דרישת תשלום מתלמוד",
         required: ["StudentIdentity", "ReasonLevelName", "Textbox145"],
+        // "פירוט סיבות אי זכאות" מתלמוד מכיל את שלוש העמודות האלה גם הוא
+        forbidden: ["ReasonID", "ReasonName"],
         optional: ["EntitlementStatusName", "StudyTypeNumber1", "PaymentSum", "Points", "StudentName1", "StudentFamilyName1", "IdentityTypeName"],
       },
       {
@@ -114,6 +119,36 @@ export const IMPORT_SIGNATURES: ImportSignature[] = [
         optional: ["שם פרטי", "שם משפחה", "סוג לימוד", "תאריך התחלה"],
       },
     ],
+  },
+  // דוחות נוספים שיורדים במשיכה מתלמוד (talmud-worker/TALMUD-REPORTS.md). מזוהים כדי
+  // שלא ייקלטו בטעות כסוג אחר; הקליטה שלהם נבנית בנפרד.
+  {
+    key: "talmud_non_entitlement",
+    label: "פירוט סיבות אי זכאות מתלמוד",
+    area: "תפעול שוטף",
+    target: { kind: "route", path: "/ops/talmud/pull", hint: "הקובץ נשמר במשיכה מתלמוד. הקליטה שלו למערכת עוד לא נבנתה." },
+    variants: [{ required: ["StudentIdentity", "ReasonID", "ReasonName"], optional: ["ReasonLevelName", "Textbox145", "StudyTypeNumber1"] }],
+  },
+  {
+    key: "talmud_institute_payments",
+    label: "תשלומים למוסד מתלמוד",
+    area: "כספים ובקרה",
+    target: { kind: "route", path: "/ops/talmud/pull", hint: "הקובץ נשמר במשיכה מתלמוד. הקליטה שלו למערכת עוד לא נבנתה." },
+    variants: [{ required: ["מספר_תלמידים_זכאים", "סוג_תשלום", "חודש_דיווח", "סכום_לתשלום1"], optional: ["סניף", "ח_פ", "שם_עמותה"] }],
+  },
+  {
+    key: "talmud_bagatz",
+    label: "זכאות בעקבות בג\"ץ מתלמוד",
+    area: "תפעול שוטף",
+    target: { kind: "route", path: "/ops/talmud/pull", hint: "הקובץ נשמר במשיכה מתלמוד. הקליטה שלו למערכת עוד לא נבנתה." },
+    variants: [{ required: ["מספר_זהות_דרכון", "השעיית_בג_ץ", "היה_זכאי_אלמלא_השעייה"], optional: ["שם_פרטי", "שם_משפחה", "PersonallyEntitled"] }],
+  },
+  {
+    key: "talmud_payment_explanation",
+    label: "הסבר תשלומים וקיזוזים מתלמוד",
+    area: "כספים ובקרה",
+    target: { kind: "route", path: "/ops/talmud/pull", hint: "הקובץ נשמר במשיכה מתלמוד. הקליטה שלו למערכת עוד לא נבנתה." },
+    variants: [{ required: ["חודש_דיווח1", "סוג_תשלום1"], optional: ["Textbox186", "סכום_לתשלום3", "הפרש"] }],
   },
   {
     key: "talmud_errors",
@@ -258,6 +293,7 @@ export const IMPORT_SIGNATURES: ImportSignature[] = [
 ];
 
 function scoreVariant(variant: ImportVariant, headerSet: Set<string>) {
+  if ((variant.forbidden ?? []).some((h) => headerSet.has(normalizeHeader(h)))) return null;
   const matchedRequired = variant.required.filter((h) => headerSet.has(normalizeHeader(h)));
   // כל עמודות החובה חייבות להופיע - חוסר אחת פוסל את הצורה הזו לגמרי. עדיף "לא
   // זוהה" מאשר שיוך חלקי שנראה סביר.

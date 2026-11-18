@@ -4,6 +4,7 @@ import { Tabs, type TabDef } from "@/components/Tabs";
 import { MasterDataImportWizard } from "@/areas/admin/MasterDataImportWizard";
 import { AutoDetectPanel } from "./panels/AutoDetectPanel";
 import { FolderInboxPanel } from "./panels/FolderInboxPanel";
+import { TalmudFilesPanel } from "./panels/TalmudFilesPanel";
 import { EligibilityImportPanel } from "./panels/EligibilityImportPanel";
 import { EligibilityListImportPanel } from "./panels/EligibilityListImportPanel";
 import { ErrorsImportPanel } from "./panels/ErrorsImportPanel";
@@ -12,10 +13,11 @@ import { PhoneListsImportPanel } from "./panels/PhoneListsImportPanel";
 import { BankImportPanel } from "./panels/BankImportPanel";
 import { TalmudBatchImportPanel } from "./panels/TalmudBatchImportPanel";
 
-type DataTypeKey = "auto" | "folder" | "master" | "talmudBatch" | "eligibility" | "eligibilityList" | "errors" | "audits" | "phone" | "bank";
+type DataTypeKey = "auto" | "talmudPulled" | "folder" | "master" | "talmudBatch" | "eligibility" | "eligibilityList" | "errors" | "audits" | "phone" | "bank";
 
 const DATA_TYPE_TABS: TabDef<DataTypeKey>[] = [
   { key: "auto", label: "זיהוי אוטומטי" },
+  { key: "talmudPulled", label: "קבצים מתלמוד" },
   { key: "folder", label: "קבצים מהתיקייה" },
   { key: "master", label: "עמותות/סניפים/קבוצות" },
   { key: "talmudBatch", label: "דוחות תלמוד (כמה יחד)" },
@@ -62,6 +64,7 @@ export function ImportCenterScreen() {
       <Tabs tabs={DATA_TYPE_TABS} activeTab={dataType} onChange={changeTab} ariaLabel="סוג נתונים ליבוא" />
 
       {dataType === "auto" && <AutoDetectPanel onRouteToTab={routeToTab} />}
+      {dataType === "talmudPulled" && <TalmudFilesPanel onRouteToTab={routeToTab} />}
       {dataType === "folder" && <FolderInboxPanel onRouteToTab={routeToTab} />}
       {dataType === "master" && <MasterDataImportWizard initialFile={handoffFile} />}
       {dataType === "talmudBatch" && <TalmudBatchImportPanel />}

@@ -41,7 +41,7 @@ const HASH_TABLES = [
   { table: "phone_list_imports", column: "file_hash" },
 ] as const;
 
-async function findExistingImport(hash: string): Promise<boolean> {
+export async function findExistingImport(hash: string): Promise<boolean> {
   for (const { table, column } of HASH_TABLES) {
     const { data, error } = await supabase.from(table).select("id").eq(column, hash).maybeSingle();
     // שגיאת הרשאה על טבלה אחת (למשל למי שאין לו גישה לאזור הכספי) לא צריכה להכשיל
