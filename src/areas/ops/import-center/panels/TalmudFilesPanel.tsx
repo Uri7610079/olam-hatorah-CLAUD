@@ -21,6 +21,7 @@ interface PulledFile {
   month: string | null;
   file_name: string;
   file_type: string | null;
+  file_hash: string;
   created_at: string;
 }
 
@@ -28,9 +29,20 @@ type FileState =
   | { kind: "imported" }
   | { kind: "detected"; candidate: DetectionCandidate; rowCount: number }
   | { kind: "unknown" }
+  | { kind: "mismatch"; label: string }
   | { kind: "unreadable"; message: string };
 
 interface Entry { pulled: PulledFile; file: File; state: FileState }
+
+// כל דוח מתלמוד צריך להיות מזוהה כסוג שלו. זיהוי אחר = משהו השתנה בתלמוד, ולא שולחים לקליטה.
+const EXPECTED: Record<string, string> = {
+  payment_demand: "talmud_eligibility",
+  students_list: "talmud_eligibility_list",
+  non_entitlement: "talmud_non_entitlement",
+  institute_payments: "talmud_institute_payments",
+  bagatz: "talmud_bagatz",
+  payment_explanation: "talmud_payment_explanation",
+};
 
 const monthText = (iso: string | null) => (iso ? iso.slice(0, 7).split("-").reverse().join("/") : "");
 
@@ -38,7 +50,11 @@ async function loadEntries(): Promise<Entry[]> {
   const { data, error } = await supabase.rpc("talmud_pulled_files_list", { p_job_id: null });
   if (error) throw error;
   // אישורי לימודים הם PDF לתלמיד - לא קובץ לקליטה
-  const pulled = ((data ?? []) as PulledFile[]).filter((f) => f.report_key !== "study_approval").slice(0, 60);
+  // אותו קובץ בדיוק משתי משיכות - פעם אחת (הרשימה מהחדש לישן)
+  const seen = new Set<string>();
+  const pulled = ((data ?? []) as PulledFile[])
+    .filter((f) => f.report_key !== "study_approval" && !seen.has(f.file_hash) && seen.add(f.file_hash))
+    .slice(0, 60);
   const out: Entry[] = [];
   for (const p of pulled) {
     const { data: rows, error: e2 } = await supabase.rpc("talmud_pulled_file", { p_file_id: p.id });
@@ -53,9 +69,11 @@ async function loadEntries(): Promise<Entry[]> {
       try {
         const parsed = await parseImportFile(file);
         const detection = detectImportType(parsed.headers, parsed.rows.length);
-        state = detection.candidates.length
-          ? { kind: "detected", candidate: detection.candidates[0], rowCount: detection.rowCount }
-          : { kind: "unknown" };
+        const top = detection.candidates[0];
+        const expected = EXPECTED[p.report_key];
+        state = !top ? { kind: "unknown" }
+          : expected && top.signature.key !== expected ? { kind: "mismatch", label: top.signature.label }
+          : { kind: "detected", candidate: top, rowCount: detection.rowCount };
       } catch (e) {
         state = { kind: "unreadable", message: e instanceof Error ? e.message : "שגיאה" };
       }
@@ -132,6 +150,12 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
                   <button onClick={() => go(entry)} className="btn-primary text-xs">המשך ליבוא</button>
                 )}
               </>
+            )}
+            {entry.state.kind === "mismatch" && (
+              <p className="flex items-start gap-1.5 text-xs text-warn-ink">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                הקובץ זוהה כ"{entry.state.label}" ולא כמו שהדוח הזה אמור להיות - לא נשלח לקליטה. משיכה חדשה תוריד אותו בפורמט הנכון.
+              </p>
             )}
             {(entry.state.kind === "unknown" || entry.state.kind === "unreadable") && (
               <p className="flex items-start gap-1.5 text-xs text-warn-ink">

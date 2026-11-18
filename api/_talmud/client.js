@@ -14,7 +14,8 @@ export const TALMUD_BASE = "https://talmud.edu.gov.il";
 // יציב יותר ממיקום השורה ברשימה. format: דוח שהמערכת כבר קולטת יורד באקסל, בדיוק
 // כמו שהמשרד מוריד אותו ידנית; דוח חדש - CSV (כותרות קבועות באנגלית).
 export const TALMUD_REPORTS = [
-  { key: "payment_demand", path: "rptSupportRequestPerStudent", label: "דרישת תשלום - מפורט לפי תלמיד", format: "EXCELOPENXML" },
+  // דרישת תשלום - CSV: זה הפורמט שהקליטה הקיימת נבנתה עליו (באקסל הכותרות בעברית ושונות)
+  { key: "payment_demand", path: "rptSupportRequestPerStudent", label: "דרישת תשלום - מפורט לפי תלמיד" },
   { key: "students_list", path: "rptStudentsCountByMonth", label: "רשימת תלמידים למוסד", format: "EXCELOPENXML" },
   { key: "non_entitlement", path: "rptNonEntitlementReasonsDetailed", label: "פירוט סיבות אי זכאות" },
   { key: "institute_payments", path: "rptInstitutePaymentAll", label: "תשלומים למוסד" },
