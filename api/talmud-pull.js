@@ -92,6 +92,12 @@ export function canReachTalmud(timeoutMs = 3000) {
   });
 }
 
+/** בדיקת חיבור למסד (מורשה?) בלי לגעת באף משיכה: לקיחת קוד SMS של מזהה שלא קיים */
+export async function checkDatabase() {
+  await rpc("talmud_worker_take_sms", { p_job_org_id: "00000000-0000-0000-0000-000000000000" });
+  return true;
+}
+
 /** צעד אחד. מחזיר תיאור קצר של מה שנעשה (לבדיקה). */
 export async function step() {
   if (!(await canReachTalmud())) return { idle: true, unreachable: true };

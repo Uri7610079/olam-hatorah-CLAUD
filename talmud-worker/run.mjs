@@ -17,6 +17,14 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const APP = path.resolve(HERE, "..");
 
 function loadEnv() {
+  // במחשב המשרד (חבילת ההתקנה): config.json ליד התוכנית - כתובת המסד, המפתח הציבורי שלו, ומפתח העובד
+  const configFile = path.join(HERE, "config.json");
+  if (fs.existsSync(configFile)) {
+    const c = JSON.parse(fs.readFileSync(configFile, "utf8"));
+    process.env.VITE_SUPABASE_URL ??= c.supabaseUrl;
+    process.env.VITE_SUPABASE_ANON_KEY ??= c.supabaseAnonKey;
+    process.env.TALMUD_PRIVATE_KEY ??= c.talmudPrivateKey;
+  }
   for (const name of [".env.local", ".env"]) {
     const envFile = path.join(APP, name);
     if (!fs.existsSync(envFile)) continue;
@@ -25,7 +33,7 @@ function loadEnv() {
       if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
     }
   }
-  const keyFile = process.argv[2] ?? path.resolve(APP, "..", "secrets", "talmud-worker.txt");
+  const keyFile = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? path.resolve(APP, "..", "secrets", "talmud-worker.txt");
   if (!process.env.TALMUD_PRIVATE_KEY && fs.existsSync(keyFile)) {
     const key = fs.readFileSync(keyFile, "utf8").match(/^([A-Za-z0-9+/=]{1000,})$/m)?.[1];
     if (key) process.env.TALMUD_PRIVATE_KEY = key;
@@ -38,32 +46,48 @@ function loadEnv() {
 }
 
 loadEnv();
-const { step, canReachTalmud } = await import("../api/talmud-pull.js");
+const { step, canReachTalmud, checkDatabase } = await import("../api/talmud-pull.js");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const stamp = () => new Date().toLocaleTimeString("he-IL");
 
-console.log(`[${stamp()}] העובד של משיכה מתלמוד פועל. תלמוד ${(await canReachTalmud(8000)) ? "זמין" : "לא זמין כרגע"}.`);
+// --check: בדיקה בהתקנה - מגיע לתלמוד? מורשה מול המסד? (בלי לגעת במשיכות)
+if (process.argv.includes("--check")) {
+  const talmud = await canReachTalmud(10000);
+  console.log(talmud ? "✓ תלמוד זמין מהמחשב הזה" : "✗ תלמוד לא זמין מהמחשב הזה");
+  let db = false;
+  try { db = await checkDatabase(); } catch (e) { console.log("  " + String(e.message).slice(0, 200)); }
+  console.log(db ? "✓ החיבור למערכת מאושר" : "✗ החיבור למערכת נדחה (בדקו את config.json)");
+  // בלי process.exit: ב-Windows יציאה באמצע סגירת חיבור מפילה את Node
+  process.exitCode = talmud && db ? 0 : 1;
+} else {
+  await work();
+}
 
-let idleSince = Date.now();
-for (;;) {
-  try {
-    const result = await step();
-    if (result.idle) {
-      // בלי עבודה: בדיקה כל 3 שניות (המזכיר מחכה לתגובה אחרי לחיצה)
-      if (result.unreachable && Date.now() - idleSince > 60_000) {
-        console.log(`[${stamp()}] תלמוד לא זמין מהמחשב הזה`);
-        idleSince = Date.now();
+/** הלולאה: צעד, ואם אין עבודה - המתנה קצרה */
+async function work() {
+  console.log(`[${stamp()}] העובד של משיכה מתלמוד פועל. תלמוד ${(await canReachTalmud(8000)) ? "זמין" : "לא זמין כרגע"}.`);
+
+  let idleSince = Date.now();
+  for (;;) {
+    try {
+      const result = await step();
+      if (result.idle) {
+        // בלי עבודה: בדיקה כל 3 שניות (המזכיר מחכה לתגובה אחרי לחיצה)
+        if (result.unreachable && Date.now() - idleSince > 60_000) {
+          console.log(`[${stamp()}] תלמוד לא זמין מהמחשב הזה`);
+          idleSince = Date.now();
+        }
+        await sleep(3000);
+        continue;
       }
-      await sleep(3000);
-      continue;
+      idleSince = Date.now();
+      // בלי פרטים אישיים ביומן - רק מה קרה
+      console.log(`[${stamp()}] ${JSON.stringify(result).slice(0, 160)}`);
+      if (result.waiting) await sleep(2000);
+    } catch (e) {
+      console.log(`[${stamp()}] שגיאה: ${String(e?.message ?? e).slice(0, 200)}`);
+      await sleep(5000);
     }
-    idleSince = Date.now();
-    // בלי פרטים אישיים ביומן - רק מה קרה
-    console.log(`[${stamp()}] ${JSON.stringify(result).slice(0, 160)}`);
-    if (result.waiting) await sleep(2000);
-  } catch (e) {
-    console.log(`[${stamp()}] שגיאה: ${String(e?.message ?? e).slice(0, 200)}`);
-    await sleep(5000);
   }
 }
