@@ -73,7 +73,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 # ההרצה נראית בדיוק כמו קודם - אותו פלט, אותן שגיאות. סבב שלם התבזבז על
 # ניתוח הרצה של קוד ישן, בלי שלאיש הייתה דרך לדעת. עכשיו אפשר לראות במבט
 # אחד אם ההעתקה נקלטה.
-$ScraperVersion = '2026-11-18.1  (כניסה עסקית: לחיצה על "כניסה" לפי הטקסט + Enter כגיבוי)'
+$ScraperVersion = '2026-11-18.2  (שליחה ישירה למערכת אחרי המשיכה)'
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runtime = Join-Path $Root 'runtime'
@@ -1169,6 +1169,83 @@ function writeOutputs(outDir, key, packet) {
   return { jpath, cpath };
 }
 
+// ===== שליחה ישירה למערכת (מיגרציה 123) =====
+// אחרי המשיכה, כל חשבון נשלח למערכת ונקלט מיד - בלי יבוא ידני. פרטי החיבור (כתובת
+// המערכת, מפתח ציבורי, ומפתח הסקרייפר) נכתבים לקובץ הזה *מהאתר*, במסך "משיכה
+// אוטומטית מהבנק", לתוך תיקיית הפלט. אין קובץ - אין שליחה, והכל עובד כמו קודם.
+//
+// המפתח מאפשר דבר אחד בלבד: ingest_scraped_bank_account. השיוך לעמותה נעשה במערכת
+// לפי מספר החשבון; חשבון שלא נמצא לא נקלט ומופיע במרכז החריגות.
+const UPLOAD_CONFIG_FILE = 'חיבור-למערכת.json';
+const BANK_CODES = { hapoalim: '12', leumi: '10', mizrahi: '20', discount: '11', pagi: '52', mercantile: '17', beinleumi: '31', 'mercantile-business': '17', 'discount-business': '11' };
+
+function readUploadConfig(outDir) {
+  const p = path.join(outDir, UPLOAD_CONFIG_FILE);
+  if (!fs.existsSync(p)) return null;
+  try {
+    const c = JSON.parse(fs.readFileSync(p, 'utf8').replace(/^﻿/, ''));
+    if (c && c.url && c.anonKey && c.secret) return c;
+    console.log('  [שליחה] הקובץ ' + UPLOAD_CONFIG_FILE + ' חסר פרטים - צרו חיבור מחדש במסך "משיכה אוטומטית מהבנק".');
+  } catch (e) { console.log('  [שליחה] הקובץ ' + UPLOAD_CONFIG_FILE + ' פגום: ' + e.message); }
+  return null;
+}
+
+async function uploadPacket(upload, conn, packet) {
+  const bankCode = BANK_CODES[conn.bank];
+  if (!bankCode) return { ok: false, lines: ['  [שליחה] אין קוד בנק עבור ' + conn.bank + ' - לא נשלח.'] };
+  const byAcc = new Map();
+  for (const r of packet.bank_transactions) {
+    const k = r.account_number || '';
+    if (!byAcc.has(k)) byAcc.set(k, []);
+    const { account_number, ...rest } = r;
+    byAcc.get(k).push(rest);
+  }
+  // חשבון שהבנק החזיר בלי אף תנועה עדיין נשלח - כדי שגם היתרה שלו תיבדק.
+  for (const a of packet.by_account || []) if (!byAcc.has(a.account_number || '')) byAcc.set(a.account_number || '', []);
+
+  const lines = [];
+  let ok = true;
+  for (const [accountNumber, txns] of byAcc) {
+    const accInfo = (packet.by_account || []).find((a) => (a.account_number || '') === accountNumber);
+    const body = {
+      p_secret: upload.secret,
+      p_connection_key: conn.key,
+      p_bank_code: bankCode,
+      p_account_number: accountNumber,
+      p_bank_balance: accInfo && typeof accInfo.balance === 'number' ? accInfo.balance : null,
+      // ממתינות נספרות לכל הכניסה ולא לכל חשבון. זהירות: היתרה לא תיבדק לאף חשבון בכניסה.
+      p_pending_count: packet.skipped ? packet.skipped.pending : 0,
+      p_transactions: txns,
+    };
+    try {
+      const res = await fetch(String(upload.url).replace(/\/+$/, '') + '/rest/v1/rpc/ingest_scraped_bank_account', {
+        method: 'POST',
+        headers: { apikey: upload.anonKey, Authorization: 'Bearer ' + upload.anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        ok = false;
+        lines.push('  [שליחה] חשבון ' + accountNumber + ': נכשל (' + res.status + ') ' + (text.includes('unauthorized') ? 'המפתח לא תקף - צרו חיבור מחדש באתר.' : text.slice(0, 200)));
+        continue;
+      }
+      const r = JSON.parse(text);
+      if (r.status === 'unmatched') {
+        lines.push('  [שליחה] חשבון ' + accountNumber + ': ' + r.message);
+      } else if (r.status === 'failed') {
+        ok = false;
+        lines.push('  [שליחה] חשבון ' + accountNumber + ': הקליטה נכשלה - ' + (r.message || ''));
+      } else {
+        lines.push('  [שליחה] חשבון ' + accountNumber + ' -> ' + (r.organization || '?') + ': נקלטו ' + r.committed + ' חדשות, ' + r.duplicates + ' כבר היו' + (r.status === 'partial' && r.message ? '. שימו לב: ' + r.message : ''));
+      }
+    } catch (e) {
+      ok = false;
+      lines.push('  [שליחה] חשבון ' + accountNumber + ': אין חיבור למערכת (' + e.message + '). הקבצים נשמרו, והמשיכה הבאה תשלח שוב.');
+    }
+  }
+  return { ok, lines };
+}
+
 async function scrapeOne(key, cfg, creds, args) {
   const startDate = new Date(Date.now() - args.days * 24 * 60 * 60 * 1000);
   const timeout = args.show ? INTERACTIVE_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
@@ -1228,6 +1305,9 @@ async function main() {
   console.log('');
 
   const combined = {}; const summary = []; let hadError = false;
+  const upload = readUploadConfig(args.out);
+  console.log(upload ? 'שליחה למערכת: פעילה - כל חשבון ייקלט מיד אחרי המשיכה.' : 'שליחה למערכת: לא מוגדרת (אין ' + UPLOAD_CONFIG_FILE + ') - הקבצים נשמרים בתיקייה בלבד.');
+  const uploadLines = [];
   for (const conn of targets) {
     const key = conn.key; const cfg = conn.cfg;
     // פרטי ההתחברות נקראו ואומתו כבר בשלב הגילוי, יחד עם דיווח על כל מה שדולג.
@@ -1250,6 +1330,11 @@ async function main() {
       combined[key] = packet;
       summary.push([conn.display, packet.bank_transactions.length, packet.bank_balance, null, packet.dedup, packet.skipped, packet.by_account]);
       console.log('  -> ' + jpath); console.log('  -> ' + cpath);
+      if (upload) {
+        const up = await uploadPacket(upload, conn, packet);
+        for (const l of up.lines) { console.log(l); uploadLines.push(conn.display + ': ' + l.trim()); }
+        if (!up.ok) hadError = true;
+      }
     } catch (e) { hadError = true; summary.push([conn.display, 0, null, e.message, null, null, null]); console.error('  ERROR: ' + e.message); }
   }
   if (Object.keys(combined).length) {
@@ -1276,6 +1361,10 @@ async function main() {
       const parts = Object.entries(skipped).filter(([, v]) => v > 0).map(([k, v]) => k + '=' + v);
       if (parts.length) console.log('      skipped: ' + parts.join(', '));
     }
+  }
+  if (uploadLines.length) {
+    console.log('\n==== שליחה למערכת ====');
+    for (const l of uploadLines) console.log('  ' + l);
   }
   // ההודעה הקודמת טענה תמיד ש"נוצרו תבניות ריקות", גם כשהקבצים כבר היו קיימים
   // ופשוט לא מולאו - מבלבל, כי זה נשמע כאילו משהו נמחק ונוצר מחדש.

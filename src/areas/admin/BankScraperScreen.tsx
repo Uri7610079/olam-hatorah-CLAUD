@@ -14,6 +14,7 @@ import {
   writeJsonToFolder,
   type FolderStatus,
 } from "@/lib/folderAccess";
+import { BankScraperConnectionPanel } from "./BankScraperConnectionPanel";
 
 // המבנה חייב להישאר תואם ל-bank-scraper/scheduler.ps1 שקורא את הקובץ הזה.
 interface ScraperConfig {
@@ -242,7 +243,7 @@ export function BankScraperScreen() {
     <div>
       <PageHeader
         title="משיכה אוטומטית מהבנק"
-        description="קביעת השעה והימים שבהם הסקרייפר שבמחשב ימשוך תנועות מהבנק. הכניסה לחשבון הבנק מוגבלת לפעם אחת ביום - גם אם המשיכה נכשלה. הקבצים יורדים לתיקיית הבנק ונקלטים משם דרך מרכז היבוא."
+        description="קביעת השעה והימים שבהם הסקרייפר שבמחשב ימשוך תנועות מהבנק. הכניסה לחשבון הבנק מוגבלת לפעם אחת ביום - גם אם המשיכה נכשלה. אחרי החיבור למערכת (למטה), התנועות נקלטות מיד אחרי כל משיכה, לעמותה הנכונה לפי מספר החשבון."
       />
 
       {loading ? (
@@ -392,6 +393,8 @@ export function BankScraperScreen() {
             </div>
 
             <StatusPanel status={status} onRefresh={load} />
+
+            <BankScraperConnectionPanel />
           </div>
 
           <aside className="card space-y-3 p-4 text-sm">

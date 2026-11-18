@@ -33,7 +33,9 @@ type ExceptionType =
   | "talmud_row_recoverable"
   | "student_missing_data"
   | "talmud_exited_but_listed"
-  | "talmud_branch_differs";
+  | "talmud_branch_differs"
+  | "bank_auto_sync_issue"
+  | "bank_account_unmatched";
 
 interface ExceptionRow {
   exception_type: ExceptionType;
@@ -71,6 +73,10 @@ const TYPE_LABEL: Record<ExceptionType, string> = {
   student_missing_data: "חסר נתון",
   talmud_exited_but_listed: "יצא במערכת ורשום בתלמוד",
   talmud_branch_differs: "סניף שונה מתלמוד",
+  // משיכה אוטומטית מהבנק: ריצה שנכשלה, או שזוהה בה פער (כולל בדיקת יתרה, 123)
+  bank_auto_sync_issue: "משיכה מהבנק - נכשלה או חסרות תנועות",
+  // הסקרייפר הביא חשבון שאין לו בעלים במערכת - התנועות שלו לא נקלטו (123)
+  bank_account_unmatched: "חשבון בנק שאינו רשום תחת עמותה",
 };
 
 type Domain = "bank" | "talmud" | "students" | "audits" | "documents" | "masav_returns";
@@ -93,6 +99,8 @@ const TYPE_DOMAIN: Record<ExceptionType, Domain> = {
   student_missing_data: "students",
   talmud_exited_but_listed: "talmud",
   talmud_branch_differs: "talmud",
+  bank_auto_sync_issue: "bank",
+  bank_account_unmatched: "bank",
 };
 const DOMAIN_LABEL: Record<Domain, string> = {
   bank: "בנק והתאמות",
@@ -112,6 +120,9 @@ function routeFor(areaPrefix: string, row: ExceptionRow): string {
   // כאן לא חסר נתון - צריך להריץ את ההשלמה, והכפתור נמצא במסך זכאות.
   if (type === "talmud_row_recoverable") return "/ops/talmud/eligibility";
   if (type === "talmud_branch_missing") return "/ops/organizations";
+  // החשבון נרשם בכרטיס העמותה; מצב המשיכה עצמה - במסך המשיכה האוטומטית
+  if (type === "bank_account_unmatched") return "/ops/organizations";
+  if (type === "bank_auto_sync_issue") return "/admin/bank-scraper";
   if (type === "talmud_student_unassigned") return "/ops/students/unassigned";
   if (type === "talmud_student_missing" || type === "talmud_students_missing_no_amount") return "/ops/students";
   const domain = TYPE_DOMAIN[type];
