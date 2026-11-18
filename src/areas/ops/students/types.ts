@@ -20,7 +20,7 @@ export interface Student {
   address_city: string | null;
   student_type: string | null;
   study_code: string | null;
-  marital_status?: "single" | "married" | null;
+  marital_status?: "single" | "married" | "divorced" | "widowed" | null;
   study_scope?: "full_day" | "half_day_morning" | "half_day_afternoon" | null;
   // לקובץ לתלמוד (מיגרציה 117). בלי שם פרטי/משפחה - השם המלא מפוצל אוטומטית.
   first_name?: string | null;
@@ -29,6 +29,11 @@ export interface Student {
   visa_number?: string | null;
   visa_type?: number | null;
   visa_expiry?: string | null;
+  // מתלמוד (מיגרציה 122) - תלמוד הוא מערכת האמת לנתונים האלה
+  gender?: string | null;
+  talmud_start_date?: string | null;
+  talmud_end_date?: string | null;
+  created_from_talmud?: boolean | null;
   status: StudentStatus;
   exit_date: string | null;
   exit_reason: string | null;

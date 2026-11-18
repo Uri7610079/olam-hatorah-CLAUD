@@ -92,7 +92,7 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
   const [error, setError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState(false);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
-  const [result, setResult] = useState<{ eligible: number; matched: number; unmatched: number; replaced: boolean; month: string } | null>(null);
+  const [result, setResult] = useState<{ eligible: number; matched: number; unmatched: number; replaced: boolean; month: string; created: number; updated: number; activated: number } | null>(null);
 
   const listsQuery = useQuery({ queryKey: ["eligibility-lists", orgId], queryFn: () => fetchLists(orgId), enabled: !!orgId });
   const unmatchedQuery = useQuery({
@@ -192,8 +192,16 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
         })
         .single();
       if (err) throw new Error(err.message);
-      const d = data as { list_id: string; eligible_count: number; matched_count: number; unmatched_eligible_count: number; replaced_previous: boolean };
-      setResult({ eligible: d.eligible_count, matched: d.matched_count, unmatched: d.unmatched_eligible_count, replaced: d.replaced_previous, month });
+      const d = data as {
+        list_id: string; eligible_count: number; matched_count: number; unmatched_eligible_count: number; replaced_previous: boolean;
+        created_count: number; updated_count: number; activated_count: number;
+      };
+      setResult({
+        eligible: d.eligible_count, matched: d.matched_count, unmatched: d.unmatched_eligible_count, replaced: d.replaced_previous, month,
+        created: d.created_count ?? 0, updated: d.updated_count ?? 0, activated: d.activated_count ?? 0,
+      });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["talmud-unassigned"] });
       setSelectedListId(d.list_id);
       setParsed(null);
       setFile(null);
@@ -326,8 +334,21 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
             הדוח נקלט{result.replaced ? " והחליף את הדוח הקודם לאותו חודש" : ""}. {result.eligible} שורות זכאים, {result.matched} שורות הותאמו לתלמידים
             במערכת.
           </p>
+          {/* תלמוד = מערכת האמת (מיגרציה 122): מי שחסר נוצר, ומי שקיים עודכן לפי תלמוד */}
+          {(result.created > 0 || result.updated > 0 || result.activated > 0) && (
+            <p className="mt-1">
+              לפי תלמוד: {result.created > 0 && `נוצרו ${result.created} תלמידים חדשים. `}
+              {result.updated > 0 && `עודכנו פרטים ל-${result.updated} תלמידים. `}
+              {result.activated > 0 && `${result.activated} תלמידים עברו לסטטוס "פעיל".`}
+            </p>
+          )}
+          {result.created > 0 && (
+            <Link to="/ops/students/unassigned" className="link-action mt-1 inline-block font-medium">
+              לשיוך התלמידים החדשים לראש קבוצה (פעם אחת לכל סניף)
+            </Link>
+          )}
           {result.unmatched > 0 && <p className="mt-1">{result.unmatched} תלמידים זכאים לא נמצאו במערכת - הרשימה למטה.</p>}
-          <Link to={`/ops/phone-lists?org=${orgId}&month=${result.month}`} className="link-action mt-2 inline-block font-medium">
+          <Link to={`/ops/phone-lists?org=${orgId}&month=${result.month}`} className="link-action mt-2 block font-medium">
             לרשימת החיוג של החודש
           </Link>
         </div>

@@ -7,6 +7,7 @@ import { useHasPermission } from "@/lib/permissions";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { StudentBagatzNote } from "../talmud/TalmudReportRowsView";
+import { StudentTalmudTruth } from "./StudentTalmudTruth";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
@@ -56,7 +57,7 @@ async function fetchStudent(id: string): Promise<Student> {
   const { data, error } = await supabase
     .from("students")
     .select(
-      "id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address_street, address_house_number, address_city, student_type, study_code, marital_status, study_scope, first_name, last_name, passport_country, visa_number, visa_type, visa_expiry, status, exit_date, exit_reason, created_at",
+      "id, id_type, external_id, full_name, birth_date, phone_raw, phone_normalized, address_street, address_house_number, address_city, student_type, study_code, marital_status, study_scope, first_name, last_name, passport_country, visa_number, visa_type, visa_expiry, gender, talmud_start_date, talmud_end_date, created_from_talmud, status, exit_date, exit_reason, created_at",
     )
     .eq("id", id)
     .single();
@@ -199,6 +200,7 @@ export function StudentDetailScreen() {
       )}
       {actionError && <div className="mb-4"><ErrorState message={actionError} /></div>}
 
+      <StudentTalmudTruth studentId={student.id} createdFromTalmud={student.created_from_talmud} />
       <StudentBagatzNote studentId={student.id} />
 
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} ariaLabel="לשוניות תלמיד" />

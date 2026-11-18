@@ -132,7 +132,11 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
   const importable = (entry: Entry) => entry.state.kind === "detected"
     && (entry.pulled.report_key === "non_entitlement" || isStored(entry.pulled.report_key) || entry.state.candidate.signature.target.kind === "import-center-tab");
 
-  const pending = query.data.filter((e) => e.state.kind !== "imported");
+  // רשימת התלמידים קודם (מיגרציה 122): היא יוצרת את התלמידים החסרים, ורק אחריה
+  // דרישת התשלום - כדי שהכסף של תלמיד חדש לא יידחה כ"תלמיד שאינו במערכת".
+  const order = (k: string) => (k === "students_list" ? 0 : k === "payment_demand" ? 1 : 2);
+  const pending = query.data.filter((e) => e.state.kind !== "imported")
+    .sort((a, b) => order(a.pulled.report_key) - order(b.pulled.report_key));
   const imported = query.data.filter((e) => e.state.kind === "imported");
 
   return (
@@ -140,6 +144,7 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
       <p className="text-sm text-ink-muted">
         הקבצים שירדו במשיכה מתלמוד, מזוהים לפי התוכן. "המשך ליבוא" פותח את מסך הקליטה המתאים עם הקובץ כבר בפנים - שם
         בודקים את התצוגה המקדימה ומאשרים. קובץ שכבר נקלט מסומן ולא ייקלט פעמיים.
+        מתחילים ב"רשימת תלמידים": היא פותחת כרטיס לכל תלמיד שרשום בתלמוד ואינו במערכת, ומעדכנת את הפרטים של הקיימים לפי תלמוד.
       </p>
 
       {pending.length === 0 && (

@@ -197,12 +197,13 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           id="student-phone"
           value={values.phone}
           onChange={(v) => setValues((prev) => ({ ...prev, phone: v }))}
+          placeholder="חסר נתון"
         />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <label className="field-label">רחוב</label>
-          <input value={values.address_street} onChange={(e) => setValues((v) => ({ ...v, address_street: e.target.value }))} className="input-field" />
+          <input value={values.address_street} onChange={(e) => setValues((v) => ({ ...v, address_street: e.target.value }))} placeholder="חסר נתון" className="input-field placeholder:text-danger-ink" />
         </div>
         <div>
           <label className="field-label">מספר בית</label>
@@ -210,7 +211,7 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
         </div>
         <div>
           <label className="field-label">עיר</label>
-          <input value={values.address_city} onChange={(e) => setValues((v) => ({ ...v, address_city: e.target.value }))} className="input-field" />
+          <input value={values.address_city} onChange={(e) => setValues((v) => ({ ...v, address_city: e.target.value }))} placeholder="חסר נתון" className="input-field placeholder:text-danger-ink" />
         </div>
       </div>
       {/* מצב משפחתי והיקף לימוד - נקבעים בפורטל ראשי הקבוצות בהוספת תלמיד, וקובעים את קוד הלימוד */}
@@ -223,6 +224,8 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
             <option value="">—</option>
             <option value="single">בחור</option>
             <option value="married">נשוי</option>
+            <option value="divorced">גרוש</option>
+            <option value="widowed">אלמן</option>
           </select>
         </div>
         {values.marital_status === "married" && (

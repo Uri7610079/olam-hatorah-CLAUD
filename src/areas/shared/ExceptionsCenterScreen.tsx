@@ -30,7 +30,10 @@ type ExceptionType =
   | "talmud_student_unassigned"
   | "talmud_branch_missing"
   | "talmud_students_missing_no_amount"
-  | "talmud_row_recoverable";
+  | "talmud_row_recoverable"
+  | "student_missing_data"
+  | "talmud_exited_but_listed"
+  | "talmud_branch_differs";
 
 interface ExceptionRow {
   exception_type: ExceptionType;
@@ -64,9 +67,13 @@ const TYPE_LABEL: Record<ExceptionType, string> = {
   // הנתונים תוקנו מאז הקליטה, ולכן התלמיד כבר אינו "חסר" - אבל הכסף שלו
   // לא נזקף, כי הקליטה כבר רצה. בלי השורה הזו הפער בלתי נראה לחלוטין.
   talmud_row_recoverable: "זכאות שנדחתה וניתן להשלים",
+  // תלמוד = מערכת האמת (122): מה שתלמוד לא יודע, ומה שהמערכת לא משנה לבד
+  student_missing_data: "חסר נתון",
+  talmud_exited_but_listed: "יצא במערכת ורשום בתלמוד",
+  talmud_branch_differs: "סניף שונה מתלמוד",
 };
 
-type Domain = "bank" | "talmud" | "audits" | "documents" | "masav_returns";
+type Domain = "bank" | "talmud" | "students" | "audits" | "documents" | "masav_returns";
 const TYPE_DOMAIN: Record<ExceptionType, Domain> = {
   masav_transmitted_no_match: "bank",
   masav_transaction_no_batch: "bank",
@@ -83,16 +90,23 @@ const TYPE_DOMAIN: Record<ExceptionType, Domain> = {
   talmud_branch_missing: "talmud",
   talmud_students_missing_no_amount: "talmud",
   talmud_row_recoverable: "talmud",
+  student_missing_data: "students",
+  talmud_exited_but_listed: "talmud",
+  talmud_branch_differs: "talmud",
 };
 const DOMAIN_LABEL: Record<Domain, string> = {
   bank: "בנק והתאמות",
   talmud: "תלמוד",
+  students: "נתוני תלמידים",
   audits: "ביקורות",
   documents: "מסמכים",
   masav_returns: 'מס"ב והחזרות',
 };
 
-function routeFor(areaPrefix: string, type: ExceptionType): string {
+function routeFor(areaPrefix: string, row: ExceptionRow): string {
+  const type = row.exception_type;
+  // חריגות על תלמיד מסוים - לכרטיס שלו, שם מזינים את הנתון או מעבירים סניף
+  if (row.related_table === "students") return `/ops/students/${row.related_id}`;
   // חריגות הפער של תלמוד מובילות למסך שבו *מתקנים* אותן, לא למרכז שגיאות
   // תלמוד: מה שחסר הוא תלמיד או סניף, ושם מזינים אותם.
   // כאן לא חסר נתון - צריך להריץ את ההשלמה, והכפתור נמצא במסך זכאות.
@@ -211,7 +225,7 @@ export function ExceptionsCenterScreen() {
           rowKey={(r) => `${r.exception_type}-${r.related_id}`}
           emptyTitle="אין חריגות פתוחות"
           emptyIcon={AlertTriangle}
-          onRowClick={(r) => navigate(routeFor(areaPrefix, r.exception_type))}
+          onRowClick={(r) => navigate(routeFor(areaPrefix, r))}
         />
       )}
     </div>
