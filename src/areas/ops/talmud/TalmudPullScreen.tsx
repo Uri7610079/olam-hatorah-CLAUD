@@ -98,8 +98,6 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
     },
   });
   const ready = (credentials.data ?? []).filter((c) => c.username && c.has_password);
-  const [picked, setPicked] = useState<Set<string> | null>(null);
-  const selected = picked ?? new Set(ready.map((c) => c.organization_id));
 
   const status = useQuery({
     queryKey: ["talmud-pull-status"],
@@ -136,9 +134,10 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
     return () => clearInterval(timer);
   }, [active, qc]);
 
+  // כל עמותה - כניסה נפרדת עם שם המשתמש והסיסמה שלה, וקוד SMS משלה
   const start = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.rpc("talmud_start_pull", { p_month: month, p_organization_ids: [...selected] });
+    mutationFn: async (organizationId: string) => {
+      const { error } = await supabase.rpc("talmud_start_pull", { p_month: month, p_organization_ids: [organizationId] });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["talmud-pull-status"] }),
@@ -168,34 +167,27 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
           ) : (
             <>
               <MonthField value={month} onChange={setMonth} label="חודש" id="pull-month" className="max-w-xs" />
-              <fieldset>
-                <legend className="field-label">עמותות</legend>
-                <div className="flex flex-wrap gap-2">
-                  {ready.map((c) => (
-                    <label key={c.organization_id} className="flex items-center gap-2 rounded-control border border-line px-3 py-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(c.organization_id)}
-                        onChange={() => {
-                          const next = new Set(selected);
-                          if (next.has(c.organization_id)) next.delete(c.organization_id); else next.add(c.organization_id);
-                          setPicked(next);
-                        }}
-                      />
-                      {c.legal_name}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
               <p className="text-sm text-ink-muted">
-                לכל עמותה תגיע הודעת SMS בתורה, ומקלידים אותה כאן. יורדים 6 דוחות לכל עמותה:
+                כל עמותה נכנסת לתלמוד בנפרד, עם שם המשתמש והסיסמה שלה, ומקבלת SMS משלה. יורדים 6 דוחות:
                 דרישת תשלום, רשימת תלמידים, סיבות אי זכאות, תשלומים למוסד, זכאות בעקבות בג"ץ, והסבר תשלומים.
               </p>
+              <div className="divide-y divide-line rounded-control border border-line">
+                {ready.map((c) => (
+                  <div key={c.organization_id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                    <span className="font-semibold">{c.legal_name}</span>
+                    <span className="text-sm text-ink-muted" dir="ltr">{c.username}</span>
+                    <button
+                      onClick={() => start.mutate(c.organization_id)}
+                      disabled={!month || start.isPending}
+                      className="btn-primary ms-auto flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" aria-hidden="true" />
+                      {start.isPending && start.variables === c.organization_id ? "מתחיל…" : "משיכה לעמותה זו"}
+                    </button>
+                  </div>
+                ))}
+              </div>
               {start.isError && <ErrorState message={errText(start.error)} />}
-              <button onClick={() => start.mutate()} disabled={!month || !selected.size || start.isPending} className="btn-primary flex items-center gap-2">
-                <Download className="h-4 w-4" aria-hidden="true" />
-                {start.isPending ? "מתחיל…" : `משיכת קבצים (${selected.size} עמותות)`}
-              </button>
             </>
           )}
         </section>
