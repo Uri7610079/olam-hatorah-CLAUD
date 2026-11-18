@@ -393,6 +393,45 @@ export const SCREENS: ScreenDef[] = [
   },
 ];
 
-export function screensForArea(area: Area): ScreenDef[] {
-  return SCREENS.filter((s) => s.area === area);
+// סדר התפריט לפי סדר העבודה, עם כותרות (2026-11-19). עד אז הסדר היה סדר הבנייה -
+// ומרכז החריגות, שממנו מתחילים את היום, ישב בתחתית. אזור שאינו כאן (ניהול, משימות)
+// מוצג כמו קודם, לבקשת צ'ני. מסך שנוסף ולא שובץ כאן מופיע בסוף - לא נעלם.
+const NAV_SECTIONS: Partial<Record<Area, { title: string; paths: string[] }[]>> = {
+  ops: [
+    { title: "כל יום", paths: ["/ops/exceptions", "/ops/students", "/ops/leader-portal"] },
+    { title: "תלמוד - לפי סדר החודש", paths: ["/ops/talmud/pull", "/ops/import-center", "/ops/talmud/eligibility", "/ops/talmud/errors", "/ops/talmud/retro", "/ops/talmud/export"] },
+    { title: "מבנה ושיוך", paths: ["/ops/organizations", "/ops/students/unassigned", "/ops/quotas"] },
+    { title: "קשר וביקורות", paths: ["/ops/phone-lists", "/ops/audits", "/ops/documents"] },
+  ],
+  finance: [
+    { title: "כל יום", paths: ["/finance/exceptions", "/finance/bank-transactions"] },
+    { title: "לפי סדר החודש", paths: ["/finance/donations", "/finance/months", "/finance/distributions", "/finance/masav", "/finance/returns"] },
+    { title: "מצב ודוחות", paths: ["/finance/group-balances", "/finance/group-leaders", "/finance/reports", "/finance/documents"] },
+    { title: "הגדרות", paths: ["/finance/commission-rules"] },
+  ],
+};
+
+export interface NavScreen extends ScreenDef {
+  /** כותרת שמוצגת מעל המסך הזה בתפריט (רק בראשון של כל קבוצה) */
+  sectionTitle?: string;
+}
+
+export function screensForArea(area: Area): NavScreen[] {
+  const inArea = SCREENS.filter((s) => s.area === area);
+  const sections = NAV_SECTIONS[area];
+  if (!sections) return inArea;
+  const byPath = new Map(inArea.map((s) => [s.path, s]));
+  const out: NavScreen[] = [];
+  for (const sec of sections) {
+    let first = true;
+    for (const p of sec.paths) {
+      const s = byPath.get(p);
+      if (!s) continue;
+      out.push(first ? { ...s, sectionTitle: sec.title } : s);
+      first = false;
+      byPath.delete(p);
+    }
+  }
+  [...byPath.values()].forEach((s, i) => out.push(i === 0 ? { ...s, sectionTitle: "עוד" } : s));
+  return out;
 }

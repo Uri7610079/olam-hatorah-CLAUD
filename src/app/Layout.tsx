@@ -118,8 +118,11 @@ export function Layout() {
               מסך פתיחה
             </NavLink>
             {screens.map((s) => (
+              <div key={s.path}>
+              {s.sectionTitle && (
+                <p className="px-3 pb-1 pt-4 text-[11px] font-semibold tracking-wide text-ink-subtle">{s.sectionTitle}</p>
+              )}
               <NavLink
-                key={s.path}
                 to={s.path}
                 title={s.description}
                 className={({ isActive }) =>
@@ -131,6 +134,7 @@ export function Layout() {
                 <s.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {s.navLabel}
               </NavLink>
+              </div>
             ))}
           </nav>
         </aside>
