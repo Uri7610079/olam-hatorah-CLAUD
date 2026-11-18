@@ -10,13 +10,14 @@ import { MonthField } from "@/components/MonthField";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
+import { TalmudCertificatesTab } from "./TalmudCertificatesTab";
 
 // משיכה מתלמוד (מיגרציה 118): המזכיר לוחץ, המערכת נכנסת לתלמוד בשם כל עמותה
 // עם הסיסמה השמורה, והוא מקליד רק את קוד ה-SMS. ההתקדמות עצמה נעשית בשרת
 // (api/talmud-pull.js), צעד אחד בכל קריאה - והמסך הזה הוא שקורא לצעד הבא כל
 // כמה שניות, כל עוד יש משיכה פעילה. לכן צריך להשאיר את המסך פתוח עד הסוף.
 
-type Tab = "pull" | "users";
+type Tab = "pull" | "certificates" | "users";
 
 interface StatusRow {
   job_id: string;
@@ -31,6 +32,8 @@ interface StatusRow {
   code_submitted: boolean;
   files_total: number | null;
   files_done: number;
+  job_kind: "reports" | "certificates";
+  item_errors: { external_id: string; name: string | null; reason: string }[] | null;
 }
 
 interface CredentialRow {
@@ -67,12 +70,14 @@ export function TalmudPullScreen() {
         description="המערכת נכנסת לתלמוד בשם כל עמותה ומורידה את הדוחות. צריך רק להקליד את קוד ה-SMS שמגיע."
       />
       <Tabs
-        tabs={[{ key: "pull", label: "משיכה" }, { key: "users", label: "משתמשי תלמוד" }]}
+        tabs={[{ key: "pull", label: "משיכה" }, { key: "certificates", label: "אישורי לימודים" }, { key: "users", label: "משתמשי תלמוד" }]}
         activeTab={tab}
         onChange={setTab}
         ariaLabel="משיכה מתלמוד"
       />
-      {tab === "pull" ? <PullTab onNeedUsers={() => setTab("users")} /> : <UsersTab />}
+      {tab === "pull" && <PullTab onNeedUsers={() => setTab("users")} />}
+      {tab === "certificates" && <TalmudCertificatesTab onStarted={() => setTab("pull")} />}
+      {tab === "users" && <UsersTab />}
     </div>
   );
 }
@@ -200,7 +205,7 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
         <section className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="font-semibold">
-              {active ? "משיכה פעילה" : "המשיכה האחרונה"} · חודש {monthText(rows[0].job_month)}
+              {active ? "משיכה פעילה" : "המשיכה האחרונה"} · {rows[0].job_kind === "certificates" ? "אישורי לימודים" : `חודש ${monthText(rows[0].job_month)}`}
             </h2>
             {active && (
               <>
@@ -213,7 +218,7 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
           <div className="space-y-2">
             {rows.map((r) => <OrgRow key={r.job_org_id} r={r} />)}
           </div>
-          <PulledFiles jobId={rows[0].job_id} refreshKey={rows.reduce((n, r) => n + r.files_done, 0)} />
+          <PulledFiles jobId={rows[0].job_id} refreshKey={rows.reduce((n, r) => n + r.files_done, 0)} autoSave={rows[0].job_kind === "certificates"} />
         </section>
       )}
     </div>
@@ -243,12 +248,19 @@ function OrgRow({ r }: { r: StatusRow }) {
         {icon}
         <span className="font-semibold">{r.legal_name}</span>
         <span className="text-sm text-ink-muted">
-          {r.status === "downloading" && r.files_total ? `מוריד קבצים (${r.files_done} מתוך ${r.files_total})` : PULL_STATUS_LABEL[r.status]}
+          {r.status === "downloading" && r.files_total
+            ? `${r.job_kind === "certificates" ? "מוריד אישורים" : "מוריד קבצים"} (${r.files_done} מתוך ${r.files_total})`
+            : PULL_STATUS_LABEL[r.status]}
         </span>
         {r.message && r.status !== "waiting_sms" && (
           <span className={`text-sm ${r.status === "failed" ? "text-danger-ink" : "text-ink-subtle"}`}>· {r.message}</span>
         )}
       </div>
+      {(r.item_errors?.length ?? 0) > 0 && (
+        <p className="mt-2 text-sm text-warn-ink">
+          לא נמצאו בתלמוד בעמותה הזו: {r.item_errors!.map((e) => `${e.name || ""} ${e.external_id}`.trim()).join(" · ")}
+        </p>
+      )}
       {r.status === "waiting_sms" && (
         r.code_submitted ? (
           <p className="mt-3 flex items-center gap-2 text-sm text-ink-muted"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> הקוד נשלח לתלמוד…</p>
@@ -276,7 +288,17 @@ function OrgRow({ r }: { r: StatusRow }) {
   );
 }
 
-function PulledFiles({ jobId, refreshKey }: { jobId: string; refreshKey: number }) {
+// אישורי לימודים נשמרים לבד בתיקיית ההורדות ברגע שהם מגיעים. מה כבר נשמר נזכר
+// בדפדפן (לנוחות בלבד), כדי שרענון של המסך לא יוריד את אותו אישור שוב.
+const savedKey = (jobId: string) => `talmud-saved-${jobId}`;
+function loadSaved(jobId: string): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(savedKey(jobId)) ?? "[]")); } catch { return new Set(); }
+}
+function rememberSaved(jobId: string, ids: Set<string>) {
+  try { localStorage.setItem(savedKey(jobId), JSON.stringify([...ids])); } catch { /* בלי זיכרון - לא נורא */ }
+}
+
+function PulledFiles({ jobId, refreshKey, autoSave }: { jobId: string; refreshKey: number; autoSave: boolean }) {
   const files = useQuery({
     queryKey: ["talmud-pulled-files", jobId, refreshKey],
     queryFn: async () => {
@@ -297,6 +319,23 @@ function PulledFiles({ jobId, refreshKey }: { jobId: string; refreshKey: number 
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  const saved = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!autoSave || !files.data?.length) return;
+    saved.current ??= loadSaved(jobId);
+    const fresh = files.data.filter((f) => !saved.current!.has(f.id));
+    if (!fresh.length) return;
+    (async () => {
+      for (const f of fresh) {
+        saved.current!.add(f.id);
+        await download(f);
+        await new Promise((r) => setTimeout(r, 400)); // דפדפן חוסם הרבה הורדות בבת אחת
+      }
+      rememberSaved(jobId, saved.current!);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSave, files.data, jobId]);
+
   if (!files.data?.length) return null;
   return (
     <div className="card overflow-x-auto">

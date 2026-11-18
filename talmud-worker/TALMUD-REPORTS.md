@@ -52,3 +52,11 @@
 - **rptVacationsByInstitute**: `AssociationNumber`, `AssociationName`, `BranchNumber`,
   `IdentificationTypeName`, `StudentIdentity`, `StudentName`, `StudentFamilyName`, `StudyTypeID`,
   `DateFrom`, `DateTo`, `Comment`, `TotalDays`, `CountedDays`, `Textbox10`.
+
+## אישור לימודים לתלמיד (rptStudyApprovalMultiple)
+- ברשימה: "הפקת אישורי לימודים" (n=4). אין שדות בדף הרשימה - הכל ב-ReportWin.
+- שדות: עמותה, סניף ("כל הסניפים"), סוג לימוד ("כל סוגי לימוד"), שם תלמיד (נשאר "בחירה לפי תז / דרכון"),
+  ומספר הזהות בשדה `ReportViewer1$ctl00$ctl13$txtValue`.
+- יצוא PDF = אישור בעמוד אחד (כ-200KB). תלמיד שאינו בעמותה: יצוא CSV עם שורת כותרות בלבד
+  (`StudentIdentity1,IdentificationTypeName,...`) - כך מזהים "לא נמצא" בלי לשמור אישור ריק.
+- נבדק מול האתר האמיתי 2026-11-18: כ-4 שניות לאישור.

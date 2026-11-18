@@ -13,7 +13,10 @@
 //   Supabase → SQL Editor: insert into talmud_worker_config (secret) ...
 
 import crypto from "node:crypto";
-import { TALMUD_REPORTS, createSession, downloadReport, login, submitSmsCode } from "./_talmud/client.js";
+import { STUDY_APPROVAL, TALMUD_REPORTS, createSession, downloadCertificate, downloadReport, login, submitSmsCode } from "./_talmud/client.js";
+
+// אישורי לימודים: כמה תלמידים בכל צעד (כ-4 שניות לתלמיד), כדי להישאר בתוך מגבלת הזמן
+const CERTIFICATES_PER_STEP = 5;
 
 function privateKey() {
   const b64 = process.env.TALMUD_PRIVATE_KEY;
@@ -76,6 +79,9 @@ export async function step() {
   const state = job.worker_state ? openState(job.worker_state) : null;
   const session = createSession({ manualCookies: true, cookies: state?.cookies ?? {} });
   const keep = (extra = {}) => sealState({ cookies: session.cookies(), ...extra });
+  const certificates = job.kind === "certificates";
+  const items = Array.isArray(job.items) ? job.items : [];
+  const total = certificates ? items.length : TALMUD_REPORTS.length;
 
   try {
     if (job.status === "logging_in") {
@@ -92,7 +98,7 @@ export async function step() {
         await update(job.job_org_id, "waiting_sms", { message: "נשלח SMS", state: keep({ smsPage: result.page }) });
         return { waiting: "sms" };
       }
-      await update(job.job_org_id, "downloading", { filesTotal: TALMUD_REPORTS.length, state: keep() });
+      await update(job.job_org_id, "downloading", { filesTotal: total, state: keep() });
       return { loggedIn: true };
     }
 
@@ -104,8 +110,33 @@ export async function step() {
         await update(job.job_org_id, "failed", { message: `${result.message}. אפשר להתחיל משיכה חדשה ולקבל קוד חדש.` });
         return { failed: result.message };
       }
-      await update(job.job_org_id, "downloading", { message: "נכנס לתלמוד", filesTotal: TALMUD_REPORTS.length, state: keep() });
+      await update(job.job_org_id, "downloading", { message: "נכנס לתלמוד", filesTotal: total, state: keep() });
       return { loggedIn: true };
+    }
+
+    if (job.status === "downloading" && certificates) {
+      let done = job.files_done;
+      for (const item of items.slice(done, done + CERTIFICATES_PER_STEP)) {
+        const cert = await downloadCertificate(session, item.external_id, item.name);
+        if (cert.found) {
+          await rpc("talmud_worker_add_file", {
+            p_job_org_id: job.job_org_id, p_report_key: STUDY_APPROVAL.key, p_report_label: STUDY_APPROVAL.label,
+            p_file_name: cert.fileName, p_file_type: cert.contentType, p_file_base64: Buffer.from(cert.bytes).toString("base64"),
+            p_student_external_id: item.external_id,
+          });
+        } else {
+          await rpc("talmud_worker_item_failed", {
+            p_job_org_id: job.job_org_id, p_external_id: item.external_id, p_reason: "לא נמצא בתלמוד בעמותה הזו",
+          });
+        }
+        done++;
+      }
+      const last = done >= items.length;
+      await update(job.job_org_id, last ? "done" : "downloading", {
+        message: last ? "הסתיים" : `${done} מתוך ${items.length}`,
+        state: last ? null : keep(),
+      });
+      return { certificates: done };
     }
 
     if (job.status === "downloading") {

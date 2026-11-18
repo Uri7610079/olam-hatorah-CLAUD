@@ -43,3 +43,9 @@ export function lastClosedMonth(today = new Date()): string {
   const d = new Date(Date.UTC(today.getFullYear(), today.getMonth() - 1, 1));
   return d.toISOString().slice(0, 10);
 }
+
+/** מספרים מכל צורה: שורה לכל אחד, פסיקים, רווחים או עמודה מאקסל */
+export function parseIds(text: string): string[] {
+  const tokens = text.split(/[\s,;|]+/).map((t) => t.replace(/[^0-9A-Za-z]/g, "")).filter((t) => t.length >= 4);
+  return [...new Set(tokens)];
+}

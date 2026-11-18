@@ -202,15 +202,16 @@ export async function submitSmsCode(session, smsPage, code) {
 // ===== הורדת דוח =====
 
 const MONTH_RE = /^(\d{2})\/(\d{4})$/;
-const isPlaceholder = (o) => !o || /select a value|^-?בחר/i.test(o.text);
+// "<Select a Value>" או "-בחר-" = לא נבחר. "בחירה לפי תז / דרכון" היא בחירה אמיתית.
+const isPlaceholder = (o) => !o || /select a value|^-?בחר-?$/i.test(o.text);
 
-/** מה לבחור בשדה של הדוח. null = להשאיר. */
+/** מה לבחור בשדה של הדוח. null = להשאיר. month null = בלי חודש (אישור לימודים). */
 function chooseOption(select, month) {
-  const [y, m] = month.split("-");
+  const [y, m] = (month ?? "").split("-");
   const monthText = `${m}/${y}`;
   const real = select.options.filter((o) => !isPlaceholder(o));
   const current = select.options.find((o) => o.selected) ?? select.options[0];
-  if (real.some((o) => MONTH_RE.test(o.text))) return real.find((o) => o.text === monthText) ?? null;
+  if (real.some((o) => MONTH_RE.test(o.text))) return month ? real.find((o) => o.text === monthText) ?? null : null;
   if (!isPlaceholder(current)) return null;
   // שדה חובה שלא נבחר: "כל ..." (כל הסניפים / כל החודש), שנה, או האפשרות היחידה
   return real.find((o) => /^כל /.test(o.text))
@@ -308,11 +309,8 @@ async function asyncPostBack(session, page, { panel, target = "", submit = null 
   return { page: { url: page.url, html: applyDelta(page.html, delta) }, delta, raw: res.html };
 }
 
-/**
- * מוריד דוח אחד לחודש month (YYYY-MM-01).
- * @returns {{ fileName: string, bytes: Uint8Array, contentType: string }}
- */
-export async function downloadReport(session, report, month) {
+/** פותח את מסך הדוח (ReportWin.aspx) של הדוח שברשימה */
+async function openReportWindow(session, report) {
   let page = await session.request("/Reports/ReportResult.aspx");
   if (!isLoggedIn(page.html)) throw new Error("החיבור לתלמוד נותק");
   // תיבת הסימון של הדוח: באותה שורה כמו hidPath עם שם הדוח
@@ -346,7 +344,14 @@ export async function downloadReport(session, report, month) {
   if (!/ReportWin\.aspx/.test(generated.raw)) throw new Error(`מסך הדוח "${report.label}" לא נפתח`);
   page = await session.request("/Reports/ReportWin.aspx");
   if (!/ReportViewer1/.test(page.html)) throw new Error(`מסך הדוח "${report.label}" לא נפתח`);
+  return page;
+}
 
+/**
+ * ממלא את שדות הדוח ומפיק אותו. מחזיר את כתובת היצוא (בלי הפורמט).
+ * month: לבחירת החודש בשדות החודש. text: ערכים לשדות טקסט לפי שם השדה.
+ */
+async function viewReport(session, page, report, { month = null, text = {} } = {}) {
   // השדות לפי הסדר. שדה עם postback אוטומטי (עמותה → סניפים) נשלח מיד, כדי
   // שהשדות שתלויים בו יתמלאו כמו בדפדפן.
   for (let pass = 0; pass < 12; pass++) {
@@ -362,8 +367,8 @@ export async function downloadReport(session, report, month) {
       page = await session.postBack(page, { target: next.name, set: [[next.name, choice.value]] });
     } else {
       // בלי postback: מסמנים בטופס עצמו, ונשלח עם "הפק דו"ח"
-      page = { ...page, html: page.html.replace(new RegExp(`(<select[^>]*name="${next.name.replace(/\$/g, "\\$")}"[\\s\\S]*?</select>)`), (block) =>
-        block.replace(/\sselected(="selected")?/g, "").replace(new RegExp(`(<option[^>]*value="${choice.value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}")`), "$1 selected")) };
+      page = { ...page, html: page.html.replace(new RegExp(`(<select[^>]*name="${escapeRe(next.name)}"[\\s\\S]*?</select>)`), (block) =>
+        block.replace(/\sselected(="selected")?/g, "").replace(new RegExp(`(<option[^>]*value="${escapeRe(choice.value)}")`), "$1 selected")) };
     }
   }
 
@@ -371,17 +376,37 @@ export async function downloadReport(session, report, month) {
     && isPlaceholder(s.options.find((o) => o.selected) ?? s.options[0]));
   if (missing.length) throw new Error(`בדוח "${report.label}" נשאר שדה בלי בחירה - צריך לעדכן את המתכון`);
 
-  const viewBtn = parseForm(page.html).inputs.find((i) => i.name === "ReportViewer1$ctl00$ctl00");
-  page = await session.postBack(page, { submit: ["ReportViewer1$ctl00$ctl00", viewBtn?.value ?? "View Report"] });
+  let html = page.html;
+  for (const [name, value] of Object.entries(text)) {
+    if (!parseForm(html).inputs.some((i) => i.name === name)) throw new Error(`בדוח "${report.label}" חסר השדה ${name} - צריך לעדכן את המתכון`);
+    html = setInputInHtml(html, name, value);
+  }
+
+  const viewBtn = parseForm(html).inputs.find((i) => i.name === "ReportViewer1$ctl00$ctl00");
+  const viewed = await session.postBack({ ...page, html }, { submit: ["ReportViewer1$ctl00$ctl00", viewBtn?.value ?? "View Report"] });
 
   // כתובת היצוא מופיעה בדף כמחרוזת בתוך הסקריפט של ReportViewer
-  const m = page.html.match(/["'](\/Reserved\.ReportViewerWebControl\.axd\?[^"']*OpType=Export[^"']*)["']/);
+  const m = viewed.html.match(/["'](\/Reserved\.ReportViewerWebControl\.axd\?[^"']*OpType=Export[^"']*)["']/);
   if (!m) throw new Error(`הדוח "${report.label}" לא הופק (אין כתובת יצוא)`);
-  const exportBase = m[1].split("\\u0026").join("&").split("&amp;").join("&");
+  return m[1].split("\\u0026").join("&").split("&amp;").join("&");
+}
+
+async function exportFile(session, exportBase, format, label) {
+  const file = await session.request(exportBase + format, { binary: true });
+  if (file.status !== 200 || !file.bytes.length) throw new Error(`יצוא "${label}" נכשל (${file.status})`);
+  return file;
+}
+
+/**
+ * מוריד דוח אחד לחודש month (YYYY-MM-01).
+ * @returns {{ fileName: string, bytes: Uint8Array, contentType: string }}
+ */
+export async function downloadReport(session, report, month) {
+  const page = await openReportWindow(session, report);
+  const exportBase = await viewReport(session, page, report, { month });
   const format = report.format ?? "CSV";
   const ext = format === "EXCELOPENXML" ? "xlsx" : "csv";
-  const file = await session.request(exportBase + format, { binary: true });
-  if (file.status !== 200 || !file.bytes.length) throw new Error(`יצוא הדוח "${report.label}" נכשל (${file.status})`);
+  const file = await exportFile(session, exportBase, format, report.label);
   const disp = file.headers.get("content-disposition") ?? "";
   const name = disp.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] ?? `${report.key}.${ext}`;
   const [y, mm] = month.split("-");
@@ -389,5 +414,36 @@ export async function downloadReport(session, report, month) {
     fileName: `${decodeURIComponent(name).replace(/\.\w+$/, "")}-${y}-${mm}.${ext}`,
     bytes: file.bytes,
     contentType: ext === "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  };
+}
+
+// ===== אישור לימודים לתלמוד אחד =====
+
+// "הפקת אישורי לימודים": שם התלמיד נשאר "בחירה לפי תז / דרכון", והמספר בשדה הטקסט
+export const STUDY_APPROVAL = {
+  key: "study_approval",
+  path: "rptStudyApprovalMultiple",
+  label: "אישור לימודים",
+  idField: "ReportViewer1$ctl00$ctl13$txtValue",
+};
+
+const safeName = (s) => String(s ?? "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * אישור לימודים (PDF) לתלמיד אחד. תלמיד שאינו בעמותה הזו בתלמוד - found: false
+ * (היצוא מגיע ריק: CSV עם שורת כותרות בלבד), בלי לשמור אישור ריק.
+ */
+export async function downloadCertificate(session, externalId, name) {
+  const page = await openReportWindow(session, STUDY_APPROVAL);
+  const exportBase = await viewReport(session, page, STUDY_APPROVAL, { text: { [STUDY_APPROVAL.idField]: externalId } });
+  const csv = new TextDecoder().decode((await exportFile(session, exportBase, "CSV", STUDY_APPROVAL.label)).bytes);
+  if (csv.split(/\r?\n/).filter((l) => l.trim()).length <= 1) return { found: false };
+  const pdf = await exportFile(session, exportBase, "PDF", STUDY_APPROVAL.label);
+  const who = safeName(name) || externalId;
+  return {
+    found: true,
+    fileName: `אישור לימודים - ${who} - ${safeName(externalId)}.pdf`,
+    bytes: pdf.bytes,
+    contentType: "application/pdf",
   };
 }
