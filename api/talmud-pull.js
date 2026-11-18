@@ -13,6 +13,7 @@
 //   הסוד מול המסד נגזר מהמפתח (workerSecret), ובמסד רק הטביעה שלו (מיגרציה 120).
 
 import crypto from "node:crypto";
+import net from "node:net";
 import { STUDY_APPROVAL, TALMUD_REPORTS, createSession, downloadCertificate, downloadReport, login, submitSmsCode } from "./_talmud/client.js";
 
 // אישורי לימודים: כמה תלמידים בכל צעד (כ-4 שניות לתלמיד), כדי להישאר בתוך מגבלת הזמן
@@ -187,7 +188,20 @@ export default async function handler(req, res) {
     } catch (e) {
       talmud = { ok: false, error: String(e?.message ?? e).slice(0, 120), cause: String(e?.cause?.code ?? e?.cause?.message ?? "").slice(0, 120) };
     }
+    // חיבור ישיר (בלי HTTPS) עם זמן ארוך - כדי להבדיל בין "איטי" לבין "חסום"
+    const tcp = (port) => new Promise((resolve) => {
+      const t0 = Date.now();
+      const sock = net.connect({ host: "91.195.162.53", port, family: 4 });
+      sock.setTimeout(25000);
+      sock.on("connect", () => { resolve({ port, ok: true, ms: Date.now() - t0 }); sock.destroy(); });
+      sock.on("timeout", () => { resolve({ port, ok: false, error: "timeout", ms: Date.now() - t0 }); sock.destroy(); });
+      sock.on("error", (e) => resolve({ port, ok: false, error: e.code ?? e.message, ms: Date.now() - t0 }));
+    });
+    const [tcp443, tcp80] = await Promise.all([tcp(443), tcp(80)]);
+    let outIp = null;
+    try { outIp = (await (await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(5000) })).json()).ip; } catch { /* לא חשוב */ }
     return res.status(200).json({
+      tcp443, tcp80, outIp,
       configured: Boolean(k), keyLength: k.length,
       fingerprint: k ? crypto.createHash("sha256").update(workerSecret()).digest("hex").slice(0, 8) : null,
       region: process.env.VERCEL_REGION ?? null,
