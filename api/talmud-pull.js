@@ -9,8 +9,8 @@
 // אף צעד לא מנסה שוב כניסה שנכשלה - כדי שהמשתמש בתלמוד לא יינעל.
 //
 // הגדרה (פעם אחת), לפי הקובץ secrets/talmud-worker.txt שמחוץ לקוד:
-//   Vercel → Environment Variables: TALMUD_PRIVATE_KEY, TALMUD_WORKER_SECRET
-//   Supabase → SQL Editor: insert into talmud_worker_config (secret) ...
+//   Vercel → Environment Variables: TALMUD_PRIVATE_KEY (זה הכל).
+//   הסוד מול המסד נגזר מהמפתח (workerSecret), ובמסד רק הטביעה שלו (מיגרציה 120).
 
 import crypto from "node:crypto";
 import { STUDY_APPROVAL, TALMUD_REPORTS, createSession, downloadCertificate, downloadReport, login, submitSmsCode } from "./_talmud/client.js";
@@ -49,6 +49,10 @@ export function openState(sealed) {
   return JSON.parse(Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8"));
 }
 
+/** הסוד מול המסד - נגזר מהמפתח הפרטי, כדי שלא יהיה עוד סוד לנהל */
+export const workerSecret = () =>
+  crypto.createHash("sha256").update("talmud-worker:" + process.env.TALMUD_PRIVATE_KEY).digest("hex");
+
 async function rpc(name, args) {
   const res = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: "POST",
@@ -57,7 +61,7 @@ async function rpc(name, args) {
       apikey: process.env.VITE_SUPABASE_ANON_KEY,
       Authorization: `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({ p_secret: process.env.TALMUD_WORKER_SECRET, ...args }),
+    body: JSON.stringify({ p_secret: workerSecret(), ...args }),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`${name}: ${text.slice(0, 300)}`);
@@ -169,7 +173,7 @@ export async function step() {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST בלבד" });
-  if (!process.env.TALMUD_WORKER_SECRET || !process.env.TALMUD_PRIVATE_KEY) {
+  if (!process.env.TALMUD_PRIVATE_KEY) {
     return res.status(500).json({ error: "המשיכה מתלמוד עוד לא הוגדרה בשרת" });
   }
   try {
