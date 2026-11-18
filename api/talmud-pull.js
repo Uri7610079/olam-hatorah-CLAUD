@@ -18,8 +18,11 @@ import { STUDY_APPROVAL, TALMUD_REPORTS, createSession, downloadCertificate, dow
 // אישורי לימודים: כמה תלמידים בכל צעד (כ-4 שניות לתלמיד), כדי להישאר בתוך מגבלת הזמן
 const CERTIFICATES_PER_STEP = 5;
 
+// המפתח כפי שהודבק ב-Vercel: בלי רווחים ושורות שנכנסו בהעתקה
+const keyText = () => String(process.env.TALMUD_PRIVATE_KEY ?? "").replace(/\s+/g, "");
+
 function privateKey() {
-  const b64 = process.env.TALMUD_PRIVATE_KEY;
+  const b64 = keyText();
   if (!b64) throw new Error("חסר TALMUD_PRIVATE_KEY בהגדרות השרת");
   return crypto.createPrivateKey({ key: Buffer.from(b64, "base64"), format: "der", type: "pkcs8" });
 }
@@ -33,7 +36,7 @@ export function decryptPassword(encryptedB64) {
 }
 
 // החיבור בין צעד לצעד: AES-256-GCM, במפתח שנגזר מהמפתח הפרטי (אין סוד נוסף לנהל)
-const stateKey = () => crypto.createHash("sha256").update("talmud-state:" + process.env.TALMUD_PRIVATE_KEY).digest();
+const stateKey = () => crypto.createHash("sha256").update("talmud-state:" + keyText()).digest();
 
 export function sealState(obj) {
   const iv = crypto.randomBytes(12);
@@ -51,7 +54,7 @@ export function openState(sealed) {
 
 /** הסוד מול המסד - נגזר מהמפתח הפרטי, כדי שלא יהיה עוד סוד לנהל */
 export const workerSecret = () =>
-  crypto.createHash("sha256").update("talmud-worker:" + process.env.TALMUD_PRIVATE_KEY).digest("hex");
+  crypto.createHash("sha256").update("talmud-worker:" + keyText()).digest("hex");
 
 async function rpc(name, args) {
   const res = await fetch(`${process.env.VITE_SUPABASE_URL}/rest/v1/rpc/${name}`, {
@@ -172,8 +175,13 @@ export async function step() {
 }
 
 export default async function handler(req, res) {
+  // בדיקת הגדרה: אורך המפתח וטביעה קצרה של הסוד (לא המפתח ולא הסוד) - להשוואה מול מיגרציה 120
+  if (req.method === "GET" && req.query?.check !== undefined) {
+    const k = keyText();
+    return res.status(200).json({ configured: Boolean(k), keyLength: k.length, fingerprint: k ? crypto.createHash("sha256").update(workerSecret()).digest("hex").slice(0, 8) : null });
+  }
   if (req.method !== "POST") return res.status(405).json({ error: "POST בלבד" });
-  if (!process.env.TALMUD_PRIVATE_KEY) {
+  if (!keyText()) {
     return res.status(500).json({ error: "המשיכה מתלמוד עוד לא הוגדרה בשרת" });
   }
   try {
