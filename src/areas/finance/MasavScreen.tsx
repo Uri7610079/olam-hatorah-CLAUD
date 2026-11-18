@@ -433,7 +433,7 @@ export function MasavScreen() {
               )}
               {selectedBatch.status === "transmitted" && canApprove && (
                 <button onClick={() => runAction("mark_masav_bank_completed", { p_batch_id: selectedBatchId })} disabled={busy} className="btn-secondary text-xs">
-                  סימון כבוצע בבנק
+                  סימון ידני כבוצע בבנק
                 </button>
               )}
               {canManage && ["draft", "pending_review", "pending_approval"].includes(selectedBatch.status) && (

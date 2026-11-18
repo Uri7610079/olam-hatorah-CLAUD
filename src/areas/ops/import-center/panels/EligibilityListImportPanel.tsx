@@ -76,8 +76,9 @@ async function fetchUnmatchedEligible(listId: string): Promise<ListRow[]> {
 }
 
 // "דוח זכאים" מתלמוד (רשימת תלמידים לפי חודש דיווח) - זכאי / אינו זכאי לכל תלמיד.
-// נפרד מ"זכאות חודשית" (דוח דרישת תשלום, עם סכומים). הקליטה לא משנה שום נתון קיים
-// בתלמידים - רק שומרת את הדוח, ממנו נבנית רשימת החיוג ב"רשימות טלפוניות".
+// נפרד מ"זכאות חודשית" (דוח דרישת תשלום, עם סכומים). מאז 122 תלמוד הוא מערכת האמת:
+// הקליטה יוצרת תלמידים חסרים ומעדכנת את מה שתלמוד יודע עליהם. ממנה גם נבנית רשימת
+// החיוג ב"רשימות טלפוניות".
 export function EligibilityListImportPanel({ initialFile }: { initialFile?: File | null }) {
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permLoading } = useHasPermission("talmud", "import");
@@ -223,7 +224,7 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
   return (
     <div className="space-y-4">
       <p className="max-w-3xl text-sm text-ink-muted">
-        "דוח זכאים" מתלמוד (רשימת תלמידים לפי חודש דיווח): מי זכאי ומי לא בחודש. הקליטה לא משנה נתוני תלמידים - ממנה נבנית רשימת החיוג
+        "דוח זכאים" מתלמוד (רשימת תלמידים לפי חודש דיווח): מי זכאי ומי לא בחודש. הקליטה פותחת כרטיס לתלמיד שאינו במערכת ומעדכנת את הפרטים שתלמוד יודע על הקיימים. ממנה גם נבנית רשימת החיוג
         ב<Link to="/ops/phone-lists" className="link-action">רשימות טלפוניות</Link>. העמותה והחודש מזוהים מהקובץ.
       </p>
 

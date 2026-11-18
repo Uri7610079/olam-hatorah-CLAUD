@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MonthField } from "@/components/MonthField";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
@@ -55,6 +56,48 @@ function buildItems(c: FinanceCounts, orgId: string): ExceptionCounter[] {
     { key: "unassigned-donations", label: "תרומות לא משויכות/ממתינות", count: c.unassigned_donations, severity: c.unassigned_donations > 0 ? "medium" : "ok", href: `/finance/donations?org=${orgId}` },
     { key: "ratio-90-10", label: "מצב 90%/10% (כבוי עד אישור הנוסחה)", count: 0, severity: "neutral", href: `/finance/reports?org=${orgId}` },
   ];
+}
+
+interface ChecklistItem {
+  item_key: string;
+  label_he: string;
+  open_count: number;
+}
+
+// מה עוד חוסם את סגירת החודש (שלב 44): אותן 10 בדיקות שהסגירה עצמה מריצה, כרשימה
+// קצרה של מה שעדיין פתוח - כדי שלא יגלו את זה רק ברגע הלחיצה על "סגירה".
+function MonthCloseBlockers({ orgId, month, periodStatus }: { orgId: string; month: string; periodStatus: string | null }) {
+  const q = useQuery({
+    queryKey: ["month-close-checklist", orgId, month],
+    enabled: !!orgId && periodStatus !== "closed",
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_month_close_checklist", { p_organization_id: orgId, p_month: month });
+      if (error) throw error;
+      return (data ?? []) as ChecklistItem[];
+    },
+  });
+  if (periodStatus === "closed" || q.isError || !q.data) return null;
+  const open = q.data.filter((i) => i.open_count > 0);
+  return (
+    <div className={`card mb-4 p-4 ${open.length ? "border-warn/40" : ""}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-ink">{open.length ? "מה עוד חוסם את סגירת החודש" : "החודש מוכן לסגירה"}</p>
+        <Link to="/finance/months" className="link-action text-xs">למסך החודשים הכספיים</Link>
+      </div>
+      {open.length === 0 ? (
+        <p className="mt-1 text-sm text-ink-muted">כל עשר הבדיקות עוברות. הסגירה עצמה - לחיצה אחת במסך החודשים.</p>
+      ) : (
+        <ul className="mt-2 space-y-1 text-sm">
+          {open.map((i) => (
+            <li key={i.item_key} className="flex justify-between gap-3">
+              <span className="text-ink">{i.label_he}</span>
+              <span className="tabular font-semibold text-warn-ink">{i.open_count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export function FinanceDashboard() {
@@ -127,7 +170,7 @@ export function FinanceDashboard() {
             </p>
             <p className="mt-1 text-xs text-ink-muted">
               {countsQuery.data.uncalculated_eligibility_amount > 0
-                ? "נקלט מדוח תלמוד וטרם עבר חישוב עמלות, ולכן אינו נכלל בברוטו/עמלה/נטו שלמעלה. נדרשים כללי עמלה, פתיחת החודש והרצת החישוב."
+                ? "נקלט מדוח תלמוד וטרם עבר חישוב עמלות, ולכן אינו נכלל בברוטו/עמלה/נטו שלמעלה. החישוב רץ לבד אחרי הקליטה; אם הסכום נשאר כאן - החודש הכספי בבדיקה או סגור, או שהחישוב האוטומטי כבוי (ניהול ← הגדרות)."
                 : "כל הזכאות שנקלטה לחודש זה כבר חושבה."}
             </p>
           </div>
@@ -136,6 +179,7 @@ export function FinanceDashboard() {
             <p className="text-sm text-ink-muted">התחייבות כוללת לקבוצות (יתרת ספר תנועות)</p>
             <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.group_commitment_total.toLocaleString("he-IL")}</p>
           </div>
+          <MonthCloseBlockers orgId={orgId} month={month} periodStatus={countsQuery.data.period_status} />
           <ExceptionGrid items={buildItems(countsQuery.data, orgId)} />
         </>
       )}
