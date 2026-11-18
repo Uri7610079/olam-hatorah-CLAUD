@@ -7,7 +7,7 @@
 //
 // הרצה:   node talmud-worker/run.mjs [נתיב לקובץ המפתח]
 // ברירת מחדל לקובץ המפתח: ..\secrets\talmud-worker.txt (מחוץ לקוד, לא בגיט).
-// כתובת המסד והמפתח הציבורי שלו - מ-app/.env (אותם ערכים שבאתר).
+// כתובת המסד והמפתח הציבורי שלו - מ-app/.env.local (אותם ערכים שבאתר).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -17,8 +17,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const APP = path.resolve(HERE, "..");
 
 function loadEnv() {
-  const envFile = path.join(APP, ".env");
-  if (fs.existsSync(envFile)) {
+  for (const name of [".env.local", ".env"]) {
+    const envFile = path.join(APP, name);
+    if (!fs.existsSync(envFile)) continue;
     for (const line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
       const m = line.match(/^\s*(VITE_SUPABASE_URL|VITE_SUPABASE_ANON_KEY)\s*=\s*(.+?)\s*$/);
       if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");

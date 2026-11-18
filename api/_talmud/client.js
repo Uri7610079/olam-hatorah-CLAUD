@@ -146,27 +146,42 @@ export function createSession({ fetchImpl = fetch, manualCookies = false, cookie
 }
 
 // ===== זיהוי המסך =====
+//
+// מסך הכניסה של תלמוד (נבדק 2026-11-18): txtUserName + txtPassword ו"כניסה"
+// (LoginButton). אחרי סיסמה נכונה תלמוד שולח SMS עם קוד בן 5 ספרות, וחלון קטן
+// באותו דף (pnlPopMFASendSMS) מבקש אותו: txtMFACode ו"זה הקוד" (btnMFAVerifySMS).
+// אחרי קוד נכון הדף קורא ל-Login(), שלוחץ על כפתור נסתר (btnLog) - ורק אז נכנסים.
 
 export const isLoggedIn = (html) => /ucLogOut|lnkLogOut/.test(html);
-const isLoginPage = (html) => /LoginButton/.test(html) && /type=["']?password/i.test(html);
 
-/** הודעת השגיאה שבדף (אם יש), בשביל הסבר למשרד */
+const spanText = (html, id) => {
+  const m = html.match(new RegExp(`<span[^>]*\\bid=["']${id}["'][^>]*>([^<]*)<`));
+  return m ? decodeEntities(m[1]).replace(/\s+/g, " ").trim() : "";
+};
+
+/**
+ * הודעת השגיאה של תלמוד. רק מהתוויות שמראות שגיאה בפועל - בדף יש גם הודעות
+ * מוסתרות שקיימות תמיד (למשל "שם משתמש יכול להכיל אותיות באנגלית ומספרים בלבד").
+ */
 function pageError(html) {
-  const m = html.match(/<(?:span|div)[^>]*(?:class|id)=["'][^"']*(?:error|Error|Validator|lblMsg|Message)[^"']*["'][^>]*>([^<]{3,200})</);
-  return m ? decodeEntities(m[1]).trim() : null;
+  return spanText(html, "lblError") || spanText(html, "lblMFAError") || null;
 }
 
-/** במסך הקוד: שדה הקוד, והכפתור ששולח אותו */
-function smsControls(html) {
-  const form = parseForm(html);
-  const box = form.inputs.find((i) => i.name && ["text", "tel", "number", "password"].includes((i.type ?? "text").toLowerCase()) && !/user|pass/i.test(i.name));
-  const submit = form.inputs.find((i) => (i.type ?? "").toLowerCase() === "submit");
-  const postback = html.match(/WebForm_PostBackOptions\(&quot;([^&]+)&quot;|WebForm_PostBackOptions\("([^"]+)"|__doPostBack\('([^']+)'/);
-  return {
-    codeField: box?.name ?? null,
-    submit: submit?.name ? [submit.name, submit.value ?? ""] : null,
-    target: submit ? "" : (postback?.[1] ?? postback?.[2] ?? postback?.[3] ?? ""),
-  };
+/** תלמוד שלח SMS ומחכה לקוד: מספר הטלפון מולא בהודעה, או שנשמר מזהה לאימות */
+const isSmsStep = (html) => {
+  const phone = spanText(html, "lblPhone");
+  return (phone && !phone.includes("@@@")) || /name="hidMFAUserID"[^>]*value="[^"]+"/.test(html);
+};
+
+/** הדף ביקש להשלים את הכניסה (קריאה ל-Login() או ל-cLogin(), לא ההגדרה שלהן) */
+const callsLogin = (html) => /(?<!function\s+)\bc?Login\(\)\s*;/.test(html);
+
+/** השלמת כניסה אחרי שהדף ביקש: הכפתור הנסתר btnLog */
+async function completeLogin(session, page) {
+  for (let i = 0; i < 2 && !isLoggedIn(page.html) && callsLogin(page.html); i++) {
+    page = await session.postBack(page, { submit: ["btnLog", ""] });
+  }
+  return page;
 }
 
 // ===== כניסה =====
@@ -176,25 +191,24 @@ function smsControls(html) {
  */
 export async function login(session, username, password) {
   const loginPage = await session.request("/Login.aspx");
-  const form = parseForm(loginPage.html);
-  const userField = form.inputs.find((i) => (i.type ?? "text").toLowerCase() === "text")?.name;
-  const passField = form.inputs.find((i) => (i.type ?? "").toLowerCase() === "password")?.name;
-  if (!userField || !passField) return { step: "error", message: "דף הכניסה של תלמוד השתנה - צריך לעדכן את המתכון" };
-
-  const page = await session.postBack(loginPage, { target: "LoginButton", set: [[userField, username], [passField, password]] });
-  if (isLoggedIn(page.html)) return { step: "in", page };
-  if (isLoginPage(page.html)) {
-    return { step: "error", message: pageError(page.html) ?? "תלמוד דחה את שם המשתמש או הסיסמה" };
+  const fields = parseForm(loginPage.html).inputs.map((i) => i.name);
+  if (!fields.includes("txtUserName") || !fields.includes("txtPassword")) {
+    return { step: "error", message: "דף הכניסה של תלמוד השתנה - צריך לעדכן את המתכון" };
   }
-  const sms = smsControls(page.html);
-  if (!sms.codeField) return { step: "error", message: "אחרי הסיסמה הופיע מסך לא מוכר (לא מסך קוד) - צריך לעדכן את המתכון" };
-  return { step: "sms", page };
+  let page = await session.postBack(loginPage, {
+    target: "LoginButton", set: [["txtUserName", username.trim()], ["txtPassword", password]],
+  });
+  if (isSmsStep(page.html)) return { step: "sms", page };
+  page = await completeLogin(session, page);
+  if (isLoggedIn(page.html)) return { step: "in", page };
+  if (isSmsStep(page.html)) return { step: "sms", page };
+  return { step: "error", message: pageError(page.html) ?? "תלמוד לא אישר את הכניסה (שם משתמש או סיסמה)" };
 }
 
 /** @returns {{ ok: boolean, page?: {url,html}, message?: string }} */
 export async function submitSmsCode(session, smsPage, code) {
-  const sms = smsControls(smsPage.html);
-  const page = await session.postBack(smsPage, { target: sms.target, submit: sms.submit, set: [[sms.codeField, code]] });
+  let page = await session.postBack(smsPage, { target: "btnMFAVerifySMS", set: [["txtMFACode", String(code).trim()]] });
+  page = await completeLogin(session, page);
   if (isLoggedIn(page.html)) return { ok: true, page };
   return { ok: false, message: pageError(page.html) ?? "תלמוד דחה את הקוד" };
 }
