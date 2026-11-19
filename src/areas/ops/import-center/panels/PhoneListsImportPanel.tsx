@@ -13,6 +13,18 @@ import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
+import { Stepper } from "@/components/Stepper";
+import { DuplicateFileNotice } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatNumber, formatPhone } from "@/lib/format";
+
+// שלבי היבוא כפי שהם קיימים כאן בפועל (v3): קובץ ← תצוגה מקדימה ← שמירה והרצת התאמה ← הותאם
+const PHONE_IMPORT_STEPS = [
+  { key: "file", label: "בחירת קובץ" },
+  { key: "preview", label: "תצוגה מקדימה" },
+  { key: "match", label: "שמירה והתאמה" },
+  { key: "done", label: "הותאם" },
+];
 
 interface OrgOption {
   id: string;
@@ -88,6 +100,7 @@ interface PhoneListsImportPanelProps {
 // המפורטת/חסרים שאינה חלק מפעולת היבוא. המסך המקורי נשאר כפי שהוא.
 export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProps) {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canPerform, isLoading: permLoading } = useHasPermission("phone_lists", "perform");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
@@ -233,11 +246,13 @@ export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProp
   const localPending = (localRows ?? []).filter((r) => r.status === "pending");
   const localDuplicate = (localRows ?? []).filter((r) => r.status === "duplicate");
   const localInvalid = (localRows ?? []).filter((r) => r.status === "invalid");
+  const selectedStatus = importsQuery.data?.find((i) => i.id === selectedImportId)?.status;
+  const phoneStep = selectedStatus === "committed" ? "done" : selectedStatus === "uploaded" ? "match" : localRows && !duplicateFileId ? "preview" : "file";
 
   const localCols: DataTableColumn<LocalRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
     { key: "raw", header: "טלפון גולמי", render: (r) => r.rawPhone || "—" },
-    { key: "norm", header: "מנורמל", className: "tabular", render: (r) => r.normalizedPhone || "—" },
+    { key: "norm", header: "מנורמל", className: "tabular", render: (r) => (isV3 && r.normalizedPhone ? <span className="ltr-num">{formatPhone(r.normalizedPhone) || r.normalizedPhone}</span> : r.normalizedPhone || "—") },
     { key: "note", header: "הערה", render: (r) => r.errorMessage ?? "—" },
   ];
 
@@ -248,8 +263,8 @@ export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProp
       </p>
 
       <div className="max-w-sm">
-        <label className="field-label">עמותה</label>
-        <select
+        <label htmlFor="plip-1" className="field-label">עמותה</label>
+        <select id="plip-1"
           value={orgId}
           onChange={(e) => {
             setOrgId(e.target.value);
@@ -274,6 +289,7 @@ export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProp
 
       {orgId && (
         <div className="card max-w-2xl space-y-4 p-5">
+          {isV3 && <Stepper steps={PHONE_IMPORT_STEPS} currentStep={phoneStep} />}
           {headerConfirm ? (
             <HeaderRowConfirm
               previewRows={headerConfirm.previewRows}
@@ -284,11 +300,11 @@ export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProp
           ) : (
             <>
               <p className="text-xs text-ink-subtle">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+              <input type="file" aria-label="קובץ רשימה טלפונית" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
               {analyzing && <LoadingState rows={2} />}
               {duplicateFileId && (
                 <div className="space-y-2">
-                  <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                  <DuplicateFileNotice />
                   <button onClick={() => setSelectedImportId(duplicateFileId)} className="link-action text-xs">
                     פתיחת הייבוא הקיים
                   </button>
@@ -298,6 +314,14 @@ export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProp
               {error && <ErrorState message={error} />}
               {localRows && !duplicateFileId && (
                 <>
+                  {isV3 && (
+                    <p className="text-sm text-ink">
+                      <span className="font-semibold text-primary">תצוגה מקדימה - עוד לא נשמר דבר.</span> בקובץ{" "}
+                      <span className="font-semibold text-ok-ink">{formatNumber(localPending.length)} מספרים להתאמה</span>
+                      {localDuplicate.length > 0 && <> · {formatNumber(localDuplicate.length)} כפולים (לא יותאמו פעמיים)</>}
+                      {localInvalid.length > 0 && <> · <span className="font-semibold text-danger-ink">{formatNumber(localInvalid.length)} לא תקינים</span></>}
+                    </p>
+                  )}
                   <Tabs
                     tabs={[
                       { key: "pending", label: "ממתין", badge: localPending.length },
@@ -340,13 +364,25 @@ export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProp
           <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית ייבוא</h2>
           <DataTable
             columns={[
-              { key: "file", header: "קובץ", render: (i: ImportSummary) => i.file_name },
+              { key: "file", header: "קובץ", truncate: isV3, render: (i: ImportSummary) => i.file_name },
               { key: "count", header: "שורות", className: "tabular", render: (i: ImportSummary) => i.row_count },
               {
                 key: "matched",
-                header: "תואם / עודף / כפול / לא תקין",
+                header: isV3 ? "תוצאת ההתאמה" : "תואם / עודף / כפול / לא תקין",
                 className: "tabular",
-                render: (i: ImportSummary) => `${i.matched_count} / ${i.extra_count} / ${i.duplicate_count} / ${i.invalid_count}`,
+                render: (i: ImportSummary) =>
+                  isV3
+                    ? i.status === "uploaded"
+                      ? "טרם הותאם"
+                      : [
+                        `${formatNumber(i.matched_count)} תואמים`,
+                        `${formatNumber(i.extra_count)} עודפים`,
+                        i.duplicate_count > 0 ? `${formatNumber(i.duplicate_count)} כפולים` : null,
+                        i.invalid_count > 0 ? `${formatNumber(i.invalid_count)} לא תקינים` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : `${i.matched_count} / ${i.extra_count} / ${i.duplicate_count} / ${i.invalid_count}`,
               },
               {
                 key: "status",
@@ -355,13 +391,14 @@ export function PhoneListsImportPanel({ initialFile }: PhoneListsImportPanelProp
                   <StatusBadge severity={i.status === "committed" ? "ok" : i.status === "rejected" ? "neutral" : "medium"} label={IMPORT_STATUS_LABEL[i.status]} />
                 ),
               },
-              { key: "date", header: "תאריך", className: "tabular", render: (i: ImportSummary) => new Date(i.created_at).toLocaleDateString("he-IL") },
+              { key: "date", header: "תאריך", className: "tabular", sortValue: isV3 ? (i: ImportSummary) => i.created_at : undefined, render: (i: ImportSummary) => (isV3 ? formatDate(i.created_at) : new Date(i.created_at).toLocaleDateString("he-IL")) },
             ]}
             rows={importsQuery.data ?? []}
             rowKey={(i: ImportSummary) => i.id}
             loading={importsQuery.isLoading}
             emptyTitle="אין עדיין ייבואים"
             onRowClick={(i: ImportSummary) => setSelectedImportId(i.id === selectedImportId ? null : i.id)}
+            selectedKey={isV3 ? selectedImportId : undefined}
           />
           <p className="text-xs text-ink-subtle">
             לפירוט מלא של שורות (תואם/עודף/כפול/לא תקין) ולתלמידים חסרים ברשימה - עברי למסך "רשימות בימות המשיח".

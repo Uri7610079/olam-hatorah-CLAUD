@@ -257,7 +257,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
       <button aria-label="סגור" className="flex-1 bg-ink/40" onClick={close} />
       <div role="dialog" aria-modal="true" aria-label={isCreate ? "משימה חדשה" : "כרטיס משימה"} className="h-full w-full max-w-xl overflow-y-auto bg-surface p-5 shadow-xl">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-ink">{isCreate ? "משימה חדשה" : task?.title ?? "כרטיס משימה"}</h2>
+          <h2 className="text-base font-semibold text-ink v3:text-primary">{isCreate ? "משימה חדשה" : task?.title ?? "כרטיס משימה"}</h2>
           <button onClick={close} aria-label="סגור" title="סגירת החלון" className="rounded-control p-1.5 text-ink-subtle transition hover:bg-surface-muted">
             ✕
           </button>
@@ -268,6 +268,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
             <StatusBadge severity={STATUS_SEVERITY[task.status]} label={STATUS_LABEL[task.status]} />
             {canEdit && (
               <select
+                aria-label="שינוי סטטוס"
                 value={task.status}
                 onChange={(e) => handleFieldSave({ status: e.target.value as TaskStatus })}
                 className="input-field w-auto text-xs"
@@ -292,8 +293,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
           <div className="space-y-3">
             {(templatesQuery.data ?? []).length > 0 && (
               <div>
-                <label className="field-label">התחלה מתבנית (לא חובה)</label>
-                <select value={selectedTemplateId} onChange={(e) => applyTemplate(e.target.value)} className="input-field">
+                <label className="field-label" htmlFor="task-field-1">התחלה מתבנית (לא חובה)</label>
+                <select id="task-field-1" value={selectedTemplateId} onChange={(e) => applyTemplate(e.target.value)} className="input-field">
                   <option value="">— ללא —</option>
                   {(templatesQuery.data ?? []).map((t) => (
                     <option key={t.id} value={t.id}>
@@ -304,17 +305,17 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
               </div>
             )}
             <div>
-              <label className="field-label">כותרת</label>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" />
+              <label className="field-label" htmlFor="task-field-2">כותרת</label>
+              <input id="task-field-2" value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" />
             </div>
             <div>
-              <label className="field-label">תיאור</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="input-field" />
+              <label className="field-label" htmlFor="task-field-3">תיאור</label>
+              <textarea id="task-field-3" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="input-field" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="field-label">עדיפות</label>
-                <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className="input-field">
+                <label className="field-label" htmlFor="task-field-4">עדיפות</label>
+                <select id="task-field-4" value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className="input-field">
                   {(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((p) => (
                     <option key={p} value={p}>
                       {PRIORITY_LABEL[p]}
@@ -323,8 +324,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                 </select>
               </div>
               <div>
-                <label className="field-label">קטגוריה</label>
-                <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="input-field">
+                <label className="field-label" htmlFor="task-field-5">קטגוריה</label>
+                <select id="task-field-5" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="input-field">
                   <option value="">— ללא —</option>
                   {(categoriesQuery.data ?? []).map((c) => (
                     <option key={c.id} value={c.id}>
@@ -335,8 +336,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
               </div>
             </div>
             <div>
-              <label className="field-label">תאריך יעד</label>
-              <input
+              <label className="field-label" htmlFor="task-field-6">תאריך יעד</label>
+              <input id="task-field-6"
                 type="date"
                 value={dueDate}
                 onChange={(e) => {
@@ -348,8 +349,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
             </div>
             {dueDate && (
               <div>
-                <label className="field-label">תזכורת (ימים לפני היעד, לא חובה)</label>
-                <input
+                <label className="field-label" htmlFor="task-field-7">תזכורת (ימים לפני היעד, לא חובה)</label>
+                <input id="task-field-7"
                   type="number"
                   min={0}
                   value={reminderDaysBefore}
@@ -413,8 +414,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
             {activeTab === "details" && (
               <div className="space-y-3">
                 <div>
-                  <label className="field-label">כותרת</label>
-                  <input
+                  <label className="field-label" htmlFor="task-field-8">כותרת</label>
+                  <input id="task-field-8"
                     defaultValue={task.title}
                     disabled={!canEdit}
                     onBlur={(e) => e.target.value !== task.title && handleFieldSave({ title: e.target.value })}
@@ -422,8 +423,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                   />
                 </div>
                 <div>
-                  <label className="field-label">תיאור</label>
-                  <textarea
+                  <label className="field-label" htmlFor="task-field-9">תיאור</label>
+                  <textarea id="task-field-9"
                     defaultValue={task.description ?? ""}
                     disabled={!canEdit}
                     rows={3}
@@ -433,8 +434,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="field-label">עדיפות</label>
-                    <select
+                    <label className="field-label" htmlFor="task-field-10">עדיפות</label>
+                    <select id="task-field-10"
                       value={task.priority}
                       disabled={!canEdit}
                       onChange={(e) => handleFieldSave({ priority: e.target.value as TaskPriority })}
@@ -448,8 +449,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                     </select>
                   </div>
                   <div>
-                    <label className="field-label">קטגוריה</label>
-                    <select
+                    <label className="field-label" htmlFor="task-field-11">קטגוריה</label>
+                    <select id="task-field-11"
                       value={task.category_id ?? ""}
                       disabled={!canEdit}
                       onChange={(e) => handleFieldSave({ category_id: e.target.value || null })}
@@ -465,8 +466,8 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                   </div>
                 </div>
                 <div>
-                  <label className="field-label">תאריך יעד</label>
-                  <input
+                  <label className="field-label" htmlFor="task-field-12">תאריך יעד</label>
+                  <input id="task-field-12"
                     type="date"
                     value={task.due_date ?? ""}
                     disabled={!canEdit}

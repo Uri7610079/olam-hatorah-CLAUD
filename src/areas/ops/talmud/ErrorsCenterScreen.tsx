@@ -25,6 +25,10 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 import { RawRowPreview } from "@/components/RawRowPreview";
+import { CountChips, type ChipTone } from "@/components/CountChips";
+import { DuplicateFileNotice, ImportSteps, PreviewSummary, SavedForReviewNote, batchCountsText, batchImportStep } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMonth } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -56,6 +60,14 @@ const STATUS_LABEL: Record<ErrorStatus, string> = {
   in_progress: "בטיפול",
   pending_info: "ממתין למידע",
   closed: "סגור",
+};
+
+// צבע הצ'יפ לכל סטטוס (v3) - פתוח בולט, סגור מאופק
+const STATUS_TONE: Record<ErrorStatus, ChipTone> = {
+  open: "danger",
+  in_progress: "info",
+  pending_info: "warn",
+  closed: "neutral",
 };
 
 async function fetchErrors(orgId: string, statusFilter: string): Promise<TalmudError[]> {
@@ -141,8 +153,15 @@ export function ErrorsCenterScreen() {
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ matched: number; unmatched: number } | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
-  const errorsQuery = useQuery({ queryKey: ["talmud-errors", orgId, statusFilter], queryFn: () => fetchErrors(orgId, statusFilter), enabled: !!orgId });
+  // v3: הסינון לפי סטטוס עובר לצ'יפים עם ספירה. כדי שהספירות יהיו נכונות טוענים את
+  // כל השגיאות (אותה שאילתה כמו "הכול") ומסננים בדפדפן. בשאר הערכות - כמו קודם.
+  const isV3 = useIsV3();
+  const [chipStatus, setChipStatus] = useState<string | null>(null);
+  const serverStatus = isV3 ? "" : statusFilter;
+
+  const errorsQuery = useQuery({ queryKey: ["talmud-errors", orgId, serverStatus], queryFn: () => fetchErrors(orgId, serverStatus), enabled: !!orgId });
   const batchesQuery = useQuery({ queryKey: ["errors-batches", orgId], queryFn: () => fetchErrorsBatches(orgId), enabled: !!orgId });
   const reviewBatchQuery = useQuery({ queryKey: ["errors-batch", reviewBatchId], queryFn: () => fetchBatchById(reviewBatchId!), enabled: !!reviewBatchId });
   const reviewRowsQuery = useQuery({ queryKey: ["errors-batch-rows", reviewBatchId], queryFn: () => fetchImportBatchRows(reviewBatchId!), enabled: !!reviewBatchId });
@@ -246,13 +265,16 @@ export function ErrorsCenterScreen() {
     queryClient.invalidateQueries({ queryKey: ["errors-batch", reviewBatchId] });
     queryClient.invalidateQueries({ queryKey: ["errors-batch-rows", reviewBatchId] });
     queryClient.invalidateQueries({ queryKey: ["errors-batches", orgId] });
-    queryClient.invalidateQueries({ queryKey: ["talmud-errors", orgId, statusFilter] });
+    queryClient.invalidateQueries({ queryKey: ["talmud-errors", orgId, serverStatus] });
     queryClient.invalidateQueries({ queryKey: ["students"] });
   };
 
   const changeStatus = async (errorId: string, status: ErrorStatus) => {
-    await supabase.rpc("resolve_talmud_error", { p_error_id: errorId, p_status: status });
-    queryClient.invalidateQueries({ queryKey: ["talmud-errors", orgId, statusFilter] });
+    setStatusError(null);
+    const { error: rpcError } = await supabase.rpc("resolve_talmud_error", { p_error_id: errorId, p_status: status });
+    // עד היום שגיאה כאן נבלעה בשקט והבחירה ברשימה "קפצה" חזרה בלי הסבר
+    if (rpcError) setStatusError(`עדכון הסטטוס נכשל: ${rpcError.message}`);
+    queryClient.invalidateQueries({ queryKey: ["talmud-errors", orgId, serverStatus] });
   };
 
   if (importPermLoading) return <LoadingState rows={4} />;
@@ -266,6 +288,16 @@ export function ErrorsCenterScreen() {
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
   const reviewIsOpen = reviewBatchQuery.data ? OPEN_STATUSES.includes(reviewBatchQuery.data.status) : false;
+  const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: reviewBatchQuery.data?.status === "committed", previewing: !!parsedRows && !duplicateId });
+
+  const allErrors = errorsQuery.data ?? [];
+  const statusChips = (Object.keys(STATUS_LABEL) as ErrorStatus[]).map((s) => ({
+    value: s,
+    label: STATUS_LABEL[s],
+    count: allErrors.filter((r) => r.status === s).length,
+    tone: STATUS_TONE[s],
+  }));
+  const shownErrors = isV3 && chipStatus ? allErrors.filter((r) => r.status === chipStatus) : allErrors;
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -302,16 +334,18 @@ export function ErrorsCenterScreen() {
         title="מרכז שגיאות תלמוד"
         description="שגיאות מדוח תלמוד, לפי תלמיד וחודש. תלמיד יכול לצבור כמה שגיאות באותו חודש."
         primaryAction={
-          <button onClick={() => setShowImport((v) => !v)} className="btn-secondary">
+          <button onClick={() => setShowImport((v) => !v)} className={isV3 && !showImport ? "btn-primary" : "btn-secondary"}>
+            {isV3 && !showImport && <Upload className="h-4 w-4" aria-hidden="true" />}
             {showImport ? "סגירה" : "יבוא דוח שגויים"}
           </button>
         }
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 max-w-2xl mb-4">
+      {/* v3: למעלה רק העמותה; החודש שייך לקובץ חדש ולכן עובר לאזור היבוא, והסטטוס - לצ'יפים */}
+      <div className={isV3 ? "mb-4 grid max-w-xs grid-cols-1 gap-3" : "grid grid-cols-1 gap-3 sm:grid-cols-3 max-w-2xl mb-4"}>
         <div>
-          <label className="field-label">עמותה</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+          <label htmlFor="errors-org" className="field-label">עמותה</label>
+          <select id="errors-org" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
             <option value="">— בחרי —</option>
             {(orgsQuery.data ?? []).map((o) => (
               <option key={o.id} value={o.id}>
@@ -320,31 +354,42 @@ export function ErrorsCenterScreen() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="field-label">חודש (לקובץ חדש)</label>
-          <input type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
-        </div>
-        <div>
-          <label className="field-label">סינון סטטוס</label>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-field">
-            <option value="">הכול</option>
-            {(Object.keys(STATUS_LABEL) as ErrorStatus[]).map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!isV3 && (
+          <div>
+            <label htmlFor="errors-month" className="field-label">חודש (לקובץ חדש)</label>
+            <input id="errors-month" type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
+          </div>
+        )}
+        {!isV3 && (
+          <div>
+            <label htmlFor="errors-status" className="field-label">סינון סטטוס</label>
+            <select id="errors-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-field">
+              <option value="">הכול</option>
+              {(Object.keys(STATUS_LABEL) as ErrorStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {showImport && orgId && !reviewBatchId && (
         <div className="card mb-6 max-w-2xl space-y-4 p-5">
+          <ImportSteps current={importStep} />
+          {isV3 && (
+            <div className="max-w-xs">
+              <label htmlFor="errors-month-v3" className="field-label">חודש הדוח</label>
+              <input id="errors-month-v3" type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
+            </div>
+          )}
           <p className="text-xs text-ink-subtle">עמודות צפויות: מזהה תלמיד, קוד שגיאה, תיאור שגיאה (לא חובה).</p>
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+          <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ דוח שגויים" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
           {analyzing && <LoadingState rows={2} />}
           {duplicateId && (
             <div className="space-y-2">
-              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              <DuplicateFileNotice />
               <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
                 פתיחת האצווה הקיימת
               </button>
@@ -368,6 +413,7 @@ export function ErrorsCenterScreen() {
             parsedRows &&
             !duplicateId && (
               <>
+                <PreviewSummary valid={localValid.length} needs={localNeeds.length} invalid={localInvalid.length} />
                 <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                   {(tab) => {
                     const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
@@ -390,10 +436,11 @@ export function ErrorsCenterScreen() {
             <LoadingState rows={4} />
           ) : reviewBatchQuery.data ? (
             <>
+              <ImportSteps current={importStep} />
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
-                  <p className="text-xs text-ink-subtle">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                  <p className="text-xs text-ink-subtle">חודש: {isV3 ? formatMonth(reviewBatchQuery.data.period_month) : reviewBatchQuery.data.period_month ?? "—"}</p>
                 </div>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
@@ -401,6 +448,7 @@ export function ErrorsCenterScreen() {
                 />
               </div>
 
+              {reviewIsOpen && <SavedForReviewNote what="דוח השגויים" />}
               {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הדוח.</p>}
 
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
@@ -435,6 +483,10 @@ export function ErrorsCenterScreen() {
 
       {orgId && (
         <>
+          {isV3 && !errorsQuery.isLoading && allErrors.length > 0 && (
+            <CountChips chips={statusChips} active={chipStatus} onSelect={setChipStatus} total={allErrors.length} allLabel="כל השגיאות" ariaLabel="סינון לפי סטטוס" />
+          )}
+          {statusError && <div className="mb-3"><ErrorState message={statusError} /></div>}
           <DataTable
             columns={[
               { key: "recurring", header: "", render: (r: TalmudError) => (r.is_recurring ? <StatusBadge severity="high" label="חוזרת" /> : null) },
@@ -445,9 +497,15 @@ export function ErrorsCenterScreen() {
               {
                 key: "status",
                 header: "סטטוס",
+                filterValue: isV3 ? (r: TalmudError) => STATUS_LABEL[r.status] : undefined,
                 render: (r: TalmudError) =>
                   canManage ? (
-                    <select value={r.status} onChange={(e) => changeStatus(r.id, e.target.value as ErrorStatus)} className="input-field text-xs">
+                    <select
+                      value={r.status}
+                      onChange={(e) => changeStatus(r.id, e.target.value as ErrorStatus)}
+                      aria-label={`סטטוס השגיאה של ${r.student?.full_name ?? r.external_student_ref ?? "התלמיד"}`}
+                      className={isV3 ? "input-field min-w-[9rem] text-sm" : "input-field text-xs"}
+                    >
                       {(Object.keys(STATUS_LABEL) as ErrorStatus[]).map((s) => (
                         <option key={s} value={s}>
                           {STATUS_LABEL[s]}
@@ -459,22 +517,28 @@ export function ErrorsCenterScreen() {
                   ),
               },
             ]}
-            rows={errorsQuery.data ?? []}
+            rows={shownErrors}
             rowKey={(r: TalmudError) => r.id}
             loading={errorsQuery.isLoading}
             emptyTitle="אין שגיאות"
           />
 
-          <h2 className="mb-2 mt-6 text-sm font-semibold text-ink-muted">היסטוריית יבוא שגויים</h2>
+          <h2 className="mb-2 mt-6 text-sm font-semibold text-ink-muted v3:text-base v3:text-primary">היסטוריית יבוא שגויים</h2>
           <DataTable
             columns={[
-              { key: "file", header: "קובץ", render: (b: ErrorsBatchSummary) => b.file_name },
-              { key: "month", header: "חודש", className: "tabular", render: (b: ErrorsBatchSummary) => b.period_month ?? "—" },
+              { key: "file", header: "קובץ", truncate: isV3, render: (b: ErrorsBatchSummary) => b.file_name },
+              {
+                key: "month",
+                header: "חודש",
+                className: "tabular",
+                sortValue: isV3 ? (b: ErrorsBatchSummary) => b.period_month : undefined,
+                render: (b: ErrorsBatchSummary) => (isV3 ? formatMonth(b.period_month) : b.period_month ?? "—"),
+              },
               {
                 key: "counts",
-                header: "תקין / דורש החלטה / שגוי",
+                header: isV3 ? "שורות" : "תקין / דורש החלטה / שגוי",
                 className: "tabular",
-                render: (b: ErrorsBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+                render: (b: ErrorsBatchSummary) => (isV3 ? batchCountsText(b) : `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`),
               },
               {
                 key: "status",
@@ -483,7 +547,13 @@ export function ErrorsCenterScreen() {
                   <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
                 ),
               },
-              { key: "date", header: "תאריך", className: "tabular", render: (b: ErrorsBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+              {
+                key: "date",
+                header: "תאריך",
+                className: "tabular",
+                sortValue: isV3 ? (b: ErrorsBatchSummary) => b.created_at : undefined,
+                render: (b: ErrorsBatchSummary) => (isV3 ? formatDate(b.created_at) : new Date(b.created_at).toLocaleDateString("he-IL")),
+              },
             ]}
             rows={batchesQuery.data ?? []}
             rowKey={(b: ErrorsBatchSummary) => b.id}

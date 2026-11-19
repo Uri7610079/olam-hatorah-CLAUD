@@ -16,6 +16,9 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
+import { MetricCard } from "@/components/MetricCard";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMoney, formatMonth, formatNumber } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -135,6 +138,9 @@ const EMPTY_NEW_BATCH = { periodMonth: todayLocalIso().slice(0, 7) + "-01", sour
 
 export function DistributionsScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
+  // v3: כפתורים בגודל רגיל במקום text-xs (בערכות הקודמות - בלי שינוי)
+  const xs = isV3 ? "" : " text-xs";
   const { hasPermission: canManage } = useHasPermission("distributions", "manage");
   const { hasPermission: canApprove } = useHasPermission("distributions", "approve");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
@@ -384,8 +390,19 @@ export function DistributionsScreen() {
         }, 0)
       : linesTotal;
 
+  // v3: "יתרה / מתוכנן / נשאר" - מהיתרה שכבר נטענה ומסכום השורות השמורות שכבר מחושב
+  // במסך (linesTotal; אלה השורות שהאישור בודק). מוצג רק לאצווה שטרם אושרה: השרת בודק
+  // באישור את היתרה גם בניכוי אצוות מאושרות/נעולות אחרות, וסכומי השורות שלהן לא נטענים
+  // כאן - לכן רק מציינים כמה אצוות כאלה יש, בלי להמציא סכום.
+  const balance = balanceQuery.data ?? 0;
+  const showPlanSummary = isV3 && !!selectedBatch && (selectedBatch.status === "draft" || selectedBatch.status === "in_review");
+  const remaining = balance - linesTotal;
+  const otherCommittedBatches = (batchesQuery.data ?? []).filter(
+    (b) => b.id !== selectedBatchId && (b.status === "approved" || b.status === "locked_for_masav"),
+  ).length;
+
   const batchColumns: DataTableColumn<BatchRow>[] = [
-    { key: "month", header: "חודש", className: "tabular", render: (r) => r.period_month },
+    { key: "month", header: "חודש", className: "tabular", filterValue: (r) => r.period_month, render: (r) => (isV3 ? formatMonth(r.period_month) : r.period_month) },
     { key: "source", header: "מקור", render: (r) => SOURCE_LABEL[r.source_type] },
     { key: "method", header: "שיטה", render: (r) => METHOD_LABEL[r.method] },
     { key: "version", header: "גרסה", className: "tabular", render: (r) => r.version },
@@ -395,7 +412,9 @@ export function DistributionsScreen() {
   const lineColumns: DataTableColumn<LineRow>[] = [
     { key: "id", header: "מזהה", className: "tabular", render: (r) => r.student.external_id },
     { key: "name", header: "שם", render: (r) => r.student.full_name },
-    { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
+    isV3
+      ? { key: "amount", header: "סכום", kind: "money", filterValue: (r) => r.amount, sortValue: (r) => r.amount, render: (r) => formatMoney(r.amount) }
+      : { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
   ];
 
   return (
@@ -448,10 +467,47 @@ export function DistributionsScreen() {
 
       {groupId && (
         <>
+          {isV3 ? (
+            showPlanSummary && selectedBatch ? (
+              <div className="mb-4 max-w-3xl">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <MetricCard label="יתרת קבוצה" value={formatMoney(balance)} tone={balance < 0 ? "danger" : "primary"} />
+                  <MetricCard
+                    label={`מתוכנן באצווה · ${formatMonth(selectedBatch.period_month)}`}
+                    value={formatMoney(linesTotal)}
+                    hint={
+                      selectedBatch.status === "draft" && draftTotal !== linesTotal
+                        ? `בטופס כרגע ${formatMoney(draftTotal)} - טרם נשמר`
+                        : `${formatNumber(lines.length)} שורות שמורות`
+                    }
+                    tone="info"
+                    muted={linesTotal === 0}
+                  />
+                  <MetricCard
+                    label="נשאר אחרי האצווה"
+                    value={formatMoney(remaining)}
+                    hint={remaining < 0 ? "חורג מהיתרה - האישור ייחסם" : undefined}
+                    tone={remaining < 0 ? "danger" : "ok"}
+                    emphasis
+                  />
+                </div>
+                {otherCommittedBatches > 0 && (
+                  <p className="mt-2 text-xs text-ink-subtle">
+                    לקבוצה יש עוד {formatNumber(otherCommittedBatches)} אצוות מאושרות/נעולות. באישור, השרת מנכה מהיתרה גם אותן - ולכן הסכום הזמין בפועל עשוי להיות נמוך יותר.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mb-4 max-w-xs">
+                <MetricCard label="יתרת קבוצה נוכחית" value={formatMoney(balance)} tone={balance < 0 ? "danger" : "primary"} />
+              </div>
+            )
+          ) : (
           <div className="card mb-4 max-w-sm p-3">
             <p className="text-xs text-ink-subtle">יתרת קבוצה נוכחית</p>
             <p className="text-lg font-bold tabular">{(balanceQuery.data ?? 0).toLocaleString("he-IL")}</p>
           </div>
+          )}
 
           {canManage && (
             <div className="mb-4">
@@ -508,14 +564,15 @@ export function DistributionsScreen() {
             emptyTitle="אין עדיין אצוות חלוקה לקבוצה זו"
             emptyIcon={Split}
             onRowClick={openBatch}
+            selectedKey={isV3 ? selectedBatchId : undefined}
           />
 
           {selectedBatchId && selectedBatch && (
             <div className="card mt-6 max-w-4xl space-y-4 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-ink-muted">
-                    אצווה {selectedBatch.period_month} · גרסה {selectedBatch.version}
+                  <h2 className="text-sm font-semibold text-ink-muted v3:text-base v3:text-primary">
+                    אצווה {isV3 ? formatMonth(selectedBatch.period_month) : selectedBatch.period_month} · גרסה {selectedBatch.version}
                   </h2>
                   <p className="text-xs text-ink-subtle">
                     {SOURCE_LABEL[selectedBatch.source_type]} · {METHOD_LABEL[selectedBatch.method]}
@@ -534,7 +591,7 @@ export function DistributionsScreen() {
                         <label className="field-label">סכום כולל לחלוקה שווה</label>
                         <input type="number" step="0.01" value={equalTotal} onChange={(e) => setEqualTotal(e.target.value)} className="input-field tabular" />
                       </div>
-                      <button type="button" onClick={applyEqualSplit} className="btn-secondary text-xs">
+                      <button type="button" onClick={applyEqualSplit} className={`btn-secondary${xs}`}>
                         חישוב חלוקה שווה
                       </button>
                     </div>
@@ -574,22 +631,28 @@ export function DistributionsScreen() {
                   {groupStudentsQuery.isLoading ? (
                     <LoadingState rows={3} />
                   ) : (
-                    <div className="max-h-80 overflow-y-auto rounded-md border border-line bg-surface">
+                    // v3: כותרת דביקה בגלילה, שורה מסומנת בגוון, וגלילה אופקית במסך צר. הבחירה עצמה לא השתנתה.
+                    <div className="max-h-80 overflow-y-auto rounded-md border border-line bg-surface v3:overflow-x-auto">
                       <table className="w-full text-right text-sm">
-                        <thead className="border-b border-line bg-surface-muted text-ink-muted">
+                        <thead className="border-b border-line bg-surface-muted text-ink-muted v3:sticky v3:top-0 v3:z-10">
                           <tr>
                             <th className="px-3 py-2"></th>
-                            <th className="px-3 py-2">מזהה</th>
-                            <th className="px-3 py-2">שם</th>
+                            <th className="px-3 py-2 v3:font-semibold">מזהה</th>
+                            <th className="px-3 py-2 v3:font-semibold">שם</th>
                             <th className="px-3 py-2"></th>
-                            <th className="px-3 py-2">{selectedBatch.method === "percentages" ? "אחוז" : "סכום"}</th>
+                            <th className="px-3 py-2 v3:font-semibold">{selectedBatch.method === "percentages" ? "אחוז" : isV3 ? "סכום (₪)" : "סכום"}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-line">
                           {(groupStudentsQuery.data ?? []).map((s) => (
-                            <tr key={s.id}>
+                            <tr key={s.id} className={isV3 ? (selectedIds.has(s.id) ? "bg-brand-50/70" : "hover:bg-surface-muted") : undefined}>
                               <td className="px-3 py-2">
-                                <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleSelected(s.id)} />
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(s.id)}
+                                  onChange={() => toggleSelected(s.id)}
+                                  aria-label={`בחירת ${s.full_name}`}
+                                />
                               </td>
                               <td className="px-3 py-2 tabular">{s.external_id}</td>
                               <td className="px-3 py-2">{s.full_name}</td>
@@ -605,6 +668,7 @@ export function DistributionsScreen() {
                                       step="0.01"
                                       value={percentages[s.id] ?? ""}
                                       onChange={(e) => setPercentages((p) => ({ ...p, [s.id]: e.target.value }))}
+                                      aria-label={`אחוז ל${s.full_name}`}
                                       className="input-field tabular w-24"
                                     />
                                   ) : (
@@ -613,6 +677,7 @@ export function DistributionsScreen() {
                                       step="0.01"
                                       value={amounts[s.id] ?? ""}
                                       onChange={(e) => setAmounts((a) => ({ ...a, [s.id]: e.target.value }))}
+                                      aria-label={`סכום ל${s.full_name}`}
                                       className="input-field tabular w-28"
                                     />
                                   ))}
@@ -626,10 +691,12 @@ export function DistributionsScreen() {
 
                   <div className="flex items-center justify-between">
                     <p className="text-xs text-ink-subtle">
-                      סה"כ נוכחי בטופס: <span className="tabular">{draftTotal.toLocaleString("he-IL")}</span>
+                      סה"כ נוכחי בטופס:{" "}
+                      <span className="tabular v3:font-semibold v3:text-ink">{isV3 ? formatMoney(draftTotal) : draftTotal.toLocaleString("he-IL")}</span>
+                      {isV3 && ` · ${formatNumber((groupStudentsQuery.data ?? []).filter((s) => selectedIds.has(s.id)).length)} תלמידים מסומנים`}
                     </p>
-                    <button onClick={saveLines} disabled={savingLines} className="btn-secondary flex items-center gap-2 text-xs">
-                      <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                    <button onClick={saveLines} disabled={savingLines} className={`btn-secondary flex items-center gap-2${xs}`}>
+                      <Upload className={isV3 ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden="true" />
                       {savingLines ? "שומרת…" : "שמירת שורות"}
                     </button>
                   </div>
@@ -637,8 +704,8 @@ export function DistributionsScreen() {
               )}
 
               <div className="flex items-center justify-end">
-                <button onClick={exportLines} className="btn-secondary flex items-center gap-2 text-xs">
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                <button onClick={exportLines} className={`btn-secondary flex items-center gap-2${xs}`}>
+                  <Download className={isV3 ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden="true" />
                   ייצוא לאקסל
                 </button>
               </div>
@@ -647,26 +714,27 @@ export function DistributionsScreen() {
 
               <div className="flex items-center justify-between">
                 <p className="text-sm text-ink-muted">
-                  סה"כ שורות שמורות: <span className="tabular">{linesTotal.toLocaleString("he-IL")}</span>
+                  סה"כ שורות שמורות:{" "}
+                  <span className="tabular v3:font-semibold v3:text-primary">{isV3 ? formatMoney(linesTotal) : linesTotal.toLocaleString("he-IL")}</span>
                 </p>
                 <div className="flex gap-2">
                   {selectedBatch.status === "draft" && canManage && (
-                    <button onClick={() => runAction("submit_distribution_for_review", { p_batch_id: selectedBatchId })} disabled={actionBusy} className="btn-primary text-xs">
+                    <button onClick={() => runAction("submit_distribution_for_review", { p_batch_id: selectedBatchId })} disabled={actionBusy} className={`btn-primary${xs}`}>
                       הגשה לבדיקה
                     </button>
                   )}
                   {selectedBatch.status === "in_review" && canApprove && (
-                    <button onClick={() => setConfirmApprove(true)} disabled={actionBusy} className="btn-primary text-xs">
+                    <button onClick={() => setConfirmApprove(true)} disabled={actionBusy} className={`btn-primary${xs}`}>
                       אישור
                     </button>
                   )}
                   {selectedBatch.status === "approved" && canApprove && (
-                    <button onClick={() => runAction("lock_distribution_for_masav", { p_batch_id: selectedBatchId })} disabled={actionBusy} className="btn-primary text-xs">
+                    <button onClick={() => runAction("lock_distribution_for_masav", { p_batch_id: selectedBatchId })} disabled={actionBusy} className={`btn-primary${xs}`}>
                       נעילה להכנת מס״ב
                     </button>
                   )}
                   {(selectedBatch.status === "approved" || selectedBatch.status === "locked_for_masav") && canManage && (
-                    <button onClick={createNewVersion} disabled={actionBusy} className="btn-secondary text-xs">
+                    <button onClick={createNewVersion} disabled={actionBusy} className={`btn-secondary${xs}`}>
                       יצירת גרסה חדשה
                     </button>
                   )}

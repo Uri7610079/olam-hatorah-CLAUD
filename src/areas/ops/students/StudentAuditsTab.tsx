@@ -3,6 +3,8 @@ import { ClipboardList } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
+import { formatDate } from "@/lib/format";
+import { useIsV3 } from "@/lib/uiTheme";
 
 interface AttendanceRow {
   id: string;
@@ -33,9 +35,20 @@ async function fetchAttendance(studentId: string): Promise<AttendanceRow[]> {
 // היסטוריית נוכחות וחוסר של התלמיד לפי כרטיס - "היסטוריית נוכחות וחוסר בכרטיס התלמיד" באפיון (שלב 13).
 export function StudentAuditsTab({ studentId }: { studentId: string }) {
   const attendanceQuery = useQuery({ queryKey: ["student-audit-attendance", studentId], queryFn: () => fetchAttendance(studentId) });
+  const isV3 = useIsV3();
 
   const columns: DataTableColumn<AttendanceRow>[] = [
-    { key: "date", header: "תאריך ביקורת", className: "tabular", render: (r) => r.audit?.audit_date ?? "—" },
+    // v3: תאריך אחיד 19.11.2026; המיון לפי הערך המקורי
+    isV3
+      ? {
+          key: "date",
+          header: "תאריך ביקורת",
+          className: "tabular",
+          filterValue: (r) => (r.audit?.audit_date ? formatDate(r.audit.audit_date) : ""),
+          sortValue: (r) => r.audit?.audit_date ?? "",
+          render: (r) => (r.audit?.audit_date ? formatDate(r.audit.audit_date) : <span className="text-ink-subtle">—</span>),
+        }
+      : { key: "date", header: "תאריך ביקורת", className: "tabular", render: (r) => r.audit?.audit_date ?? "—" },
     { key: "org", header: "עמותה", render: (r) => r.audit?.organization?.legal_name ?? "—" },
     { key: "recurring", header: "", render: (r) => (r.is_recurring ? <StatusBadge severity="high" label="חוזר" /> : null) },
     { key: "reason", header: "סיבה", render: (r) => r.reason ?? "—" },

@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
 import { Tabs, type TabDef } from "@/components/Tabs";
+import { useIsV3 } from "@/lib/uiTheme";
 import type { Organization } from "./types";
 import { OrganizationDetailsTab } from "./OrganizationDetailsTab";
 import { OrganizationOfficeholdersTab } from "./OrganizationOfficeholdersTab";
@@ -26,6 +27,8 @@ const TABS: TabDef<TabKey>[] = [
   { key: "documents", label: "מסמכים" },
   { key: "history", label: "היסטוריה" },
 ];
+// v3: בלי לשונית "מסמכים" - היא ריקה ("ייבנה בשלב 13")
+const TABS_V3 = TABS.filter((t) => t.key !== "documents");
 
 async function fetchOrganization(id: string): Promise<Organization> {
   const { data, error } = await supabase
@@ -39,7 +42,10 @@ async function fetchOrganization(id: string): Promise<Organization> {
 
 export function OrganizationDetailScreen() {
   const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<TabKey>("details");
+  const [selectedTab, setActiveTab] = useState<TabKey>("details");
+  const isV3 = useIsV3();
+  // מעבר ל-v3 כשלשונית "מסמכים" (שאינה קיימת שם) פתוחה - חוזרים ל"פרטים"
+  const activeTab: TabKey = isV3 && selectedTab === "documents" ? "details" : selectedTab;
   const query = useQuery({ queryKey: ["organization", id], queryFn: () => fetchOrganization(id!), enabled: !!id });
 
   if (query.isLoading) return <LoadingState rows={6} />;
@@ -57,12 +63,12 @@ export function OrganizationDetailScreen() {
         }
       />
 
-      <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} ariaLabel="לשוניות עמותה" />
+      <Tabs tabs={isV3 ? TABS_V3 : TABS} activeTab={activeTab} onChange={setActiveTab} ariaLabel="לשוניות עמותה" />
 
       {activeTab === "details" && <OrganizationDetailsTab organization={org} />}
       {activeTab === "officeholders" && <OrganizationOfficeholdersTab organizationId={org.id} />}
       {activeTab === "accounts" && <OrganizationBankAccountsTab organizationId={org.id} />}
-      {activeTab === "branches" && <OrganizationBranchesTab organizationId={org.id} />}
+      {activeTab === "branches" && <OrganizationBranchesTab organizationId={org.id} organizationName={org.legal_name} />}
       {activeTab === "documents" && (
         <EmptyState title="מסמכי עמותה" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={FileText} />
       )}

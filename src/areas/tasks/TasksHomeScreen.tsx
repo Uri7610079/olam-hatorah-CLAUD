@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { CheckSquare, BellRing, MessageSquare, NotebookPen } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useHasPermission } from "@/lib/permissions";
+import { useIsV3 } from "@/lib/uiTheme";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
@@ -14,6 +15,7 @@ import { TaskDrawer } from "./TaskDrawer";
 import { BulkTaskCaptureModal } from "./BulkTaskCaptureModal";
 import { PriorityBadge } from "./PriorityBadge";
 import { todayIso } from "./dateUtils";
+import { DueDateLabel } from "./DueDateLabel";
 
 function tomorrowIso(): string {
   const d = new Date();
@@ -40,7 +42,7 @@ interface TaskListSectionProps {
 function TaskListSection({ title, tasks, onOpen, emptyText, accentClass }: TaskListSectionProps) {
   return (
     <div className={`card border-t-4 p-4 ${accentClass}`}>
-      <h2 className="mb-3 text-sm font-semibold text-ink">
+      <h2 className="mb-3 text-sm font-semibold text-ink v3:text-primary">
         {title} <span className="text-ink-subtle">({tasks.length})</span>
       </h2>
       {tasks.length === 0 ? (
@@ -55,7 +57,7 @@ function TaskListSection({ title, tasks, onOpen, emptyText, accentClass }: TaskL
               >
                 <span className="truncate">{t.title}</span>
                 <span className="flex shrink-0 items-center gap-2 text-xs text-ink-subtle">
-                  {t.due_date && <span className="tabular">{t.due_date}</span>}
+                  {t.due_date && <DueDateLabel date={t.due_date} done={t.status === "completed"} />}
                   <PriorityBadge priority={t.priority} />
                   <StatusBadge severity={STATUS_SEVERITY[t.status]} label={STATUS_LABEL[t.status]} />
                 </span>
@@ -72,6 +74,7 @@ export function TasksHomeScreen() {
   const { session } = useAuth();
   const userId = session?.user.id ?? "";
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canCreate } = useHasPermission("tasks", "create");
   const { hasPermission: canSeeWhatsApp } = useHasPermission("tasks", "convert_whatsapp");
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
@@ -93,6 +96,17 @@ export function TasksHomeScreen() {
   };
 
   const refreshReminders = () => queryClient.invalidateQueries({ queryKey: ["due-reminders"] });
+  // עד היום כישלון בדחייה/סגירה של תזכורת נבלע - הלחיצה פשוט "לא עשתה כלום"
+  const [reminderError, setReminderError] = useState<string | null>(null);
+  const runReminderAction = async (action: () => Promise<void>) => {
+    setReminderError(null);
+    try {
+      await action();
+    } catch {
+      setReminderError("הפעולה על התזכורת לא נשמרה. נסו שוב.");
+    }
+    refreshReminders();
+  };
 
   if (query.isLoading) return <LoadingState rows={6} />;
 
@@ -104,6 +118,15 @@ export function TasksHomeScreen() {
   const today = tasks.filter((t) => t.due_date && isToday(t.due_date) && t.status !== "completed");
   const upcoming = tasks.filter((t) => t.due_date && !isPast(t.due_date) && !isToday(t.due_date) && t.status !== "completed");
   const waitingOrBlocked = tasks.filter((t) => t.status === "waiting" || t.status === "blocked");
+
+  // v3: כל משימה מופיעה בקבוצה אחת בלבד. משימה ממתינה/חסומה מופיעה רק תחת
+  // "ממתינות או חסומות" (עם התאריך והתיאור "לפני X ימים" בכרטיס), ומשימה פתוחה
+  // בלי תאריך יעד - שעד היום לא הופיעה באף קבוצה - מקבלת קבוצה משלה.
+  const isOnHold = (t: TaskWithRelations) => t.status === "waiting" || t.status === "blocked";
+  const v3Overdue = overdue.filter((t) => !isOnHold(t));
+  const v3Today = today.filter((t) => !isOnHold(t));
+  const v3Upcoming = upcoming.filter((t) => !isOnHold(t));
+  const noDueDate = tasks.filter((t) => !t.due_date && t.status !== "completed" && !isOnHold(t));
 
   return (
     <div>
@@ -131,6 +154,7 @@ export function TasksHomeScreen() {
             <BellRing className="h-4 w-4" aria-hidden="true" />
             תזכורות שהגיע זמנן ({dueReminders.length})
           </h2>
+          {reminderError && <p role="alert" className="mb-2 text-sm text-danger-ink">{reminderError}</p>}
           <ul className="space-y-1.5">
             {dueReminders.map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-2 rounded-control bg-surface p-2 text-sm">
@@ -139,19 +163,13 @@ export function TasksHomeScreen() {
                 </button>
                 <span className="flex shrink-0 gap-2 text-xs">
                   <button
-                    onClick={async () => {
-                      await snoozeReminder(r.id, tomorrowIso());
-                      refreshReminders();
-                    }}
+                    onClick={() => runReminderAction(() => snoozeReminder(r.id, tomorrowIso()))}
                     className="text-ink-subtle underline hover:text-ink-muted"
                   >
                     דחייה למחר
                   </button>
                   <button
-                    onClick={async () => {
-                      await dismissReminder(r.id);
-                      refreshReminders();
-                    }}
+                    onClick={() => runReminderAction(() => dismissReminder(r.id))}
                     className="text-ink-subtle underline hover:text-ink-muted"
                   >
                     סגירה
@@ -165,6 +183,22 @@ export function TasksHomeScreen() {
 
       {tasks.length === 0 ? (
         <EmptyState title="אין לך משימות פתוחות כרגע" icon={CheckSquare} />
+      ) : isV3 ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TaskListSection title="באיחור" tasks={v3Overdue} onOpen={openTask} emptyText="אין משימות באיחור." accentClass="border-t-danger" />
+          <TaskListSection title="להיום" tasks={v3Today} onOpen={openTask} emptyText="אין משימות להיום." accentClass="border-t-tasks" />
+          <TaskListSection title="קרובות" tasks={v3Upcoming} onOpen={openTask} emptyText="אין משימות קרובות." accentClass="border-t-info" />
+          <TaskListSection
+            title="ממתינות או חסומות"
+            tasks={waitingOrBlocked}
+            onOpen={openTask}
+            emptyText="אין משימות ממתינות או חסומות."
+            accentClass="border-t-high"
+          />
+          {noDueDate.length > 0 && (
+            <TaskListSection title="ללא תאריך יעד" tasks={noDueDate} onOpen={openTask} emptyText="" accentClass="border-t-neutral" />
+          )}
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <TaskListSection title="באיחור" tasks={overdue} onOpen={openTask} emptyText="אין משימות באיחור." accentClass="border-t-danger" />

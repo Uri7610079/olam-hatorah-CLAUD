@@ -3,7 +3,10 @@ import { AlertTriangle, CheckCircle2, Link2, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { writeJsonToFolder } from "@/lib/folderAccess";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // השם חייב להיות זהה ל-UPLOAD_CONFIG_FILE ב-bank-scraper-portable.ps1
 export const SCRAPER_UPLOAD_FILE = "חיבור-למערכת.json";
@@ -36,18 +39,24 @@ const STATUS_LABEL: Record<RunRow["status"], { label: string; severity: "ok" | "
   running: { label: "רץ", severity: "neutral" },
 };
 
-const fmt = (v: string) => new Date(v).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+const fmtClassic = (v: string) => new Date(v).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
 
 // חיבור הסקרייפר למערכת (מיגרציה 123): התנועות נקלטות מיד אחרי המשיכה, בלי יבוא
 // ידני. המפתח נוצר כאן ונכתב ישר לתיקיית הבנק שבמחשב הזה - לא מוצג ולא מועתק ידנית.
 // במסד נשמרת רק טביעה שלו, ולכן אי אפשר "לראות" מפתח קיים: רק ליצור חדש.
 export function BankScraperConnectionPanel() {
   const { hasPermission: canManage } = useHasPermission("bank_import", "perform");
+  const isV3 = useIsV3();
+  const fmt = isV3 ? formatDateTime : fmtClassic;
   const [keyStatus, setKeyStatus] = useState<{ has_key: boolean; created_at: string | null } | null>(null);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [unmatched, setUnmatched] = useState<UnmatchedRow[]>([]);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // אישורים בחלון של המערכת במקום window.confirm של הדפדפן - אותה שאלה ואותה פעולה
+  const [ignoreTarget, setIgnoreTarget] = useState<UnmatchedRow | null>(null);
+  const [confirmReconnect, setConfirmReconnect] = useState(false);
 
   const load = useCallback(async () => {
     const [ks, rs, um] = await Promise.all([
@@ -67,6 +76,8 @@ export function BankScraperConnectionPanel() {
         .is("ignored_at", null)
         .order("last_seen_at", { ascending: false }),
     ]);
+    // עד היום שגיאת טעינה נבלעה, והמסך הציג "לא מחובר" גם כשהחיבור קיים
+    setLoadError(Boolean(ks.error || rs.error || um.error));
     const k = Array.isArray(ks.data) ? ks.data[0] : ks.data;
     setKeyStatus(k ?? { has_key: false, created_at: null });
     const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
@@ -88,14 +99,17 @@ export function BankScraperConnectionPanel() {
   }, [load]);
 
   const ignore = async (u: UnmatchedRow) => {
-    if (!window.confirm(`להתעלם מחשבון ${u.account_number}? התנועות שלו לא ייקלטו, והוא לא יופיע יותר כהתראה. אפשר לבטל ברישום החשבון תחת עמותה.`)) return;
     const { error } = await supabase.rpc("set_unmatched_bank_account_ignored", { p_id: u.id, p_ignored: true });
     if (error) setMessage({ kind: "error", text: error.message });
     void load();
   };
 
+  const requestConnect = () => {
+    if (keyStatus?.has_key) setConfirmReconnect(true);
+    else void connect();
+  };
+
   const connect = async () => {
-    if (keyStatus?.has_key && !window.confirm("כבר קיים חיבור. חיבור חדש מבטל את הקודם - הסקרייפר ישתמש רק בחדש. להמשיך?")) return;
     setWorking(true);
     setMessage(null);
     try {
@@ -142,7 +156,7 @@ export function BankScraperConnectionPanel() {
           <StatusBadge severity="medium" label="לא מחובר - התנועות נשמרות רק כקבצים" />
         )}
         {canManage && (
-          <button type="button" onClick={connect} disabled={working} className="btn-primary text-xs">
+          <button type="button" onClick={requestConnect} disabled={working} className="btn-primary text-xs">
             {working ? "מחברת…" : keyStatus?.has_key ? "חיבור מחדש" : "חיבור הסקרייפר למערכת"}
           </button>
         )}
@@ -151,6 +165,13 @@ export function BankScraperConnectionPanel() {
         את החיבור עושים <span className="font-medium">במחשב שבו הסקרייפר מותקן</span>: המפתח נשמר בתיקיית הבנק שלו, בקובץ "
         {SCRAPER_UPLOAD_FILE}".
       </p>
+
+      {loadError && (
+        <div className="flex items-start gap-2 rounded-control border border-warn bg-warn-soft p-2.5 text-xs text-warn-ink">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>חלק מהנתונים לא נטענו, ולכן המצב שמוצג כאן עלול להיות חלקי. אפשר ללחוץ "רענון".</span>
+        </div>
+      )}
 
       {message && (
         <div
@@ -175,7 +196,7 @@ export function BankScraperConnectionPanel() {
               בנק {u.bank_code} · חשבון <span className="ltr-num">{u.account_number || "(ללא מספר)"}</span> · {u.transactions_count} תנועות ·{" "}
               {u.reason === "not_found" ? "לא רשום תחת אף עמותה - יש להוסיף אותו בכרטיס העמותה" : "תואם לכמה חשבונות במערכת"}
               {canManage && (
-                <button type="button" onClick={() => void ignore(u)} className="ms-2 underline">
+                <button type="button" onClick={() => setIgnoreTarget(u)} className="ms-2 underline">
                   להתעלם מהחשבון הזה
                 </button>
               )}
@@ -215,6 +236,37 @@ export function BankScraperConnectionPanel() {
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={ignoreTarget !== null}
+        title="התעלמות מחשבון"
+        description={
+          ignoreTarget && (
+            <>
+              להתעלם מחשבון <span className="ltr-num">{ignoreTarget.account_number}</span>? התנועות שלו לא ייקלטו, והוא לא יופיע יותר כהתראה. אפשר לבטל ברישום החשבון תחת עמותה.
+            </>
+          )
+        }
+        confirmLabel="התעלמות"
+        danger
+        onCancel={() => setIgnoreTarget(null)}
+        onConfirm={() => {
+          const target = ignoreTarget;
+          setIgnoreTarget(null);
+          if (target) void ignore(target);
+        }}
+      />
+      <ConfirmDialog
+        open={confirmReconnect}
+        title="חיבור מחדש"
+        description="כבר קיים חיבור. חיבור חדש מבטל את הקודם - הסקרייפר ישתמש רק בחדש. להמשיך?"
+        confirmLabel="חיבור מחדש"
+        onCancel={() => setConfirmReconnect(false)}
+        onConfirm={() => {
+          setConfirmReconnect(false);
+          void connect();
+        }}
+      />
     </div>
   );
 }

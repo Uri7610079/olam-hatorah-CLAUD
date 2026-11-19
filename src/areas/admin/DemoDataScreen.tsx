@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FlaskConical } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { Tabs } from "@/components/Tabs";
@@ -53,6 +55,7 @@ async function fetchDemoBatches(): Promise<DemoBatchRow[]> {
 export function DemoDataScreen() {
   const { hasPermission, isLoading: permissionLoading } = useHasPermission("demo_data", "manage");
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const [tab, setTab] = useState<"demo" | "real">("demo");
 
   const batchesQuery = useQuery({ queryKey: ["demo-batches"], queryFn: fetchDemoBatches, enabled: hasPermission && tab === "demo" });
@@ -141,7 +144,7 @@ export function DemoDataScreen() {
   const batchColumns: DataTableColumn<DemoBatchRow>[] = [
     { key: "label", header: "תווית", render: (b) => b.label },
     { key: "description", header: "תיאור", render: (b) => b.description ?? "—" },
-    { key: "created", header: "נוצר", className: "tabular", render: (b) => new Date(b.created_at).toLocaleString("he-IL") },
+    { key: "created", header: "נוצר", className: "tabular", render: (b) => (isV3 ? formatDateTime(b.created_at) : new Date(b.created_at).toLocaleString("he-IL")) },
     {
       key: "actions",
       header: "",
@@ -192,12 +195,12 @@ export function DemoDataScreen() {
               יוצרת שרשרת נתונים סינתטית שלמה תחת עמותת "DEMO" נפרדת: סניף, 2 קבוצות, 3 תלמידים, זכאות ועמלה, תרומה וחלוקה, מס"ב, התאמת בנק והחזרה פתוחה - לצורך הדגמה בלבד. לא מתערבב בנתוני אמת של אף עמותה אחרת.
             </p>
             <div>
-              <label className="field-label">תווית</label>
-              <input value={label} onChange={(e) => setLabel(e.target.value)} className="input-field" placeholder="לדוגמה: הדגמה ליום עיון" />
+              <label className="field-label" htmlFor="demo-label">תווית</label>
+              <input id="demo-label" value={label} onChange={(e) => setLabel(e.target.value)} className="input-field" placeholder="לדוגמה: הדגמה ליום עיון" />
             </div>
             <div>
-              <label className="field-label">תיאור (לא חובה)</label>
-              <input value={description} onChange={(e) => setDescription(e.target.value)} className="input-field" />
+              <label className="field-label" htmlFor="demo-description">תיאור (לא חובה)</label>
+              <input id="demo-description" value={description} onChange={(e) => setDescription(e.target.value)} className="input-field" />
             </div>
             <button onClick={createBatch} disabled={!label.trim() || creating} className="btn-primary text-xs">
               {creating ? "יוצרת…" : "יצירת חבילת דמו"}
@@ -248,8 +251,10 @@ export function DemoDataScreen() {
                           </li>
                         ))}
                     </ul>
-                    <label className="field-label">כדי לאשר, הקלידי את תווית החבילה בדיוק: {previewLabel}</label>
-                    <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} className="input-field" />
+                    <label className="field-label" htmlFor="demo-confirm">
+                      {isV3 ? "כדי לאשר, יש להקליד" : "כדי לאשר, הקלידי"} את תווית החבילה בדיוק: {previewLabel}
+                    </label>
+                    <input id="demo-confirm" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} className="input-field" />
                     <div className="flex gap-2">
                       <button
                         onClick={confirmDelete}

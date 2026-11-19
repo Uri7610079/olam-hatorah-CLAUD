@@ -27,6 +27,8 @@ import {
 } from "@/lib/folderAccess";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 
 interface FolderInboxPanelProps {
   onRouteToTab: (tab: string, file: File) => void;
@@ -105,11 +107,12 @@ function FileRow({
   onArchive: (entry: ScannedFile, outcome: "done" | "failed") => void;
 }) {
   const { state } = entry;
+  const isV3 = useIsV3();
   return (
-    <div className="card space-y-2.5 p-3.5">
+    <div className="card space-y-2.5 p-3.5 v3:space-y-2 v3:p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium text-ink">{entry.name}</span>
-        <span className="text-xs text-ink-subtle ltr-num">{new Date(entry.lastModified).toLocaleString("he-IL")}</span>
+        <span className="text-sm font-medium text-ink v3:min-w-0 v3:flex-1 v3:truncate" title={isV3 ? entry.name : undefined}>{entry.name}</span>
+        <span className="text-xs text-ink-subtle ltr-num">{isV3 ? formatDateTime(new Date(entry.lastModified)) : new Date(entry.lastModified).toLocaleString("he-IL")}</span>
       </div>
 
       {state.kind === "already-imported" && (
@@ -378,6 +381,12 @@ export function FolderInboxPanel({ onRouteToTab }: FolderInboxPanelProps) {
               <Folder className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
             )}
             {FOLDER_LABEL[scan.folder]}
+            {/* v3: כמה קבצים מחכים בתיקייה - מתוך הסריקה שכבר נעשתה */}
+            {scan.files.length > 0 && (
+              <span className="hidden rounded-full bg-brand-100 px-2 py-px text-xs font-medium text-brand-800 tabular v3:inline-block">
+                {scan.files.length} {scan.files.length === 1 ? "קובץ ממתין" : "קבצים ממתינים"}
+              </span>
+            )}
           </h3>
 
           {scan.error && (
@@ -410,7 +419,7 @@ export function FolderInboxPanel({ onRouteToTab }: FolderInboxPanelProps) {
             </p>
           )}
 
-          <div className="grid gap-2.5 lg:grid-cols-2">
+          <div className="grid gap-2.5 lg:grid-cols-2 v3:gap-2">
             {scan.files.map((entry) => (
               <FileRow key={`${entry.folder}:${entry.name}`} entry={entry} onChoose={choose} onArchive={handleArchive} />
             ))}

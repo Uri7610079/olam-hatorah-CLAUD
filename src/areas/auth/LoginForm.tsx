@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
+import { useIsV3 } from "@/lib/uiTheme";
 import { ErrorState } from "@/components/ErrorState";
 import { AuthLayout } from "./AuthLayout";
+import { PasswordInput } from "./PasswordInput";
 
 interface LoginFormProps {
   onSignUp: () => void;
@@ -9,6 +11,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onSignUp, onForgot }: LoginFormProps) {
+  const isV3 = useIsV3();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +49,8 @@ export function LoginForm({ onSignUp, onForgot }: LoginFormProps) {
           <label htmlFor="login-password" className="field-label">
             סיסמה
           </label>
-          <input
+          <PasswordInput
             id="login-password"
-            type="password"
             required
             autoComplete="current-password"
             value={password}
@@ -58,7 +60,7 @@ export function LoginForm({ onSignUp, onForgot }: LoginFormProps) {
         </div>
         {error && <ErrorState message={error} />}
         <button type="submit" disabled={submitting} className="btn-primary w-full">
-          {submitting ? "מתחברת…" : "כניסה"}
+          {submitting ? (isV3 ? "מתבצעת כניסה…" : "מתחברת…") : "כניסה"}
         </button>
       </form>
       <div className="mt-5 flex justify-between text-xs">

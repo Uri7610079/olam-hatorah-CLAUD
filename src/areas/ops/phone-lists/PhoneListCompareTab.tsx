@@ -16,6 +16,10 @@ import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
+import { SegmentedChips } from "@/components/SegmentedChips";
+import { DuplicateFileNotice } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatPhone } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -116,10 +120,22 @@ async function fetchMissing(importId: string): Promise<MissingStudent[]> {
   return fetchAll(() => supabase.rpc("get_phone_list_missing_students", { p_import_id: importId }).order("full_name").order("student_id"));
 }
 
+// סינון שורות הרשימה אחרי ההתאמה ("" = הכול)
+const ENTRY_FILTERS: { key: string; label: string }[] = [
+  { key: "", label: "הכול" },
+  { key: "matched", label: "תואם" },
+  { key: "extra", label: "עודף" },
+  { key: "duplicate", label: "כפול" },
+  { key: "invalid", label: "לא תקין" },
+];
+
 // ההשוואה הישנה: מעלים רשימת טלפונים קיימת ובודקים מול התלמידים. מאז שלב 37 זו
 // לשונית משנית - הרשימה הראשית נבנית מדוח הזכאים (EligibilityCallListTab).
 export function PhoneListCompareTab() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
+  // v3: טלפון בתצוגה אחידה (052-1234567) - תצוגה בלבד, הייצוא לא משתנה
+  const phone = (v: string | null | undefined) => (isV3 ? (v ? formatPhone(v) || v : "—") : v ?? "—");
   const { hasPermission: canPerform } = useHasPermission("phone_lists", "perform");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
@@ -299,8 +315,8 @@ export function PhoneListCompareTab() {
       </div>
 
       <div className="mb-4 max-w-sm">
-        <label className="field-label">עמותה</label>
-        <select
+        <label htmlFor="plc-1" className="field-label">עמותה</label>
+        <select id="plc-1"
           value={orgId}
           onChange={(e) => {
             setOrgId(e.target.value);
@@ -329,11 +345,11 @@ export function PhoneListCompareTab() {
           ) : (
             <>
               <p className="text-xs text-ink-subtle">עמודה נדרשת: עמודה שמכילה "טלפון" בכותרת (אם לא נמצאה - העמודה הראשונה בקובץ).</p>
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+              <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ רשימה טלפונית" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
               {analyzing && <LoadingState rows={2} />}
               {duplicateFileId && (
                 <div className="space-y-2">
-                  <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                  <DuplicateFileNotice />
                   <button onClick={() => setSelectedImportId(duplicateFileId)} className="link-action text-xs">
                     פתיחת הייבוא הקיים
                   </button>
@@ -343,6 +359,19 @@ export function PhoneListCompareTab() {
               {error && <ErrorState message={error} />}
               {localRows && !duplicateFileId && (
                 <>
+                  {isV3 && <p className="text-sm font-semibold text-primary">תצוגה מקדימה - עוד לא נשמר דבר.</p>}
+                  {isV3 ? (
+                    <SegmentedChips
+                      options={[
+                        { key: "pending", label: "ממתין", count: localPending.length },
+                        { key: "duplicate", label: "כפול", count: localDuplicate.length },
+                        { key: "invalid", label: "לא תקין", count: localInvalid.length },
+                      ]}
+                      active={previewTab}
+                      onChange={setPreviewTab}
+                      ariaLabel="תצוגה מקדימה"
+                    />
+                  ) : (
                   <Tabs
                     tabs={[
                       { key: "pending", label: "ממתין", badge: localPending.length },
@@ -353,6 +382,7 @@ export function PhoneListCompareTab() {
                     onChange={setPreviewTab}
                     ariaLabel="תצוגה מקדימה"
                   />
+                  )}
                   <DataTable
                     columns={localCols}
                     rows={previewTab === "pending" ? localPending : previewTab === "duplicate" ? localDuplicate : localInvalid}
@@ -375,11 +405,11 @@ export function PhoneListCompareTab() {
           <h2 className="mb-2 text-sm font-semibold text-ink-muted">היסטוריית ייבוא</h2>
           <DataTable
             columns={[
-              { key: "file", header: "קובץ", render: (i: ImportSummary) => i.file_name },
+              { key: "file", header: "קובץ", truncate: isV3, render: (i: ImportSummary) => i.file_name },
               { key: "count", header: "שורות", className: "tabular", render: (i: ImportSummary) => i.row_count },
               { key: "matched", header: "תואם / עודף / כפול / לא תקין", className: "tabular", render: (i: ImportSummary) => `${i.matched_count} / ${i.extra_count} / ${i.duplicate_count} / ${i.invalid_count}` },
               { key: "status", header: "סטטוס", render: (i: ImportSummary) => <StatusBadge severity={i.status === "committed" ? "ok" : i.status === "rejected" ? "neutral" : "medium"} label={IMPORT_STATUS_LABEL[i.status]} /> },
-              { key: "date", header: "תאריך", className: "tabular", render: (i: ImportSummary) => new Date(i.created_at).toLocaleDateString("he-IL") },
+              { key: "date", header: "תאריך", className: "tabular", sortValue: isV3 ? (i: ImportSummary) => i.created_at : undefined, render: (i: ImportSummary) => (isV3 ? formatDate(i.created_at) : new Date(i.created_at).toLocaleDateString("he-IL")) },
             ]}
             rows={importsQuery.data ?? []}
             rowKey={(i: ImportSummary) => i.id}
@@ -387,6 +417,7 @@ export function PhoneListCompareTab() {
             emptyTitle="אין עדיין ייבואים"
             emptyIcon={Phone}
             onRowClick={(i: ImportSummary) => setSelectedImportId(i.id === selectedImportId ? null : i.id)}
+            selectedKey={isV3 ? selectedImportId : undefined}
           />
         </>
       )}
@@ -416,22 +447,21 @@ export function PhoneListCompareTab() {
 
           {error && <ErrorState message={error} />}
 
+          {/* v3: סינון השורות כשורת צ'יפים - אותם ערכים בדיוק */}
+          {isV3 ? (
+            <SegmentedChips options={ENTRY_FILTERS} active={entryFilter} onChange={setEntryFilter} ariaLabel="סינון שורות" />
+          ) : (
           <Tabs
-            tabs={[
-              { key: "", label: "הכול" },
-              { key: "matched", label: "תואם" },
-              { key: "extra", label: "עודף" },
-              { key: "duplicate", label: "כפול" },
-              { key: "invalid", label: "לא תקין" },
-            ]}
+            tabs={ENTRY_FILTERS}
             activeTab={entryFilter}
             onChange={setEntryFilter}
             ariaLabel="סינון שורות"
           />
+          )}
           <DataTable
             columns={[
               { key: "raw", header: "טלפון גולמי", className: "ltr-num", render: (r: EntryRow) => r.raw_phone ?? "—" },
-              { key: "norm", header: "מנורמל", className: "tabular ltr-num", render: (r: EntryRow) => r.normalized_phone ?? "—" },
+              { key: "norm", header: "מנורמל", className: "tabular ltr-num", render: (r: EntryRow) => phone(r.normalized_phone) },
               { key: "status", header: "סטטוס", render: (r: EntryRow) => <StatusBadge severity={r.status === "matched" ? "ok" : r.status === "extra" ? "medium" : "neutral"} label={ENTRY_STATUS_LABEL[r.status]} /> },
               { key: "student", header: "תלמיד תואם", render: (r: EntryRow) => (r.matched_student ? `${r.matched_student.full_name} (${r.matched_student.external_id})` : "—") },
             ]}
@@ -451,7 +481,7 @@ export function PhoneListCompareTab() {
                   columns={[
                     { key: "id", header: "מזהה", className: "tabular ltr-num", render: (s: MissingStudent) => s.external_id },
                     { key: "name", header: "שם", render: (s: MissingStudent) => s.full_name },
-                    { key: "phone", header: "טלפון במערכת", className: "tabular ltr-num", render: (s: MissingStudent) => s.phone_normalized },
+                    { key: "phone", header: "טלפון במערכת", className: "tabular ltr-num", render: (s: MissingStudent) => phone(s.phone_normalized) },
                   ]}
                   rows={missingQuery.data ?? []}
                   rowKey={(s: MissingStudent) => s.student_id}

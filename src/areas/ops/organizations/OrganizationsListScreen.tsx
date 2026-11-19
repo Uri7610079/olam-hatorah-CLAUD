@@ -2,7 +2,7 @@ import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Building2, Download } from "lucide-react";
+import { Building2, Download, FileUp } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { useEscapeToClose } from "@/lib/useEscapeToClose";
@@ -11,6 +11,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ActionsMenu } from "@/components/ActionsMenu";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatPhone } from "@/lib/format";
 import type { Organization } from "./types";
 import { OrganizationForm, EMPTY_ORGANIZATION_FORM, type OrganizationFormValues } from "./OrganizationForm";
 import { BranchesGroupsManager } from "./BranchesGroupsManager";
@@ -29,6 +32,7 @@ export function OrganizationsListScreen() {
   const queryClient = useQueryClient();
   const { hasPermission: canManage } = useHasPermission("organizations", "manage");
   const query = useQuery({ queryKey: ["organizations"], queryFn: fetchOrganizations });
+  const isV3 = useIsV3();
 
   // מסך אחד לעמותות, סניפים וקבוצות (שלב 36): לחיצה על עמותה פותחת מתחת לרשימה את
   // הסניפים והקבוצות שלה. העמותה שנבחרה נשמרת בכתובת (?org=), כך שקישור מכל מקום
@@ -105,7 +109,15 @@ export function OrganizationsListScreen() {
         <StatusBadge severity={o.status === "active" ? "ok" : "neutral"} label={o.status === "active" ? "פעילה" : "סגורה"} />
       ),
     },
-    { key: "phone", header: "טלפון", className: "ltr-num", render: (o) => o.contact_phone ?? "—" },
+    {
+      key: "phone",
+      header: "טלפון",
+      className: "ltr-num",
+      filterValue: isV3 ? (o) => o.contact_phone ?? "" : undefined,
+      // v3: תצוגה אחידה 02-1234567 (הערך השמור לא משתנה), ריק - מאופק
+      render: (o) =>
+        isV3 ? (o.contact_phone ? formatPhone(o.contact_phone) || o.contact_phone : <span className="text-ink-subtle">—</span>) : o.contact_phone ?? "—",
+    },
     {
       key: "branches",
       header: "",
@@ -128,6 +140,22 @@ export function OrganizationsListScreen() {
         title="עמותות, סניפים וקבוצות"
         description="בחרי עמותה כדי לראות ולנהל את הסניפים והקבוצות שלה. פרטים, חשבונות ובעלי תפקידים - בכרטיס העמותה."
         primaryAction={
+          isV3 ? (
+            // v3: פעולה ראשית אחת. ייצוא ויבוא - פעולות לא יומיומיות - בתפריט.
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionsMenu
+                actions={[
+                  { key: "export", label: "ייצוא לאקסל", icon: Download, onSelect: handleExport },
+                  { key: "import", label: "יבוא עמותות/סניפים/קבוצות מאקסל", hint: "כולל גם סניפים וקבוצות", icon: FileUp, onSelect: () => navigate("/ops/import-center") },
+                ]}
+              />
+              {canManage && (
+                <button onClick={() => setShowCreate(true)} className="btn-primary">
+                  עמותה חדשה
+                </button>
+              )}
+            </div>
+          ) : (
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
               <Download className="h-4 w-4" aria-hidden="true" />
@@ -145,6 +173,7 @@ export function OrganizationsListScreen() {
               </button>
             )}
           </div>
+          )
         }
       />
       <SearchAndFilters searchValue={search} onSearchChange={setSearch} searchPlaceholder="חיפוש לפי שם או מספר עמותה…" />
@@ -152,7 +181,9 @@ export function OrganizationsListScreen() {
         columns={columns}
         rows={filtered}
         rowKey={(o) => o.id}
-        rowClassName={(o) => (o.id === selectedOrgId ? "!bg-brand-50 ring-2 ring-inset ring-brand-500" : undefined)}
+        // v3: סימון השורה הנבחרת של הטבלה עצמה (רקע ופס בצד) במקום מסגרת
+        rowClassName={isV3 ? undefined : (o) => (o.id === selectedOrgId ? "!bg-brand-50 ring-2 ring-inset ring-brand-500" : undefined)}
+        selectedKey={isV3 ? selectedOrgId || null : undefined}
         onRowClick={(o) => selectOrg(o.id)}
         loading={query.isLoading}
         emptyTitle="אין עמותות עדיין"
@@ -163,12 +194,12 @@ export function OrganizationsListScreen() {
         {selectedOrgId ? (
           <>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
-              <h2 className="text-base font-semibold text-ink">סניפים וקבוצות{selectedOrg ? ` — ${selectedOrg.legal_name}` : ""}</h2>
+              <h2 className="text-base font-semibold text-ink v3:text-primary">סניפים וקבוצות{selectedOrg ? ` — ${selectedOrg.legal_name}` : ""}</h2>
               <Link to={`/ops/organizations/${selectedOrgId}`} className="link-action text-xs">
                 לכרטיס העמותה (פרטים, חשבונות, בעלי תפקידים)
               </Link>
             </div>
-            <BranchesGroupsManager orgId={selectedOrgId} />
+            <BranchesGroupsManager orgId={selectedOrgId} orgName={selectedOrg?.legal_name} />
           </>
         ) : (
           <p className="rounded-md border border-dashed border-line p-4 text-sm text-ink-muted">

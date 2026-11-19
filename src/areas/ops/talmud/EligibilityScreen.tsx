@@ -26,6 +26,10 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 import { RawRowPreview } from "@/components/RawRowPreview";
+import { MetricCard } from "@/components/MetricCard";
+import { DuplicateFileNotice, ImportSteps, PreviewSummary, SavedForReviewNote, batchCountsText, batchImportStep } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMoney, formatMonth, formatNumber as formatCount } from "@/lib/format";
 
 type SectionTabKey = "month" | "missing" | "amounts" | "history";
 
@@ -200,6 +204,9 @@ export function EligibilityScreen() {
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ matched: number; unmatched: number } | null>(null);
+  // v3: אזור היבוא מוסתר מאחורי כפתור, והנתונים של החודש מוצגים ראשונים
+  const isV3 = useIsV3();
+  const [showImport, setShowImport] = useState(false);
 
   const batchesQuery = useQuery({ queryKey: ["eligibility-batches", orgId], queryFn: () => fetchEligibilityBatches(orgId), enabled: !!orgId });
   const reviewBatchQuery = useQuery({ queryKey: ["eligibility-batch", reviewBatchId], queryFn: () => fetchBatchById(reviewBatchId!), enabled: !!reviewBatchId });
@@ -375,6 +382,15 @@ export function EligibilityScreen() {
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
   const reviewIsOpen = reviewBatchQuery.data ? OPEN_STATUSES.includes(reviewBatchQuery.data.status) : false;
 
+  // סיכום החודש (v3) - נגזר מהשורות שהמסך כבר טוען, בלי שאילתה נוספת.
+  // פערי הסכומים נטענים רק כשנכנסים ללשונית "בדיקת סכומים", ולכן עד אז אין מספר.
+  const monthRows = monthDataQuery.data ?? [];
+  const monthTotal = monthRows.reduce((sum, r) => sum + Number(r.gross_amount || 0), 0);
+  const gapCount = amountCheckQuery.data ? amountCheckQuery.data.filter((r) => hasGap(r.difference)).length : null;
+  const batchesWithRejected = (batchesQuery.data ?? []).filter((b) => b.status === "committed" && b.invalid_count > 0);
+  const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: reviewBatchQuery.data?.status === "committed", previewing: !!parsedRows && !duplicateId });
+  const importVisible = !isV3 || showImport || !!file;
+
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
     { key: "content", header: "תוכן", render: (r) => <RawRowPreview raw={r.raw} /> },
@@ -407,12 +423,23 @@ export function EligibilityScreen() {
 
   return (
     <div>
-      <PageHeader title="זכאות חודשית" description="יבוא דוח זכאות מתלמוד. הזכאות נפרדת לגמרי מתשלום בפועל." />
+      <PageHeader
+        title="זכאות חודשית"
+        description="יבוא דוח זכאות מתלמוד. הזכאות נפרדת לגמרי מתשלום בפועל."
+        primaryAction={
+          isV3 && orgId && !reviewBatchId ? (
+            <button type="button" onClick={() => (showImport ? (resetForm(), setShowImport(false)) : setShowImport(true))} className={showImport ? "btn-secondary" : "btn-primary"}>
+              {!showImport && <Upload className="h-4 w-4" aria-hidden="true" />}
+              {showImport ? "סגירת היבוא" : "יבוא דוח זכאות"}
+            </button>
+          ) : undefined
+        }
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-lg mb-4">
         <div>
-          <label className="field-label">עמותה</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+          <label htmlFor="eligibility-org" className="field-label">עמותה</label>
+          <select id="eligibility-org" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
             <option value="">— בחרי —</option>
             {(orgsQuery.data ?? []).map((o) => (
               <option key={o.id} value={o.id}>
@@ -422,20 +449,68 @@ export function EligibilityScreen() {
           </select>
         </div>
         <div>
-          <label className="field-label">חודש (לקובץ חדש)</label>
-          <input type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
+          {/* v3: אותו חודש קובע גם את הנתונים שמוצגים למטה, לא רק את הקובץ החדש */}
+          <label htmlFor="eligibility-month" className="field-label">
+            <span className="v3:hidden">חודש (לקובץ חדש)</span>
+            <span className="hidden v3:inline">חודש</span>
+          </label>
+          <input id="eligibility-month" type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
         </div>
       </div>
 
-      {orgId && !reviewBatchId && (
+      {isV3 && orgId && (
+        <div className="mb-4 grid max-w-4xl grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard
+            label={`זכאות ל${formatMonth(month)}`}
+            value={monthDataQuery.isLoading ? "…" : formatMoney(monthTotal)}
+            tone="primary"
+            emphasis
+            muted={!monthDataQuery.isLoading && monthRows.length === 0}
+          />
+          <MetricCard
+            label="תלמידים זכאים"
+            value={monthDataQuery.isLoading ? "…" : formatCount(monthRows.length)}
+            muted={!monthDataQuery.isLoading && monthRows.length === 0}
+          />
+          <MetricCard
+            label="פעילים שלא הופיעו בדוח"
+            value={missingQuery.isLoading ? "…" : formatCount(missingQuery.data?.length ?? 0)}
+            tone="warn"
+            muted={!missingQuery.data?.length}
+          />
+          <MetricCard
+            label="פערי סכומים לבירור"
+            value={gapCount === null ? "—" : formatCount(gapCount)}
+            hint={gapCount === null ? "נבדק בלשונית \"בדיקת סכומים\"" : undefined}
+            tone="high"
+            muted={!gapCount}
+          />
+        </div>
+      )}
+
+      {/* v3: יבואים שנקלטו עם שורות שנדחו - כדי שהפעולה "השלמת שורות שנדחו" לא תישאר
+          חבויה בעמודה האחרונה של לשונית ההיסטוריה */}
+      {isV3 && orgId && batchesWithRejected.length > 0 && sectionTab !== "history" && (
+        <div className="mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-2 rounded-control border border-warn/30 bg-warn-soft px-3 py-2.5 text-sm text-warn-ink">
+          <span>
+            {batchesWithRejected.length === 1 ? "יבוא אחד נקלט" : `${formatCount(batchesWithRejected.length)} יבואים נקלטו`} עם שורות שנדחו. אם הנתונים החסרים כבר הוזנו - אפשר להשלים אותן.
+          </span>
+          <button type="button" onClick={() => setSectionTab("history")} className="btn-secondary px-3 py-1.5 text-sm">
+            להשלמת שורות שנדחו
+          </button>
+        </div>
+      )}
+
+      {orgId && !reviewBatchId && importVisible && (
         <div className="card mb-6 max-w-2xl space-y-4 p-5">
+          <ImportSteps current={importStep} />
           <p className="text-xs text-ink-subtle">עמודות צפויות בקובץ: מזהה תלמיד, סכום ברוטו, ניקוד/סוג תשלום (לא חובה).</p>
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+          <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ דוח זכאות" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
 
           {analyzing && <LoadingState rows={2} />}
           {duplicateId && (
             <div className="space-y-2">
-              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              <DuplicateFileNotice />
               <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
                 פתיחת האצווה הקיימת
               </button>
@@ -460,6 +535,12 @@ export function EligibilityScreen() {
             parsedRows &&
             !duplicateId && (
               <>
+                <PreviewSummary
+                  valid={localValid.length}
+                  needs={localNeeds.length}
+                  invalid={localInvalid.length}
+                  next="האישור שומר את השורות לבדיקה, והזכאות נקלטת רק בשלב הבא."
+                />
                 <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                   {(tab) => {
                     const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
@@ -482,10 +563,11 @@ export function EligibilityScreen() {
             <LoadingState rows={4} />
           ) : reviewBatchQuery.data ? (
             <>
+              <ImportSteps current={importStep} />
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
-                  <p className="text-xs text-ink-subtle">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                  <p className="text-xs text-ink-subtle">חודש: {isV3 ? formatMonth(reviewBatchQuery.data.period_month) : reviewBatchQuery.data.period_month ?? "—"}</p>
                 </div>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
@@ -493,6 +575,7 @@ export function EligibilityScreen() {
                 />
               </div>
 
+              {reviewIsOpen && <SavedForReviewNote what="דוח הזכאות" />}
               {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הדוח (שורות "שגוי" יישארו מחוץ לזכאות).</p>}
 
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
@@ -534,7 +617,14 @@ export function EligibilityScreen() {
               columns={[
                 { key: "id", header: "מזהה", className: "tabular ltr-num", render: (r: EligibilityRow) => r.student?.external_id ?? "—" },
                 { key: "name", header: "שם", render: (r: EligibilityRow) => r.student?.full_name ?? "—" },
-                { key: "amount", header: "סכום ברוטו", className: "tabular", render: (r: EligibilityRow) => r.gross_amount.toLocaleString("he-IL") },
+                {
+                  key: "amount",
+                  header: "סכום ברוטו",
+                  className: isV3 ? undefined : "tabular",
+                  kind: isV3 ? "money" : undefined,
+                  sortValue: isV3 ? (r: EligibilityRow) => Number(r.gross_amount) : undefined,
+                  render: (r: EligibilityRow) => (isV3 ? formatMoney(r.gross_amount) : r.gross_amount.toLocaleString("he-IL")),
+                },
                 { key: "score", header: "ניקוד/סוג תשלום", render: (r: EligibilityRow) => r.score_or_payment_type ?? "—" },
               ]}
               rows={monthDataQuery.data ?? []}
@@ -590,7 +680,7 @@ export function EligibilityScreen() {
                     },
                   },
                   { key: "value", header: "שווי נקודה", className: "tabular", render: (r: AmountCheckRow) => formatNumber(r.point_value, 4, 2) },
-                  { key: "reported", header: "סכום מדווח", className: "tabular", render: (r: AmountCheckRow) => formatNumber(r.reported_amount, 2, 2) },
+                  { key: "reported", header: "סכום מדווח", className: "tabular", kind: isV3 ? "money" : undefined, render: (r: AmountCheckRow) => (isV3 ? formatMoney(r.reported_amount) : formatNumber(r.reported_amount, 2, 2)) },
                   {
                     key: "expected",
                     header: "סכום צפוי",
@@ -599,7 +689,7 @@ export function EligibilityScreen() {
                       r.expected_amount === null || r.expected_amount === undefined ? (
                         <span className="text-xs text-ink-subtle">לא הוגדר ניקוד/שווי</span>
                       ) : (
-                        formatNumber(r.expected_amount, 2, 2)
+                        isV3 ? formatMoney(r.expected_amount) : formatNumber(r.expected_amount, 2, 2)
                       ),
                   },
                   {
@@ -607,7 +697,7 @@ export function EligibilityScreen() {
                     header: "הפרש",
                     className: "tabular",
                     render: (r: AmountCheckRow) =>
-                      r.difference === null || r.difference === undefined ? "—" : <span className={hasGap(r.difference) ? "font-semibold text-warn-ink" : ""}>{formatNumber(r.difference, 2, 2)}</span>,
+                      r.difference === null || r.difference === undefined ? "—" : <span className={hasGap(r.difference) ? "font-semibold text-warn-ink" : ""}>{isV3 ? formatMoney(r.difference) : formatNumber(r.difference, 2, 2)}</span>,
                   },
                   {
                     key: "state",
@@ -639,15 +729,24 @@ export function EligibilityScreen() {
                 {retryResult}
               </div>
             )}
+            {/* v3: כשאזור היבוא סגור, שגיאה בהשלמת שורות לא מופיעה בו - מציגים אותה כאן */}
+            {isV3 && error && !reviewBatchId && !importVisible && <div className="mb-3"><ErrorState message={error} /></div>}
             <DataTable
               columns={[
-                { key: "file", header: "קובץ", render: (b: EligibilityBatchSummary) => b.file_name },
-                { key: "month", header: "חודש", className: "tabular", render: (b: EligibilityBatchSummary) => b.period_month ?? "—" },
+                { key: "file", header: "קובץ", truncate: isV3, render: (b: EligibilityBatchSummary) => b.file_name },
+                {
+                  key: "month",
+                  header: "חודש",
+                  className: "tabular",
+                  sortValue: isV3 ? (b: EligibilityBatchSummary) => b.period_month : undefined,
+                  render: (b: EligibilityBatchSummary) => (isV3 ? formatMonth(b.period_month) : b.period_month ?? "—"),
+                },
                 {
                   key: "counts",
-                  header: "תקין / דורש החלטה / שגוי",
+                  header: isV3 ? "שורות" : "תקין / דורש החלטה / שגוי",
                   className: "tabular",
-                  render: (b: EligibilityBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+                  render: (b: EligibilityBatchSummary) =>
+                    isV3 ? batchCountsText(b) : `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
                 },
                 {
                   key: "status",
@@ -656,7 +755,13 @@ export function EligibilityScreen() {
                     <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
                   ),
                 },
-                { key: "date", header: "תאריך", className: "tabular", render: (b: EligibilityBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+                {
+                  key: "date",
+                  header: "תאריך",
+                  className: "tabular",
+                  sortValue: isV3 ? (b: EligibilityBatchSummary) => b.created_at : undefined,
+                  render: (b: EligibilityBatchSummary) => (isV3 ? formatDate(b.created_at) : new Date(b.created_at).toLocaleDateString("he-IL")),
+                },
                 {
                   key: "retry",
                   header: "",
@@ -664,7 +769,7 @@ export function EligibilityScreen() {
                     b.status === "committed" && b.invalid_count > 0 ? (
                       <button
                         type="button"
-                        className="link-action text-xs"
+                        className={isV3 ? "btn-secondary whitespace-nowrap px-2.5 py-1 text-xs" : "link-action text-xs"}
                         disabled={retrying === b.id}
                         onClick={(e) => {
                           e.stopPropagation();   // אחרת הלחיצה פותחת גם את סקירת האצווה

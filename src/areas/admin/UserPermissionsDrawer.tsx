@@ -1,9 +1,20 @@
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useEscapeToClose } from "@/lib/useEscapeToClose";
+import { useIsV3 } from "@/lib/uiTheme";
 import { EmptyState } from "@/components/EmptyState";
+import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  PERMISSION_ACTION_LABEL,
+  PERMISSION_AREA_LABEL,
+  PERMISSION_AREA_ORDER,
+  PERMISSION_RESOURCE_LABEL,
+  permissionArea,
+  type PermissionArea,
+} from "./adminLabels";
 
 interface PermissionCatalogItem {
   id: string;
@@ -47,6 +58,10 @@ async function fetchUserOverrides(userId: string): Promise<Map<string, Effect>> 
 // את ברירת המחדל; "איפוס" מוחק את החריגה וחוזר לברירת המחדל של התפקיד.
 export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId, roleLabel }: UserPermissionsDrawerProps) {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // שגיאה של משתמש אחד לא נשארת מוצגת כשפותחים את המגירה למשתמש אחר
+  useEffect(() => setSaveError(null), [open, userId]);
 
   const catalogQuery = useQuery({ queryKey: ["permissions-catalog"], queryFn: fetchPermissionsCatalog, enabled: open });
   const roleGrantsQuery = useQuery({
@@ -64,7 +79,10 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
   const overrides = overridesQuery.data ?? new Map<string, Effect>();
 
   const setOverride = async (resource: string, action: string, effect: Effect | null) => {
-    await supabase.rpc("admin_set_user_permission", { p_user_id: userId, p_resource: resource, p_action: action, p_effect: effect });
+    setSaveError(null);
+    const { error } = await supabase.rpc("admin_set_user_permission", { p_user_id: userId, p_resource: resource, p_action: action, p_effect: effect });
+    // עד היום שגיאה כאן נבלעה בשקט - הלחיצה "לא עשתה כלום" בלי הסבר.
+    if (error) setSaveError(`השינוי לא נשמר (${error.message}).`);
     queryClient.invalidateQueries({ queryKey: ["user-overrides", userId] });
     queryClient.invalidateQueries({ queryKey: ["my-permissions"] });
   };
@@ -75,12 +93,28 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
     grouped.get(item.resource)!.push(item);
   }
 
+  // v3: קיבוץ לפי אזור במערכת (תפעול/כספים/ניהול/משימות) במקום לפי מפתח טכני.
+  // אותן שורות ואותם כפתורים בדיוק - רק הסדר והכותרות.
+  const sections: [string, PermissionCatalogItem[]][] = isV3
+    ? PERMISSION_AREA_ORDER.map((area): [PermissionArea, PermissionCatalogItem[]] => [
+        area,
+        (catalogQuery.data ?? []).filter((item) => permissionArea(item.resource) === area),
+      ])
+        .filter(([, items]) => items.length > 0)
+        .map(([area, items]) => [PERMISSION_AREA_LABEL[area], items])
+    : Array.from(grouped.entries());
+
+  const isEffective = (item: PermissionCatalogItem) => {
+    const override = overrides.get(item.id) ?? null;
+    return override === "revoke" ? false : override === "grant" ? true : roleGrants.has(item.id);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button aria-label="סגור" className="flex-1 bg-ink/40" onClick={onClose} />
       <div role="dialog" aria-modal="true" aria-label="ניהול הרשאות" className="h-full w-full max-w-lg overflow-y-auto bg-surface p-5 shadow-xl">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-ink">ניהול הרשאות — {userLabel}</h2>
+          <h2 className="text-base font-semibold text-ink v3:text-primary">ניהול הרשאות — {userLabel}</h2>
           <button onClick={onClose} aria-label="סגור" className="rounded-control p-1.5 text-ink-subtle transition hover:bg-surface-muted">
             ✕
           </button>
@@ -88,6 +122,11 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
         <p className="mb-4 text-xs text-ink-subtle">
           תפקיד: {roleLabel ?? "— טרם נקבע —"}. "ברירת מחדל" ניתנת מהתפקיד; ניתן לחרוג פר-משתמש בכל שורה בנפרד.
         </p>
+        {saveError && (
+          <div className="mb-4">
+            <ErrorState message={saveError} />
+          </div>
+        )}
 
         {loading ? (
           <LoadingState rows={6} />
@@ -95,9 +134,18 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
           <EmptyState title="אין הרשאות מוגדרות במערכת" />
         ) : (
           <div className="space-y-5">
-            {Array.from(grouped.entries()).map(([resource, items]) => (
-              <div key={resource}>
-                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{resource}</h3>
+            {sections.map(([heading, items]) => (
+              <div key={heading}>
+                {isV3 ? (
+                  <h3 className="mb-1.5 flex items-baseline justify-between gap-2 border-b border-line pb-1 text-sm font-semibold text-primary">
+                    {heading}
+                    <span className="text-xs font-normal text-ink-muted">
+                      {items.filter(isEffective).length} מתוך {items.length} עם גישה
+                    </span>
+                  </h3>
+                ) : (
+                  <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-subtle">{heading}</h3>
+                )}
                 <ul className="space-y-1.5">
                   {items.map((item) => {
                     const override = overrides.get(item.id) ?? null;
@@ -108,7 +156,9 @@ export function UserPermissionsDrawer({ open, onClose, userId, userLabel, roleId
                         <div className="min-w-0">
                           <p className="truncate text-sm text-ink">{item.label_he}</p>
                           <p className="text-xs text-ink-subtle">
-                            {item.resource}.{item.action}
+                            {isV3
+                              ? `${PERMISSION_RESOURCE_LABEL[item.resource] ?? item.resource} · ${PERMISSION_ACTION_LABEL[item.action] ?? item.action}`
+                              : `${item.resource}.${item.action}`}
                             {override && (
                               <span className="mr-2 text-warn">
                                 {override === "grant" ? "· הענקה ידנית" : "· שלילה ידנית"} (ברירת מחדל: {fromRole ? "כן" : "לא"})

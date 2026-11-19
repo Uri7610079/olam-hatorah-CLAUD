@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { MultiSelect } from "@/components/MultiSelect";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Percent, FlaskConical } from "lucide-react";
+import { Percent, FlaskConical, FileUp, FileDown } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
@@ -14,6 +14,9 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { CommissionRulesImportPanel } from "./CommissionRulesImportPanel";
+import { ActionsMenu } from "@/components/ActionsMenu";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMoney } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -146,6 +149,7 @@ const EMPTY_SIM = { groupId: "", studyCode: "", studentId: "", date: todayLocalI
 
 export function CommissionRulesScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canManage } = useHasPermission("commission_rules", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
@@ -243,9 +247,13 @@ export function CommissionRulesScreen() {
     void queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
   };
 
+  // שגיאה בהפעלה/כיבוי נבלעה עד היום בשקט - הלחיצה פשוט "לא עשתה כלום". עכשיו היא מוצגת.
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const toggleActive = async (rule: CommissionRule) => {
+    setToggleError(null);
     const { error: err } = await supabase.from("commission_rules").update({ is_active: !rule.is_active }).eq("id", rule.id);
     if (!err) queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
+    else setToggleError(err.message);
   };
 
   const exportToExcel = () => {
@@ -302,8 +310,14 @@ export function CommissionRulesScreen() {
       key: "value",
       header: "ערך",
       className: "tabular",
+      // v3: סכום קבוע עם ₪
       render: (r) =>
-        [r.percentage != null ? `${r.percentage}%` : null, r.fixed_amount != null ? r.fixed_amount.toLocaleString("he-IL") : null].filter(Boolean).join(" + ") || "—",
+        [
+          r.percentage != null ? `${r.percentage}%` : null,
+          r.fixed_amount != null ? (isV3 ? formatMoney(r.fixed_amount) : r.fixed_amount.toLocaleString("he-IL")) : null,
+        ]
+          .filter(Boolean)
+          .join(" + ") || "—",
     },
     { key: "rounding", header: "עיגול", className: "whitespace-nowrap", render: (r) => roundingText(r) },
     { key: "priority", header: "עדיפות", className: "tabular", render: (r) => r.priority },
@@ -311,14 +325,23 @@ export function CommissionRulesScreen() {
       key: "effective",
       header: "בתוקף",
       className: "tabular",
-      render: (r) => `${r.effective_from} — ${r.effective_until ?? "ללא הגבלה"}`,
+      sortValue: isV3 ? (r) => r.effective_from : undefined,
+      render: (r) =>
+        isV3
+          ? `${formatDate(r.effective_from)} — ${r.effective_until ? formatDate(r.effective_until) : "ללא הגבלה"}`
+          : `${r.effective_from} — ${r.effective_until ?? "ללא הגבלה"}`,
     },
     {
       key: "status",
       header: "סטטוס",
       render: (r) =>
         canManage ? (
-          <button onClick={() => toggleActive(r)} className="link-action text-xs">
+          <button
+            onClick={() => toggleActive(r)}
+            className="link-action text-xs"
+            aria-label={r.is_active ? "פעיל - לחיצה תכבה את הכלל" : "כבוי - לחיצה תפעיל את הכלל"}
+            title={isV3 ? (r.is_active ? "לחיצה תכבה את הכלל" : "לחיצה תפעיל את הכלל") : undefined}
+          >
             <StatusBadge severity={r.is_active ? "ok" : "neutral"} label={r.is_active ? "פעיל" : "כבוי"} />
           </button>
         ) : (
@@ -332,7 +355,8 @@ export function CommissionRulesScreen() {
         canManage ? (
           <button
             type="button"
-            className="link-action text-xs text-danger"
+            // v3: צבע הקישורים בערכה גובר על text-danger - לכן ! כדי שהמחיקה תישאר אדומה
+            className={isV3 ? "link-action text-xs !text-danger-ink" : "link-action text-xs text-danger"}
             onClick={(e) => {
               e.stopPropagation();
               setDeleteError(null);
@@ -372,7 +396,47 @@ export function CommissionRulesScreen() {
         title="כללי עמלה"
         description="כלל תואם לפי עמותה, קבוצה, קוד לימוד או חריג לתלמיד ספציפי, בטווח תאריכים. כשכמה כללים תואמים - מנצח העדיפות הגבוהה ביותר."
         primaryAction={
-          orgId && (
+          orgId &&
+          (isV3 ? (
+            // v3: פעולה ראשית אחת ("כלל חדש"); סימולציה משנית; יבוא וייצוא - בתפריט
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionsMenu
+                actions={[
+                  ...(canManage
+                    ? [
+                        {
+                          key: "import",
+                          label: showImport ? "סגירת יבוא" : "יבוא מאקסל",
+                          icon: FileUp,
+                          onSelect: () => {
+                            setShowImport((v) => !v);
+                            setShowAdd(false);
+                          },
+                        },
+                      ]
+                    : []),
+                  { key: "export", label: "ייצוא לאקסל", icon: FileDown, disabled: !(rulesQuery.data ?? []).length, onSelect: exportToExcel },
+                ]}
+              />
+              {canManage && (
+                <button onClick={() => setShowSim((v) => !v)} className="btn-secondary">
+                  <FlaskConical className="h-4 w-4" aria-hidden="true" />
+                  {showSim ? "סגירת סימולציה" : "סימולציה"}
+                </button>
+              )}
+              {canManage && (
+                <button
+                  onClick={() => {
+                    setShowAdd((v) => !v);
+                    setShowImport(false);
+                  }}
+                  className="btn-primary"
+                >
+                  {showAdd ? "סגירה" : "כלל חדש"}
+                </button>
+              )}
+            </div>
+          ) : (
             <div className="flex flex-wrap gap-2">
               {canManage && (
                 <button onClick={() => setShowSim((v) => !v)} className="btn-secondary flex items-center gap-2">
@@ -406,7 +470,7 @@ export function CommissionRulesScreen() {
                 </button>
               )}
             </div>
-          )
+          ))
         }
       />
 
@@ -477,8 +541,8 @@ export function CommissionRulesScreen() {
               {simResult.rule_id ? (
                 <p>
                   כלל תואם: <strong>{TYPE_LABEL[simResult.calculation_type as CalculationType]}</strong> · עמלה:{" "}
-                  <strong className="tabular">{simResult.commission_amount.toLocaleString("he-IL")}</strong> · נטו:{" "}
-                  <strong className="tabular">{simResult.net_amount.toLocaleString("he-IL")}</strong>
+                  <strong className="tabular">{isV3 ? formatMoney(simResult.commission_amount) : simResult.commission_amount.toLocaleString("he-IL")}</strong> · נטו:{" "}
+                  <strong className="tabular">{isV3 ? formatMoney(simResult.net_amount) : simResult.net_amount.toLocaleString("he-IL")}</strong>
                 </p>
               ) : (
                 <p className="text-warn-ink">לא נמצא כלל תואם - עמלה 0, נטו = ברוטו במלואו.</p>
@@ -637,6 +701,8 @@ export function CommissionRulesScreen() {
           </button>
         </form>
       )}
+
+      {toggleError && <div className="mb-4"><ErrorState message={toggleError} /></div>}
 
       {orgId && (
         <DataTable columns={columns} rows={rulesQuery.data ?? []} rowKey={(r) => r.id} loading={rulesQuery.isLoading} emptyTitle="אין כללי עמלה לעמותה זו" emptyIcon={Percent} />

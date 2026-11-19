@@ -18,6 +18,25 @@ export function addDaysIso(days: number): string {
   return localDateIso(d);
 }
 
+// תיאור יחסי של תאריך יעד ליד התאריך עצמו (ערכה v3): "היום", "מחר", "לפני 3 ימים".
+// תצוגה בלבד - שיבוץ משימה לקבוצה (באיחור/להיום/קרובות) לא נשען על זה.
+// רחוק משבועיים לכל כיוון - אין תיאור, התאריך לבדו מספיק.
+export function relativeDayLabel(iso: string): string | null {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const [ty, tm, td] = todayIso().split("-").map(Number);
+  // הפרש בימים לפי תאריכים מקומיים (UTC לשניהם, כדי ששעון קיץ לא יזיז יום)
+  const diff = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86_400_000);
+  if (diff === 0) return "היום";
+  if (diff === 1) return "מחר";
+  if (diff === -1) return "אתמול";
+  if (diff === 2) return "בעוד יומיים";
+  if (diff === -2) return "לפני יומיים";
+  if (diff > 0 && diff <= 14) return `בעוד ${diff} ימים`;
+  if (diff < 0 && diff >= -14) return `לפני ${-diff} ימים`;
+  return null;
+}
+
 const WEEKDAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
 // ניחוש תאריך יעד מטקסט חופשי - היוריסטי בלבד, לא AI (לפי הנחיית Chani לדלג על כל

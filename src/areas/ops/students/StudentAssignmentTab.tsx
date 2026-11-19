@@ -8,6 +8,8 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import type { StudentAssignment } from "./types";
+import { formatDate } from "@/lib/format";
+import { useIsV3 } from "@/lib/uiTheme";
 
 interface StudentAssignmentTabProps {
   studentId: string;
@@ -26,7 +28,8 @@ interface GroupOption {
   name: string;
 }
 
-async function fetchAssignments(studentId: string): Promise<StudentAssignment[]> {
+// מיוצא גם לכרטיס התלמיד (v3), שמציג את השיוך הנוכחי בכותרת מאותה שאילתה ואותו מפתח
+export async function fetchAssignments(studentId: string): Promise<StudentAssignment[]> {
   const { data, error } = await supabase
     .from("student_assignments")
     .select(
@@ -68,6 +71,7 @@ async function fetchGroups(branchId: string): Promise<GroupOption[]> {
 
 export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canManage } = useHasPermission("students", "manage");
   const query = useQuery({ queryKey: ["student-assignments", studentId], queryFn: () => fetchAssignments(studentId) });
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrganizations });
@@ -109,14 +113,28 @@ export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
     setGroupId("");
     setReason("");
     queryClient.invalidateQueries({ queryKey: ["student-assignments", studentId] });
+    // גם "יש שיוך פעיל" שבכרטיס (שלבי ההתקדמות ו"מה חסר") - אחרת נשאר ישן עד רענון
+    queryClient.invalidateQueries({ queryKey: ["student-has-assignment", studentId] });
   };
 
   const columns: DataTableColumn<StudentAssignment>[] = [
     { key: "org", header: "עמותה", render: (r) => r.organization_name ?? "—" },
     { key: "branch", header: "סניף", render: (r) => r.branch_name ?? "—" },
     { key: "group", header: "קבוצה", render: (r) => r.group_name ?? "—" },
-    { key: "start", header: "מתאריך", className: "tabular", render: (r) => r.start_date },
-    { key: "end", header: "עד תאריך", className: "tabular", render: (r) => r.end_date ?? "—" },
+    // v3: תאריך אחיד 19.11.2026; המיון והסינון לפי הערך המקורי
+    isV3
+      ? { key: "start", header: "מתאריך", className: "tabular", filterValue: (r) => formatDate(r.start_date), sortValue: (r) => r.start_date, render: (r) => formatDate(r.start_date) }
+      : { key: "start", header: "מתאריך", className: "tabular", render: (r) => r.start_date },
+    isV3
+      ? {
+          key: "end",
+          header: "עד תאריך",
+          className: "tabular",
+          filterValue: (r) => (r.end_date ? formatDate(r.end_date) : ""),
+          sortValue: (r) => r.end_date ?? "",
+          render: (r) => (r.end_date ? formatDate(r.end_date) : <span className="text-ink-subtle">—</span>),
+        }
+      : { key: "end", header: "עד תאריך", className: "tabular", render: (r) => r.end_date ?? "—" },
     {
       key: "status",
       header: "סטטוס",
@@ -141,8 +159,9 @@ export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="field-label">עמותה</label>
+              <label htmlFor="reassign-org" className="field-label">עמותה</label>
               <select
+                id="reassign-org"
                 required
                 value={orgId}
                 onChange={(e) => {
@@ -161,8 +180,9 @@ export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
               </select>
             </div>
             <div>
-              <label className="field-label">סניף</label>
+              <label htmlFor="reassign-branch" className="field-label">סניף</label>
               <select
+                id="reassign-branch"
                 required
                 value={branchId}
                 onChange={(e) => {
@@ -181,8 +201,8 @@ export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
               </select>
             </div>
             <div>
-              <label className="field-label">קבוצה</label>
-              <select required value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={!branchId} className="input-field">
+              <label htmlFor="reassign-group" className="field-label">קבוצה</label>
+              <select id="reassign-group" required value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={!branchId} className="input-field">
                 <option value="">— בחרי —</option>
                 {(groupsQuery.data ?? []).map((g) => (
                   <option key={g.id} value={g.id}>
@@ -194,13 +214,13 @@ export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">תאריך תחילת שיוך</label>
-              <input required type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-field" />
+              <label htmlFor="reassign-start" className="field-label">תאריך תחילת שיוך</label>
+              <input id="reassign-start" required type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-field" />
             </div>
             {currentAssignment && (
               <div>
-                <label className="field-label">סיבת שינוי</label>
-                <input value={reason} onChange={(e) => setReason(e.target.value)} className="input-field" />
+                <label htmlFor="reassign-reason" className="field-label">סיבת שינוי</label>
+                <input id="reassign-reason" value={reason} onChange={(e) => setReason(e.target.value)} className="input-field" />
               </div>
             )}
           </div>

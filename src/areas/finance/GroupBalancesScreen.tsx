@@ -11,6 +11,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { MetricCard } from "@/components/MetricCard";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMoney, formatMonth, formatNumber } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -46,6 +50,27 @@ const ENTRY_TYPE_LABEL: Record<EntryType, string> = {
   correction: "תיקון",
 };
 
+// source_table הוא שם טבלה טכני ("eligibility_financial_results") - מוצג בעברית.
+// ערך שלא מופיע כאן מוצג כמו שהוא, כדי שמקור חדש לא ייעלם מהמסך.
+const SOURCE_TABLE_LABEL: Record<string, string> = {
+  eligibility_financial_results: "חישוב מלגה",
+  donations: "תרומה",
+  masav_lines: "מס״ב",
+  masav_batches: "מס״ב",
+  payment_returns: "החזרת תשלום",
+  demo_batches: "נתוני דמו",
+};
+
+/** v3: יתרה עם מינוס מפורש, ₪ ומילה - חוב/זכות לא מועברים בצבע בלבד */
+function BalanceAmount({ value }: { value: number }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className={`tabular font-semibold ${value < 0 ? "text-danger-ink" : "text-ink"}`}>{formatMoney(value)}</span>
+      {value < 0 && <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger-ink">חוב</span>}
+    </span>
+  );
+}
+
 async function fetchOrgs(): Promise<OrgOption[]> {
   const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
   if (error) throw error;
@@ -71,6 +96,7 @@ const EMPTY_CORRECTION = { amount: "", periodMonth: todayLocalIso().slice(0, 7) 
 
 export function GroupBalancesScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canCorrect } = useHasPermission("ledger", "correct");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
@@ -94,8 +120,17 @@ export function GroupBalancesScreen() {
     setError(null);
   };
 
-  const submitCorrection = async (e: FormEvent) => {
+  // תנועת תיקון היא רישום קבוע בספר (אין עריכה ואין מחיקה) - לכן אישור לפני השמירה.
+  const [confirmCorrection, setConfirmCorrection] = useState(false);
+
+  const submitCorrection = (e: FormEvent) => {
     e.preventDefault();
+    if (!selectedGroupId || !correction.amount) return;
+    setConfirmCorrection(true);
+  };
+
+  const saveCorrection = async () => {
+    setConfirmCorrection(false);
     if (!selectedGroupId || !correction.amount) return;
     setSubmitting(true);
     setError(null);
@@ -118,27 +153,52 @@ export function GroupBalancesScreen() {
     queryClient.invalidateQueries({ queryKey: ["group-ledger-entries", selectedGroupId] });
   };
 
+  const negativeCount = (balancesQuery.data ?? []).filter((g) => g.balance < 0).length;
+
   const balanceColumns: DataTableColumn<GroupBalanceRow>[] = [
     { key: "name", header: "קבוצה", render: (r) => r.group_name },
     {
       key: "balance",
       header: "יתרה",
       className: "tabular",
-      render: (r) => <span className={r.balance < 0 ? "text-danger" : "text-ink"}>{r.balance.toLocaleString("he-IL")}</span>,
+      kind: isV3 ? "money" : undefined,
+      filterValue: isV3 ? (r) => r.balance : undefined,
+      sortValue: isV3 ? (r) => r.balance : undefined,
+      render: (r) => (isV3 ? <BalanceAmount value={r.balance} /> : <span className={r.balance < 0 ? "text-danger" : "text-ink"}>{r.balance.toLocaleString("he-IL")}</span>),
     },
   ];
 
   const entryColumns: DataTableColumn<LedgerEntry>[] = [
-    { key: "date", header: "תאריך", className: "tabular", render: (r) => new Date(r.created_at).toLocaleDateString("he-IL") },
+    {
+      key: "date",
+      header: "תאריך",
+      className: "tabular",
+      sortValue: isV3 ? (r) => r.created_at : undefined,
+      render: (r) => (isV3 ? formatDate(r.created_at) : new Date(r.created_at).toLocaleDateString("he-IL")),
+    },
     { key: "type", header: "סוג תנועה", render: (r) => ENTRY_TYPE_LABEL[r.entry_type] },
     {
       key: "amount",
       header: "סכום",
       className: "tabular",
-      render: (r) => <span className={r.amount < 0 ? "text-danger" : "text-ok-ink"}>{r.amount.toLocaleString("he-IL")}</span>,
+      kind: isV3 ? "money" : undefined,
+      filterValue: isV3 ? (r) => r.amount : undefined,
+      sortValue: isV3 ? (r) => r.amount : undefined,
+      // v3: + / − מפורש ו-₪ - כניסה ויציאה לא מועברות בצבע בלבד
+      render: (r) => (
+        <span className={r.amount < 0 ? (isV3 ? "text-danger-ink" : "text-danger") : "text-ok-ink"}>
+          {isV3 ? formatMoney(r.amount, { sign: true }) : r.amount.toLocaleString("he-IL")}
+        </span>
+      ),
     },
-    { key: "month", header: "חודש", className: "tabular", render: (r) => r.period_month ?? "—" },
-    { key: "source", header: "מקור", render: (r) => r.source_table ?? "—" },
+    {
+      key: "month",
+      header: "חודש",
+      className: "tabular",
+      filterValue: isV3 ? (r) => r.period_month : undefined,
+      render: (r) => (isV3 ? (r.period_month ? formatMonth(r.period_month) : "—") : r.period_month ?? "—"),
+    },
+    { key: "source", header: "מקור", render: (r) => (r.source_table ? SOURCE_TABLE_LABEL[r.source_table] ?? r.source_table : "—") },
     { key: "ref", header: "אסמכתה / סיבה", render: (r) => (r.reference ? <span className="ltr-num">{r.reference}</span> : r.reason ?? "—") },
   ];
 
@@ -170,12 +230,34 @@ export function GroupBalancesScreen() {
 
       {orgId && (
         <>
+          {isV3 ? (
+            // v3: הסכום הכולל, וכמה קבוצות ביתרת חוב - שני מספרים מהשורות שכבר נטענו
+            balancesQuery.data && (
+              <div className="mb-4 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+                <MetricCard
+                  label="סך היתרות לכל הקבוצות"
+                  value={formatMoney(totalLiabilities)}
+                  tone={totalLiabilities < 0 ? "danger" : "primary"}
+                  emphasis
+                />
+                <MetricCard label="קבוצות" value={formatNumber(balancesQuery.data.length)} />
+                <MetricCard
+                  label="קבוצות ביתרת חוב"
+                  value={formatNumber(negativeCount)}
+                  hint={negativeCount ? "יתרה שלילית - יצא יותר ממה שנכנס" : undefined}
+                  tone="danger"
+                  muted={negativeCount === 0}
+                />
+              </div>
+            )
+          ) : (
           <div className="card mb-4 max-w-sm p-4">
             <p className="text-xs text-ink-subtle">סך התחייבויות לכל הקבוצות</p>
             <p className={`mt-1 text-xl font-bold tabular ${totalLiabilities < 0 ? "text-danger" : "text-ink"}`}>
               {totalLiabilities.toLocaleString("he-IL")}
             </p>
           </div>
+          )}
 
           <DataTable
             columns={balanceColumns}
@@ -185,19 +267,26 @@ export function GroupBalancesScreen() {
             emptyTitle="אין קבוצות לעמותה זו"
             emptyIcon={Wallet}
             onRowClick={openGroup}
+            selectedKey={isV3 ? selectedGroupId || null : undefined}
           />
 
           {selectedGroupId && (
             <div className="card mt-6 max-w-4xl space-y-4 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-ink-muted">כרטיס יתרה — {selectedGroup?.group_name}</h2>
+                  <h2 className="text-sm font-semibold text-ink-muted v3:text-base v3:text-primary">כרטיס יתרה — {selectedGroup?.group_name}</h2>
+                  {isV3 ? (
+                    <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink-muted">
+                      יתרה נוכחית: {selectedGroup ? <BalanceAmount value={selectedGroup.balance} /> : "—"}
+                    </p>
+                  ) : (
                   <p className="text-xs text-ink-subtle">
                     יתרה נוכחית: <span className="tabular">{selectedGroup?.balance.toLocaleString("he-IL")}</span>
                   </p>
+                  )}
                 </div>
                 {canCorrect && (
-                  <button onClick={() => setShowCorrection((v) => !v)} className="btn-secondary text-xs">
+                  <button onClick={() => setShowCorrection((v) => !v)} className={isV3 ? "btn-secondary" : "btn-secondary text-xs"}>
                     {showCorrection ? "סגירה" : "תנועת תיקון"}
                   </button>
                 )}
@@ -253,6 +342,23 @@ export function GroupBalancesScreen() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmCorrection}
+        title="שמירת תנועת תיקון"
+        description={
+          <>
+            תירשם תנועה של{" "}
+            <span className="tabular font-semibold text-ink">
+              {isV3 ? formatMoney(Number(correction.amount), { sign: true }) : Number(correction.amount).toLocaleString("he-IL")}
+            </span>{" "}
+            לקבוצה {selectedGroup?.group_name ?? ""}. תנועה בספר אינה ניתנת לעריכה או למחיקה - תיקון שלה הוא רק תנועה נגדית חדשה.
+          </>
+        }
+        confirmLabel="שמירת תיקון"
+        onConfirm={() => void saveCorrection()}
+        onCancel={() => setConfirmCorrection(false)}
+      />
     </div>
   );
 }

@@ -12,6 +12,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
 import { DocumentsImportPanel } from "./DocumentsImportPanel";
+import { ActionsMenu } from "@/components/ActionsMenu";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatNumber } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -58,6 +62,12 @@ interface LetterRow {
 
 const LETTER_STATUS_LABEL: Record<LetterStatus, string> = { draft: "טיוטה", approved: "מאושר", sent: "נשלח", answered: "נענה", archived: "נגנז" };
 const LETTER_STATUS_SEVERITY: Record<LetterStatus, "neutral" | "medium" | "ok"> = { draft: "neutral", approved: "medium", sent: "ok", answered: "ok", archived: "neutral" };
+
+// ימים עד התפוגה - אותו חישוב בדיוק כמו בתג שלמטה (משמש גם לספירה שבראש הרשימה ב-v3)
+function daysToExpiry(expiryDate: string): number {
+  const todayUtc = new Date(new Date().toLocaleDateString("en-CA"));
+  return Math.round((new Date(expiryDate).getTime() - todayUtc.getTime()) / 86400000);
+}
 
 function expiryBadge(expiryDate: string | null) {
   if (!expiryDate) return null;
@@ -135,6 +145,10 @@ export function DocumentsScreen() {
   const [sendMethodDraft, setSendMethodDraft] = useState("");
   const [responseNotesDraft, setResponseNotesDraft] = useState("");
   const [letterBusy, setLetterBusy] = useState(false);
+  const isV3 = useIsV3();
+  // גניזה - אין במסך דרך להחזיר, ולכן מאשרים קודם
+  const [confirmArchiveDoc, setConfirmArchiveDoc] = useState<DocumentRow | null>(null);
+  const [confirmArchiveLetter, setConfirmArchiveLetter] = useState(false);
 
   const documentsQuery = useQuery({ queryKey: ["documents", orgId], queryFn: () => fetchDocuments(orgId), enabled: !!orgId && tab === "documents" });
   const templatesQuery = useQuery({ queryKey: ["letter-templates"], queryFn: fetchTemplates, enabled: tab === "letters" });
@@ -181,13 +195,17 @@ export function DocumentsScreen() {
   };
 
   const archiveDocument = async (id: string) => {
-    await supabase.from("documents").update({ status: "archived" }).eq("id", id);
+    const { error: err } = await supabase.from("documents").update({ status: "archived" }).eq("id", id);
+    // עד היום כשל כאן נבלע בשקט
+    if (err) setError(`גניזת המסמך נכשלה: ${err.message}`);
     queryClient.invalidateQueries({ queryKey: ["documents", orgId] });
   };
 
   const openDocument = async (path: string) => {
     const { data, error: err } = await supabase.storage.from("organization-documents").createSignedUrl(path, 60);
     if (!err && data) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    // עד היום כשל בפתיחת הקובץ נבלע בשקט - הלחיצה פשוט לא עשתה כלום
+    else setError(`פתיחת הקובץ נכשלה${err ? `: ${err.message}` : ""}`);
   };
 
   // ייצוא מטא-דאטה בלבד (כותרת/סוג/תאריכים/קישור) - לעולם לא תוכן הקובץ עצמו, גם אם
@@ -301,7 +319,8 @@ export function DocumentsScreen() {
 
   const archiveLetter = async () => {
     if (!selectedLetterId) return;
-    await supabase.from("letters").update({ status: "archived" }).eq("id", selectedLetterId);
+    const { error: err } = await supabase.from("letters").update({ status: "archived" }).eq("id", selectedLetterId);
+    if (err) setError(`גניזת המכתב נכשלה: ${err.message}`);
     queryClient.invalidateQueries({ queryKey: ["letters", orgId] });
   };
 
@@ -313,10 +332,10 @@ export function DocumentsScreen() {
         {d.is_sensitive && <StatusBadge severity="high" label="רגיש" />}
       </span>
     ) },
-    { key: "issued", header: "הונפק", className: "tabular", render: (d) => d.issued_date ?? "—" },
-    { key: "expiry", header: "תוקף", className: "tabular", render: (d) => (
+    { key: "issued", header: "הונפק", className: "tabular", sortValue: isV3 ? (d) => d.issued_date : undefined, render: (d) => (isV3 ? formatDate(d.issued_date) : d.issued_date ?? "—") },
+    { key: "expiry", header: "תוקף", className: "tabular", sortValue: isV3 ? (d) => d.expiry_date : undefined, render: (d) => (
       <span className="flex items-center gap-2">
-        {d.expiry_date ?? "—"}
+        {isV3 ? formatDate(d.expiry_date) : d.expiry_date ?? "—"}
         {d.status === "active" && expiryBadge(d.expiry_date)}
       </span>
     ) },
@@ -337,7 +356,7 @@ export function DocumentsScreen() {
             </a>
           )}
           {canManageDocs && d.status === "active" && (
-            <button onClick={() => archiveDocument(d.id)} className="text-xs text-danger underline">
+            <button onClick={() => setConfirmArchiveDoc(d)} className="text-xs text-danger underline">
               גניזה
             </button>
           )}
@@ -350,7 +369,7 @@ export function DocumentsScreen() {
     { key: "recipient", header: "נמען", render: (l) => l.recipient_name },
     { key: "subject", header: "נושא", render: (l) => l.subject },
     { key: "status", header: "סטטוס", render: (l) => <StatusBadge severity={LETTER_STATUS_SEVERITY[l.status]} label={LETTER_STATUS_LABEL[l.status]} /> },
-    { key: "sent", header: "נשלח", className: "tabular", render: (l) => l.sent_at ?? "—" },
+    { key: "sent", header: "נשלח", className: "tabular", sortValue: isV3 ? (l) => l.sent_at : undefined, render: (l) => (isV3 ? formatDate(l.sent_at) : l.sent_at ?? "—") },
     { key: "method", header: "אופן שליחה", render: (l) => l.send_method ?? "—" },
   ];
 
@@ -372,8 +391,8 @@ export function DocumentsScreen() {
       />
 
       <div className="mb-4 max-w-sm">
-        <label className="field-label">עמותה</label>
-        <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+        <label htmlFor="doc-1" className="field-label">עמותה</label>
+        <select id="doc-1" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
           <option value="">— בחרי —</option>
           {(orgsQuery.data ?? []).map((o) => (
             <option key={o.id} value={o.id}>
@@ -385,6 +404,32 @@ export function DocumentsScreen() {
 
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
 
+      <ConfirmDialog
+        open={!!confirmArchiveDoc}
+        title="לגנוז את המסמך?"
+        description={confirmArchiveDoc ? `"${confirmArchiveDoc.title}" יסומן כנגנז ולא יופיעו לו עוד התראות תפוגה. אין במסך הזה דרך להחזיר אותו לפעיל.` : undefined}
+        confirmLabel="גניזה"
+        danger
+        onCancel={() => setConfirmArchiveDoc(null)}
+        onConfirm={() => {
+          const d = confirmArchiveDoc;
+          setConfirmArchiveDoc(null);
+          if (d) void archiveDocument(d.id);
+        }}
+      />
+      <ConfirmDialog
+        open={confirmArchiveLetter}
+        title="לגנוז את המכתב?"
+        description="המכתב יסומן כנגנז. אין במסך הזה דרך להחזיר אותו."
+        confirmLabel="גניזה"
+        danger
+        onCancel={() => setConfirmArchiveLetter(false)}
+        onConfirm={() => {
+          setConfirmArchiveLetter(false);
+          void archiveLetter();
+        }}
+      />
+
       {tab === "documents" && orgId && (
         <>
           <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -393,17 +438,49 @@ export function DocumentsScreen() {
                 {showDocForm ? "סגירה" : "מסמך חדש"}
               </button>
             )}
-            {canManageDocs && (
-              <button onClick={() => setShowDocImport((v) => !v)} className="btn-secondary flex items-center gap-2 text-xs">
-                <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
-                {showDocImport ? "סגירת יבוא" : "יבוא מסמכים מאקסל"}
-              </button>
+            {/* v3: מסמך חדש - הפעולה הראשית; יבוא וייצוא בתפריט */}
+            {isV3 ? (
+              <ActionsMenu
+                actions={[
+                  ...(canManageDocs
+                    ? [{ key: "import", label: showDocImport ? "סגירת יבוא" : "יבוא מסמכים מאקסל", icon: FileSpreadsheet, onSelect: () => setShowDocImport((v) => !v) }]
+                    : []),
+                  { key: "export", label: "ייצוא לאקסל", icon: Download, disabled: !documentsQuery.data?.length, onSelect: () => void exportDocuments() },
+                ]}
+              />
+            ) : (
+              <>
+                {canManageDocs && (
+                  <button onClick={() => setShowDocImport((v) => !v)} className="btn-secondary flex items-center gap-2 text-xs">
+                    <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
+                    {showDocImport ? "סגירת יבוא" : "יבוא מסמכים מאקסל"}
+                  </button>
+                )}
+                <button onClick={exportDocuments} disabled={!documentsQuery.data?.length} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50">
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  ייצוא לאקסל
+                </button>
+              </>
             )}
-            <button onClick={exportDocuments} disabled={!documentsQuery.data?.length} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50">
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
-              ייצוא לאקסל
-            </button>
           </div>
+
+          {/* v3: כמה מסמכים פעילים פגו או יפוגו בקרוב - מהרשימה שכבר נטענה, באותו חישוב של התג בטבלה */}
+          {isV3 && (() => {
+            const active = (documentsQuery.data ?? []).filter((d) => d.status === "active" && d.expiry_date);
+            const expired = active.filter((d) => daysToExpiry(d.expiry_date!) < 0).length;
+            const soon = active.filter((d) => {
+              const n = daysToExpiry(d.expiry_date!);
+              return n >= 0 && n <= 30;
+            }).length;
+            if (!expired && !soon) return null;
+            return (
+              <p className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-warn-ink">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {expired > 0 && <span><span className="tabular font-semibold">{formatNumber(expired)}</span> מסמכים פגו</span>}
+                {soon > 0 && <span><span className="tabular font-semibold">{formatNumber(soon)}</span> יפוגו ב-30 הימים הקרובים</span>}
+              </p>
+            );
+          })()}
 
           {showDocImport && <DocumentsImportPanel orgId={orgId} />}
 
@@ -411,28 +488,28 @@ export function DocumentsScreen() {
             <form onSubmit={submitDocument} className="card mb-6 max-w-2xl space-y-3 p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="field-label">סוג מסמך</label>
-                  <input required value={docForm.document_type} onChange={(e) => setDocForm((f) => ({ ...f, document_type: e.target.value }))} className="input-field" placeholder="רישיון עמותה, אישור ניהול תקין..." />
+                  <label htmlFor="doc-2" className="field-label">סוג מסמך</label>
+                  <input id="doc-2" required value={docForm.document_type} onChange={(e) => setDocForm((f) => ({ ...f, document_type: e.target.value }))} className="input-field" placeholder="רישיון עמותה, אישור ניהול תקין..." />
                 </div>
                 <div>
-                  <label className="field-label">כותרת</label>
-                  <input required value={docForm.title} onChange={(e) => setDocForm((f) => ({ ...f, title: e.target.value }))} className="input-field" />
+                  <label htmlFor="doc-3" className="field-label">כותרת</label>
+                  <input id="doc-3" required value={docForm.title} onChange={(e) => setDocForm((f) => ({ ...f, title: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="field-label">תאריך הנפקה</label>
-                  <input type="date" value={docForm.issued_date} onChange={(e) => setDocForm((f) => ({ ...f, issued_date: e.target.value }))} className="input-field" />
+                  <label htmlFor="doc-4" className="field-label">תאריך הנפקה</label>
+                  <input id="doc-4" type="date" value={docForm.issued_date} onChange={(e) => setDocForm((f) => ({ ...f, issued_date: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="field-label">תוקף</label>
-                  <input type="date" value={docForm.expiry_date} onChange={(e) => setDocForm((f) => ({ ...f, expiry_date: e.target.value }))} className="input-field" />
+                  <label htmlFor="doc-5" className="field-label">תוקף</label>
+                  <input id="doc-5" type="date" value={docForm.expiry_date} onChange={(e) => setDocForm((f) => ({ ...f, expiry_date: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="field-label">קובץ (פרטי)</label>
-                  <input type="file" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} className="input-field" />
+                  <label htmlFor="doc-6" className="field-label">קובץ (פרטי)</label>
+                  <input id="doc-6" type="file" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} className="input-field" />
                 </div>
                 <div>
-                  <label className="field-label">או קישור לתיקיית שיתוף</label>
-                  <input value={docForm.external_link} onChange={(e) => setDocForm((f) => ({ ...f, external_link: e.target.value }))} className="input-field" placeholder="https://..." />
+                  <label htmlFor="doc-7" className="field-label">או קישור לתיקיית שיתוף</label>
+                  <input id="doc-7" value={docForm.external_link} onChange={(e) => setDocForm((f) => ({ ...f, external_link: e.target.value }))} className="input-field" placeholder="https://..." />
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-ink-muted">
@@ -462,11 +539,11 @@ export function DocumentsScreen() {
               {showTemplateForm && (
                 <form onSubmit={submitTemplate} className="space-y-2">
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <input required placeholder="מפתח (key)" value={templateForm.key} onChange={(e) => setTemplateForm((f) => ({ ...f, key: e.target.value }))} className="input-field" />
-                    <input required placeholder="תיאור" value={templateForm.label_he} onChange={(e) => setTemplateForm((f) => ({ ...f, label_he: e.target.value }))} className="input-field" />
+                    <input required placeholder="מפתח (key)" aria-label="מפתח התבנית" value={templateForm.key} onChange={(e) => setTemplateForm((f) => ({ ...f, key: e.target.value }))} className="input-field" />
+                    <input required placeholder="תיאור" aria-label="תיאור התבנית" value={templateForm.label_he} onChange={(e) => setTemplateForm((f) => ({ ...f, label_he: e.target.value }))} className="input-field" />
                   </div>
-                  <input required placeholder="נוסח נושא" value={templateForm.subject_template} onChange={(e) => setTemplateForm((f) => ({ ...f, subject_template: e.target.value }))} className="input-field" />
-                  <textarea required placeholder="נוסח גוף המכתב" value={templateForm.body_template} onChange={(e) => setTemplateForm((f) => ({ ...f, body_template: e.target.value }))} className="input-field" rows={4} />
+                  <input required placeholder="נוסח נושא" aria-label="נוסח נושא" value={templateForm.subject_template} onChange={(e) => setTemplateForm((f) => ({ ...f, subject_template: e.target.value }))} className="input-field" />
+                  <textarea required placeholder="נוסח גוף המכתב" aria-label="נוסח גוף המכתב" value={templateForm.body_template} onChange={(e) => setTemplateForm((f) => ({ ...f, body_template: e.target.value }))} className="input-field" rows={4} />
                   <button type="submit" disabled={savingTemplate} className="btn-primary text-xs">
                     {savingTemplate ? "שומרת…" : "שמירת תבנית"}
                   </button>
@@ -491,8 +568,8 @@ export function DocumentsScreen() {
           {showLetterForm && (
             <form onSubmit={submitLetter} className="card mb-6 max-w-2xl space-y-3 p-4">
               <div>
-                <label className="field-label">תבנית (לא חובה)</label>
-                <select value={letterForm.template_id} onChange={(e) => applyTemplate(e.target.value)} className="input-field">
+                <label htmlFor="doc-8" className="field-label">תבנית (לא חובה)</label>
+                <select id="doc-8" value={letterForm.template_id} onChange={(e) => applyTemplate(e.target.value)} className="input-field">
                   <option value="">— ללא תבנית —</option>
                   {(templatesQuery.data ?? []).filter((t) => t.is_active).map((t) => (
                     <option key={t.id} value={t.id}>
@@ -503,21 +580,21 @@ export function DocumentsScreen() {
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="field-label">נמען</label>
-                  <input required value={letterForm.recipient_name} onChange={(e) => setLetterForm((f) => ({ ...f, recipient_name: e.target.value }))} className="input-field" />
+                  <label htmlFor="doc-9" className="field-label">נמען</label>
+                  <input id="doc-9" required value={letterForm.recipient_name} onChange={(e) => setLetterForm((f) => ({ ...f, recipient_name: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="field-label">פרטי קשר</label>
-                  <input value={letterForm.recipient_details} onChange={(e) => setLetterForm((f) => ({ ...f, recipient_details: e.target.value }))} className="input-field" />
+                  <label htmlFor="doc-10" className="field-label">פרטי קשר</label>
+                  <input id="doc-10" value={letterForm.recipient_details} onChange={(e) => setLetterForm((f) => ({ ...f, recipient_details: e.target.value }))} className="input-field" />
                 </div>
               </div>
               <div>
-                <label className="field-label">נושא</label>
-                <input required value={letterForm.subject} onChange={(e) => setLetterForm((f) => ({ ...f, subject: e.target.value }))} className="input-field" />
+                <label htmlFor="doc-11" className="field-label">נושא</label>
+                <input id="doc-11" required value={letterForm.subject} onChange={(e) => setLetterForm((f) => ({ ...f, subject: e.target.value }))} className="input-field" />
               </div>
               <div>
-                <label className="field-label">טיוטת נוסח</label>
-                <textarea required value={letterForm.draft_body} onChange={(e) => setLetterForm((f) => ({ ...f, draft_body: e.target.value }))} className="input-field" rows={6} />
+                <label htmlFor="doc-draft" className="field-label">טיוטת נוסח</label>
+                <textarea id="doc-draft" required value={letterForm.draft_body} onChange={(e) => setLetterForm((f) => ({ ...f, draft_body: e.target.value }))} className="input-field" rows={6} />
               </div>
               <button type="submit" disabled={savingLetter} className="btn-primary">
                 {savingLetter ? "שומרת…" : "שמירת טיוטה"}
@@ -550,8 +627,8 @@ export function DocumentsScreen() {
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     אישור אנושי חובה - יש לערוך את הנוסח הסופי ולאשר לפני שהמכתב ייחשב מוכן לשליחה.
                   </p>
-                  <label className="field-label">נוסח סופי</label>
-                  <textarea value={finalBodyDraft} onChange={(e) => setFinalBodyDraft(e.target.value)} className="input-field" rows={6} />
+                  <label htmlFor="doc-final" className="field-label">נוסח סופי</label>
+                  <textarea id="doc-final" value={finalBodyDraft} onChange={(e) => setFinalBodyDraft(e.target.value)} className="input-field" rows={6} />
                   <button onClick={approveLetter} disabled={!finalBodyDraft.trim() || letterBusy} className="btn-primary text-xs">
                     {letterBusy ? "מאשרת…" : "אישור נוסח סופי"}
                   </button>
@@ -561,9 +638,9 @@ export function DocumentsScreen() {
               {selectedLetter.status === "approved" && (
                 <>
                   <p className="whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-sm text-ink-muted">{selectedLetter.final_body}</p>
-                  <label className="field-label">אופן שליחה</label>
+                  <label htmlFor="doc-send-method" className="field-label">אופן שליחה</label>
                   <div className="flex gap-2">
-                    <input value={sendMethodDraft} onChange={(e) => setSendMethodDraft(e.target.value)} className="input-field" placeholder="דואר / מייל / פקס..." />
+                    <input id="doc-send-method" value={sendMethodDraft} onChange={(e) => setSendMethodDraft(e.target.value)} className="input-field" placeholder="דואר / מייל / פקס..." />
                     <button onClick={markSent} disabled={!sendMethodDraft.trim() || letterBusy} className="btn-primary text-xs shrink-0">
                       {letterBusy ? "מסמנת…" : "סימון כנשלח"}
                     </button>
@@ -574,14 +651,14 @@ export function DocumentsScreen() {
               {selectedLetter.status === "sent" && (
                 <>
                   <p className="whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-sm text-ink-muted">{selectedLetter.final_body}</p>
-                  <p className="text-xs text-ink-subtle">נשלח {selectedLetter.sent_at} · {selectedLetter.send_method}</p>
-                  <label className="field-label">רישום תשובה (לא חובה)</label>
-                  <textarea value={responseNotesDraft} onChange={(e) => setResponseNotesDraft(e.target.value)} className="input-field" rows={3} />
+                  <p className="text-xs text-ink-subtle">נשלח {isV3 ? formatDate(selectedLetter.sent_at) : selectedLetter.sent_at} · {selectedLetter.send_method}</p>
+                  <label htmlFor="doc-response" className="field-label">רישום תשובה (לא חובה)</label>
+                  <textarea id="doc-response" value={responseNotesDraft} onChange={(e) => setResponseNotesDraft(e.target.value)} className="input-field" rows={3} />
                   <div className="flex gap-2">
                     <button onClick={recordResponse} disabled={letterBusy} className="btn-primary text-xs">
                       רישום תשובה
                     </button>
-                    <button onClick={archiveLetter} className="text-xs text-ink-subtle underline">
+                    <button onClick={() => setConfirmArchiveLetter(true)} className="text-xs text-ink-subtle underline">
                       גניזה
                     </button>
                   </div>
@@ -591,8 +668,8 @@ export function DocumentsScreen() {
               {selectedLetter.status === "answered" && (
                 <>
                   <p className="whitespace-pre-wrap rounded-md bg-surface-muted p-3 text-sm text-ink-muted">{selectedLetter.final_body}</p>
-                  <p className="text-xs text-ink-subtle">נענה {selectedLetter.responded_at}: {selectedLetter.response_notes}</p>
-                  <button onClick={archiveLetter} className="text-xs text-ink-subtle underline">
+                  <p className="text-xs text-ink-subtle">נענה {isV3 ? formatDate(selectedLetter.responded_at) : selectedLetter.responded_at}: {selectedLetter.response_notes}</p>
+                  <button onClick={() => setConfirmArchiveLetter(true)} className="text-xs text-ink-subtle underline">
                     גניזה
                   </button>
                 </>

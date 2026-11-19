@@ -1,5 +1,5 @@
 import { fetchAll } from "@/lib/fetchAll";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
@@ -9,6 +9,10 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge, type Severity } from "@/components/StatusBadge";
 import { LoadingState } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
+import { SearchAndFilters } from "@/components/SearchAndFilters";
+import { CountChips, type ChipTone } from "@/components/CountChips";
+import { formatDate, formatMoney, formatNumber } from "@/lib/format";
+import { useIsV3 } from "@/lib/uiTheme";
 
 interface OrgOption {
   id: string;
@@ -111,6 +115,20 @@ const DOMAIN_LABEL: Record<Domain, string> = {
   masav_returns: 'מס"ב והחזרות',
 };
 
+// v3: סדר חומרה אמיתי. המיון בשאילתה הוא אלפביתי על הטקסט (critical, high, low,
+// medium), ולכן "לידיעה" הופיע לפני "בינוני".
+const SEVERITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+const SEVERITY_TEXT: Record<string, string> = { critical: "קריטי", high: "גבוה", medium: "בינוני", low: "לידיעה" };
+const DOMAIN_TONE: Record<Domain, ChipTone> = {
+  bank: "info",
+  talmud: "warn",
+  students: "neutral",
+  audits: "neutral",
+  documents: "neutral",
+  masav_returns: "high",
+};
+const rankOf = (s: string) => SEVERITY_RANK[s] ?? 9;
+
 function routeFor(areaPrefix: string, row: ExceptionRow): string {
   const type = row.exception_type;
   // חריגות על תלמיד מסוים - לכרטיס שלו, שם מזינים את הנתון או מעבירים סניף
@@ -169,23 +187,97 @@ export function ExceptionsCenterScreen() {
   const [orgId, setOrgId] = useState("");
   const [severity, setSeverity] = useState("");
   const [domain, setDomain] = useState("");
+  const isV3 = useIsV3();
+  const [search, setSearch] = useState("");
+  // v3: התחום מסונן כאן, מעל השורות שכבר נטענו (גם קודם הסינון לפי תחום היה בצד
+  // לקוח, אחרי אותה שאילתה) - כדי שהצ'יפים יוכלו להראות כמה יש בכל תחום.
+  const queryDomain = isV3 ? "" : domain;
 
   const exceptionsQuery = useQuery({
-    queryKey: ["unified-exceptions", orgId, severity, domain, orgsQuery.data],
-    queryFn: () => fetchExceptions(orgId, severity, domain, orgsQuery.data ?? []),
+    queryKey: ["unified-exceptions", orgId, severity, queryDomain, orgsQuery.data],
+    queryFn: () => fetchExceptions(orgId, severity, queryDomain, orgsQuery.data ?? []),
     enabled: !!orgsQuery.data,
   });
 
-  const columns: DataTableColumn<ExceptionRow>[] = [
-    { key: "severity", header: "חומרה", render: (r) => <StatusBadge severity={r.severity} /> },
-    { key: "domain", header: "תחום", className: "whitespace-nowrap", render: (r) => DOMAIN_LABEL[TYPE_DOMAIN[r.exception_type]] },
-    { key: "type", header: "סוג", className: "whitespace-nowrap", render: (r) => TYPE_LABEL[r.exception_type] },
-    { key: "org", header: "עמותה", className: "whitespace-nowrap", render: (r) => r.organization?.legal_name ?? "—" },
-    // הפירוט הוא הטקסט היחיד באורך משתנה כאן, ולכן הוא שמקבל את הרוחב הפנוי
-    { key: "desc", header: "פירוט", grow: true, render: (r) => r.description },
-    { key: "date", header: "תאריך", className: "tabular", render: (r) => r.related_date ?? "—" },
-    { key: "amount", header: "סכום", className: "tabular", render: (r) => (r.amount != null ? r.amount.toLocaleString("he-IL") : "—") },
-  ];
+  // v3: חיפוש חופשי ← ספירה לפי תחום ← סינון לפי התחום שנבחר ← מיון לפי חומרה.
+  // הכול מהשורות שכבר על המסך; שום שאילתה נוספת.
+  const searched = useMemo(() => {
+    const all = exceptionsQuery.data ?? [];
+    const term = search.trim().toLowerCase();
+    if (!isV3 || !term) return all;
+    return all.filter((r) =>
+      [r.description, TYPE_LABEL[r.exception_type], DOMAIN_LABEL[TYPE_DOMAIN[r.exception_type]], r.organization?.legal_name ?? ""]
+        .some((t) => (t ?? "").toLowerCase().includes(term)),
+    );
+  }, [exceptionsQuery.data, search, isV3]);
+  const domainChips = useMemo(() => {
+    const counts = new Map<Domain, number>();
+    for (const r of searched) {
+      const d = TYPE_DOMAIN[r.exception_type];
+      counts.set(d, (counts.get(d) ?? 0) + 1);
+    }
+    return (Object.keys(DOMAIN_LABEL) as Domain[]).map((d) => ({ value: d, label: DOMAIN_LABEL[d], count: counts.get(d) ?? 0, tone: DOMAIN_TONE[d] }));
+  }, [searched]);
+  const v3Rows = useMemo(
+    () =>
+      searched
+        .filter((r) => !domain || TYPE_DOMAIN[r.exception_type] === domain)
+        .slice()
+        .sort((a, b) => rankOf(a.severity) - rankOf(b.severity)),
+    [searched, domain],
+  );
+  const severitySummary = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of v3Rows) counts.set(r.severity, (counts.get(r.severity) ?? 0) + 1);
+    return Object.keys(SEVERITY_RANK)
+      .filter((s) => counts.get(s))
+      .map((s) => `${formatNumber(counts.get(s))} ${SEVERITY_TEXT[s]}`)
+      .join(" · ");
+  }, [v3Rows]);
+
+  const v3Empty = <span className="text-ink-subtle">—</span>;
+
+  const columns: DataTableColumn<ExceptionRow>[] = isV3
+    ? [
+        {
+          key: "severity",
+          header: "חומרה",
+          filterValue: (r) => SEVERITY_TEXT[r.severity] ?? r.severity,
+          sortValue: (r) => rankOf(r.severity),
+          render: (r) => <StatusBadge severity={r.severity} />,
+        },
+        { key: "domain", header: "תחום", className: "whitespace-nowrap", render: (r) => DOMAIN_LABEL[TYPE_DOMAIN[r.exception_type]] },
+        { key: "type", header: "סוג", className: "whitespace-nowrap", render: (r) => TYPE_LABEL[r.exception_type] },
+        { key: "org", header: "עמותה", className: "whitespace-nowrap", filterValue: (r) => r.organization?.legal_name ?? "", render: (r) => r.organization?.legal_name ?? v3Empty },
+        { key: "desc", header: "פירוט", grow: true, render: (r) => r.description },
+        {
+          key: "date",
+          header: "תאריך",
+          className: "tabular whitespace-nowrap",
+          filterValue: (r) => (r.related_date ? formatDate(r.related_date) : ""),
+          sortValue: (r) => r.related_date ?? "",
+          render: (r) => (r.related_date ? formatDate(r.related_date) : v3Empty),
+        },
+        {
+          key: "amount",
+          header: "סכום",
+          kind: "money",
+          className: "whitespace-nowrap",
+          filterValue: (r) => (r.amount != null ? formatMoney(r.amount) : ""),
+          sortValue: (r) => r.amount ?? null,
+          render: (r) => (r.amount != null ? formatMoney(r.amount) : v3Empty),
+        },
+      ]
+    : [
+        { key: "severity", header: "חומרה", render: (r) => <StatusBadge severity={r.severity} /> },
+        { key: "domain", header: "תחום", className: "whitespace-nowrap", render: (r) => DOMAIN_LABEL[TYPE_DOMAIN[r.exception_type]] },
+        { key: "type", header: "סוג", className: "whitespace-nowrap", render: (r) => TYPE_LABEL[r.exception_type] },
+        { key: "org", header: "עמותה", className: "whitespace-nowrap", render: (r) => r.organization?.legal_name ?? "—" },
+        // הפירוט הוא הטקסט היחיד באורך משתנה כאן, ולכן הוא שמקבל את הרוחב הפנוי
+        { key: "desc", header: "פירוט", grow: true, render: (r) => r.description },
+        { key: "date", header: "תאריך", className: "tabular", render: (r) => r.related_date ?? "—" },
+        { key: "amount", header: "סכום", className: "tabular", render: (r) => (r.amount != null ? r.amount.toLocaleString("he-IL") : "—") },
+      ];
 
   return (
     <div>
@@ -193,8 +285,8 @@ export function ExceptionsCenterScreen() {
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3 max-w-2xl">
         <div>
-          <label className="field-label">עמותה</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+          <label htmlFor="exc-org" className="field-label">עמותה</label>
+          <select id="exc-org" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
             <option value="">— הכול —</option>
             {(orgsQuery.data ?? []).map((o) => (
               <option key={o.id} value={o.id}>
@@ -204,8 +296,8 @@ export function ExceptionsCenterScreen() {
           </select>
         </div>
         <div>
-          <label className="field-label">חומרה</label>
-          <select value={severity} onChange={(e) => setSeverity(e.target.value)} className="input-field">
+          <label htmlFor="exc-severity" className="field-label">חומרה</label>
+          <select id="exc-severity" value={severity} onChange={(e) => setSeverity(e.target.value)} className="input-field">
             <option value="">— הכול —</option>
             <option value="critical">קריטי</option>
             <option value="high">גבוה</option>
@@ -213,17 +305,20 @@ export function ExceptionsCenterScreen() {
             <option value="low">לידיעה</option>
           </select>
         </div>
-        <div>
-          <label className="field-label">תחום</label>
-          <select value={domain} onChange={(e) => setDomain(e.target.value)} className="input-field">
-            <option value="">— הכול —</option>
-            {(Object.keys(DOMAIN_LABEL) as Domain[]).map((d) => (
-              <option key={d} value={d}>
-                {DOMAIN_LABEL[d]}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* v3: התחום נבחר בצ'יפים שמעל הטבלה (עם ספירה), ולכן הרשימה הנפתחת לא מוצגת */}
+        {!isV3 && (
+          <div>
+            <label htmlFor="exc-domain" className="field-label">תחום</label>
+            <select id="exc-domain" value={domain} onChange={(e) => setDomain(e.target.value)} className="input-field">
+              <option value="">— הכול —</option>
+              {(Object.keys(DOMAIN_LABEL) as Domain[]).map((d) => (
+                <option key={d} value={d}>
+                  {DOMAIN_LABEL[d]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* בלי רשימת העמותות שאילתת החריגות לא רצה בכלל, והמסך הציג "אין חריגות" - מטעה */}
@@ -231,6 +326,33 @@ export function ExceptionsCenterScreen() {
       {exceptionsQuery.isError && <div className="mb-4"><ErrorState message="שגיאה בטעינת מרכז החריגות." /></div>}
       {orgsQuery.isError ? null : exceptionsQuery.isLoading ? (
         <LoadingState rows={5} />
+      ) : isV3 ? (
+        <>
+          <SearchAndFilters searchValue={search} onSearchChange={setSearch} searchPlaceholder="חיפוש בפירוט, בסוג או בשם העמותה…" />
+          {(exceptionsQuery.data ?? []).length > 0 && (
+            <CountChips
+              ariaLabel="סינון לפי תחום"
+              chips={domainChips}
+              active={domain || null}
+              onSelect={(v) => setDomain(v ?? "")}
+              total={searched.length}
+              allLabel="כל התחומים"
+            />
+          )}
+          {severitySummary && (
+            <p className="mb-2 text-sm text-ink-muted">
+              בתצוגה: <span className="tabular font-semibold text-ink">{formatNumber(v3Rows.length)}</span> חריגות · {severitySummary}
+            </p>
+          )}
+          <DataTable
+            columns={columns}
+            rows={v3Rows}
+            rowKey={(r) => `${r.exception_type}-${r.related_id}`}
+            emptyTitle={search.trim() || domain ? "אין חריגות שמתאימות לחיפוש" : "אין חריגות פתוחות"}
+            emptyIcon={AlertTriangle}
+            onRowClick={(r) => navigate(routeFor(areaPrefix, r))}
+          />
+        </>
       ) : (
         <DataTable
           columns={columns}

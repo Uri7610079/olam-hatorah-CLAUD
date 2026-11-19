@@ -18,6 +18,10 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { AuditsContainerImportPanel } from "./AuditsContainerImportPanel";
 import { RawRowPreview } from "@/components/RawRowPreview";
+import { ActionsMenu } from "@/components/ActionsMenu";
+import { DuplicateFileNotice, ImportSteps, PreviewSummary, SavedForReviewNote, batchImportStep } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -90,6 +94,7 @@ async function fetchAttendance(auditId: string): Promise<AttendanceRow[]> {
 
 export function AuditsScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canImport, isLoading: permLoading } = useHasPermission("audits", "import");
   const { hasPermission: canManage } = useHasPermission("audits", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
@@ -115,6 +120,7 @@ export function AuditsScreen() {
   const [resolvingRow, setResolvingRow] = useState<number | null>(null);
   const [committing, setCommitting] = useState(false);
   const [commitResult, setCommitResult] = useState<{ matched: number; unmatched: number } | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const branchesQuery = useQuery({ queryKey: ["audit-branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
   const auditsQuery = useQuery({ queryKey: ["audits", orgId], queryFn: () => fetchAudits(orgId), enabled: !!orgId });
@@ -255,7 +261,10 @@ export function AuditsScreen() {
   };
 
   const changeAttendanceStatus = async (id: string, status: AttendanceStatus) => {
-    await supabase.from("audit_attendance").update({ status }).eq("id", id);
+    setStatusError(null);
+    const { error: updateError } = await supabase.from("audit_attendance").update({ status }).eq("id", id);
+    // עד היום שגיאה כאן נבלעה בשקט והבחירה "קפצה" חזרה בלי הסבר
+    if (updateError) setStatusError(`עדכון הטיפול נכשל: ${updateError.message}`);
     queryClient.invalidateQueries({ queryKey: ["audit-attendance", selectedAuditId] });
   };
 
@@ -268,6 +277,7 @@ export function AuditsScreen() {
   const storedValid = storedRows.filter((r) => r.status === "valid" || r.status === "committed");
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
+  const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: false, previewing: !!parsedRows && !duplicateId });
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -311,24 +321,43 @@ export function AuditsScreen() {
                   {showCreate ? "סגירה" : "אירוע ביקורת חדש"}
                 </button>
               )}
-              {canManage && (
-                <button onClick={() => setShowContainerImport((v) => !v)} className="btn-secondary flex items-center gap-2 text-xs">
-                  <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
-                  {showContainerImport ? "סגירת יבוא אירועים" : "יבוא אירועי ביקורת מאקסל"}
-                </button>
+              {/* v3: יבוא אירועים מאקסל וייצוא - פעולות לא יומיומיות, בתפריט אחד */}
+              {isV3 ? (
+                <ActionsMenu
+                  actions={[
+                    ...(canManage
+                      ? [{
+                          key: "container-import",
+                          label: showContainerImport ? "סגירת יבוא אירועים" : "יבוא אירועי ביקורת מאקסל",
+                          icon: FileSpreadsheet,
+                          onSelect: () => setShowContainerImport((v) => !v),
+                        }]
+                      : []),
+                    { key: "export", label: "ייצוא לאקסל", icon: Download, disabled: !auditsQuery.data?.length, onSelect: () => void exportAudits() },
+                  ]}
+                />
+              ) : (
+                <>
+                  {canManage && (
+                    <button onClick={() => setShowContainerImport((v) => !v)} className="btn-secondary flex items-center gap-2 text-xs">
+                      <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
+                      {showContainerImport ? "סגירת יבוא אירועים" : "יבוא אירועי ביקורת מאקסל"}
+                    </button>
+                  )}
+                  <button onClick={exportAudits} disabled={!auditsQuery.data?.length} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50">
+                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                    ייצוא לאקסל
+                  </button>
+                </>
               )}
-              <button onClick={exportAudits} disabled={!auditsQuery.data?.length} className="btn-secondary flex items-center gap-2 text-xs disabled:opacity-50">
-                <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                ייצוא לאקסל
-              </button>
             </div>
           )
         }
       />
 
       <div className="mb-4 max-w-sm">
-        <label className="field-label">עמותה</label>
-        <select
+        <label htmlFor="aud-1" className="field-label">עמותה</label>
+        <select id="aud-1"
           value={orgId}
           onChange={(e) => {
             setOrgId(e.target.value);
@@ -349,8 +378,8 @@ export function AuditsScreen() {
         <div className="card mb-6 max-w-2xl space-y-3 p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">סניף (לא חובה)</label>
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="input-field">
+              <label htmlFor="aud-2" className="field-label">סניף (לא חובה)</label>
+              <select id="aud-2" value={branchId} onChange={(e) => setBranchId(e.target.value)} className="input-field">
                 <option value="">— כל הסניפים —</option>
                 {(branchesQuery.data ?? []).map((b) => (
                   <option key={b.id} value={b.id}>
@@ -360,8 +389,8 @@ export function AuditsScreen() {
               </select>
             </div>
             <div>
-              <label className="field-label">תאריך ביקורת</label>
-              <input type="date" value={auditDate} onChange={(e) => setAuditDate(e.target.value)} className="input-field" />
+              <label htmlFor="aud-3" className="field-label">תאריך ביקורת</label>
+              <input id="aud-3" type="date" value={auditDate} onChange={(e) => setAuditDate(e.target.value)} className="input-field" />
             </div>
           </div>
           {error && <ErrorState message={error} />}
@@ -376,7 +405,7 @@ export function AuditsScreen() {
       {orgId && (
         <DataTable
           columns={[
-            { key: "date", header: "תאריך", className: "tabular", render: (a: AuditRow) => a.audit_date },
+            { key: "date", header: "תאריך", className: "tabular", sortValue: isV3 ? (a: AuditRow) => a.audit_date : undefined, render: (a: AuditRow) => (isV3 ? formatDate(a.audit_date) : a.audit_date) },
             { key: "branch", header: "סניף", render: (a: AuditRow) => a.branch?.internal_name ?? "כל הסניפים" },
             { key: "status", header: "סטטוס", render: (a: AuditRow) => <StatusBadge severity={a.status === "completed" ? "ok" : "medium"} label={AUDIT_STATUS_LABEL[a.status]} /> },
           ]}
@@ -386,6 +415,7 @@ export function AuditsScreen() {
           emptyTitle="אין עדיין אירועי ביקורת"
           emptyIcon={ClipboardList}
           onRowClick={(a: AuditRow) => setSelectedAuditId(a.id === selectedAuditId ? null : a.id)}
+          selectedKey={isV3 ? selectedAuditId : undefined}
         />
       )}
 
@@ -393,7 +423,7 @@ export function AuditsScreen() {
         <div className="card mt-4 max-w-4xl space-y-4 p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-ink-muted">
-              ביקורת · {selectedAudit.audit_date} · {selectedAudit.branch?.internal_name ?? "כל הסניפים"}
+              ביקורת · {isV3 ? formatDate(selectedAudit.audit_date) : selectedAudit.audit_date} · {selectedAudit.branch?.internal_name ?? "כל הסניפים"}
             </h2>
             <div className="flex items-center gap-2">
               <StatusBadge severity={selectedAudit.status === "completed" ? "ok" : "medium"} label={AUDIT_STATUS_LABEL[selectedAudit.status]} />
@@ -408,6 +438,7 @@ export function AuditsScreen() {
 
           {showImport && !reviewBatchId && (
             <div className="space-y-3 border-t border-line pt-4">
+              <ImportSteps current={importStep} />
               {headerConfirm ? (
                 <HeaderRowConfirm
                   previewRows={headerConfirm.previewRows}
@@ -418,11 +449,11 @@ export function AuditsScreen() {
               ) : (
                 <>
                   <p className="text-xs text-ink-subtle">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
-                  <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+                  <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ רשימת חסרים" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
                   {analyzing && <LoadingState rows={2} />}
                   {duplicateId && (
                     <div className="space-y-2">
-                      <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                      <DuplicateFileNotice />
                       <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
                         פתיחת האצווה הקיימת
                       </button>
@@ -432,6 +463,7 @@ export function AuditsScreen() {
                   {error && <ErrorState message={error} />}
                   {parsedRows && !duplicateId && (
                     <>
+                      <PreviewSummary valid={localValid.length} needs={localNeeds.length} invalid={localInvalid.length} />
                       <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                         {(tab) => {
                           const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
@@ -455,6 +487,8 @@ export function AuditsScreen() {
                 <LoadingState rows={3} />
               ) : (
                 <>
+                  <ImportSteps current={importStep} />
+                  <SavedForReviewNote what="רשימת החסרים" />
                   <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הרשימה.</p>
                   <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                     {(tab) => {
@@ -482,6 +516,7 @@ export function AuditsScreen() {
             </div>
           )}
 
+          {statusError && <ErrorState message={statusError} />}
           {selectedAudit.status === "completed" && (
             <DataTable
               columns={[
@@ -494,7 +529,12 @@ export function AuditsScreen() {
                   header: "טיפול",
                   render: (r: AttendanceRow) =>
                     canManage ? (
-                      <select value={r.status} onChange={(e) => changeAttendanceStatus(r.id, e.target.value as AttendanceStatus)} className="input-field text-xs">
+                      <select
+                        value={r.status}
+                        onChange={(e) => changeAttendanceStatus(r.id, e.target.value as AttendanceStatus)}
+                        aria-label={`טיפול בחוסר של ${r.student?.full_name ?? r.external_student_ref ?? "התלמיד"}`}
+                        className={isV3 ? "input-field min-w-[9rem] text-sm" : "input-field text-xs"}
+                      >
                         {(Object.keys(ATTENDANCE_STATUS_LABEL) as AttendanceStatus[]).map((s) => (
                           <option key={s} value={s}>
                             {ATTENDANCE_STATUS_LABEL[s]}

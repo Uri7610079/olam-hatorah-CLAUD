@@ -6,6 +6,8 @@ import { fetchAll } from "@/lib/fetchAll";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
 import { STORED_REPORT_LABEL, type StoredReportKey } from "@/lib/talmudReports";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMoney, formatMonth } from "@/lib/format";
 
 // השורות שנקלטו מדוחות תלמוד (מיגרציה 121): תשלומים למוסד, בג"ץ, הסבר תשלומים.
 // טבלה אחת לכל דוח, עם סינון ומיון בכותרות (כמו באקסל).
@@ -63,7 +65,28 @@ const COLUMNS: Record<StoredReportKey, DataTableColumn<Row>[]> = {
   ],
 };
 
+// v3: אותן עמודות, עם סכומים ב-₪ (ומינוס מפורש בהפרש), חודש במילים ות.ז. מבודדת
+// כיוונית. המיון נשאר לפי הערך הגולמי (sortValue שכבר מוגדר למעלה).
+const MONEY_FIELD: Record<string, string> = { amount: "amount", prev: "prev_amount", diff: "diff", offset: "offset_this", offsetTotal: "offset_total" };
+const v3Money = (n: unknown, sign = false) => (typeof n === "number" ? formatMoney(n, { sign }) : "—");
+// rowMonth: עמודת החודש מציגה את month של השורה (בג"ץ), ולא חודש דיווח כטקסט מהקובץ
+const toV3 = (cols: DataTableColumn<Row>[], rowMonth = false): DataTableColumn<Row>[] =>
+  cols.map((c) => {
+    const field = MONEY_FIELD[c.key];
+    if (field) return { ...c, className: undefined, kind: "money", render: (r: Row) => v3Money(r.data[field], c.key === "diff") };
+    if (c.key === "eligible") return { ...c, className: undefined, kind: "number" };
+    if (c.key === "id") return { ...c, className: undefined, kind: "ltr" };
+    if (c.key === "month" && rowMonth) return { ...c, render: (r: Row) => formatMonth(r.month) };
+    return c;
+  });
+const COLUMNS_V3: Record<StoredReportKey, DataTableColumn<Row>[]> = {
+  institute_payments: toV3(COLUMNS.institute_payments),
+  payment_explanation: toV3(COLUMNS.payment_explanation),
+  bagatz: toV3(COLUMNS.bagatz, true),
+};
+
 export function TalmudReportRowsView({ reportKey, organizationId }: { reportKey: StoredReportKey; organizationId?: string | null }) {
+  const isV3 = useIsV3();
   const query = useQuery({
     queryKey: ["talmud-report-rows", reportKey, organizationId ?? "all"],
     queryFn: () => fetchAll(() => {
@@ -82,7 +105,7 @@ export function TalmudReportRowsView({ reportKey, organizationId }: { reportKey:
   if (query.isError) return <ErrorState message={(query.error as Error).message} />;
   return (
     <DataTable
-      columns={COLUMNS[reportKey]}
+      columns={isV3 ? COLUMNS_V3[reportKey] : COLUMNS[reportKey]}
       rows={query.data ?? []}
       rowKey={(r) => r.id}
       loading={query.isLoading}
@@ -96,6 +119,7 @@ export function TalmudReportRowsView({ reportKey, organizationId }: { reportKey:
 
 /** בכרטיס התלמיד: מצב בג"ץ בחודש האחרון שנקלט */
 export function StudentBagatzNote({ studentId }: { studentId: string }) {
+  const isV3 = useIsV3();
   const query = useQuery({
     queryKey: ["talmud-report-rows", "bagatz-student", studentId],
     queryFn: async () => {
@@ -109,7 +133,7 @@ export function StudentBagatzNote({ studentId }: { studentId: string }) {
   const suspended = String(row.data?.suspended ?? "").trim();
   return (
     <p className={`mb-4 rounded-control p-3 text-sm ${suspended ? "bg-warn-soft text-warn-ink" : "bg-surface-muted text-ink-muted"}`}>
-      בג"ץ, חודש {monthText(row.month)}: {suspended ? `השעיה - ${suspended}` : "לא מושעה"}
+      בג"ץ, חודש {isV3 ? formatMonth(row.month) : monthText(row.month)}: {suspended ? `השעיה - ${suspended}` : "לא מושעה"}
       {row.data?.entitlement ? ` · זכאות: ${row.data.entitlement}` : ""}
       {row.data?.would_be_entitled ? ` · זכאי אלמלא השעיה: ${row.data.would_be_entitled}` : ""}
     </p>

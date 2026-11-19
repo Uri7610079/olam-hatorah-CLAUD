@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { fetchAllIn } from "@/lib/fetchAll";
 import { ErrorState } from "@/components/ErrorState";
 import { parseIds, toTalmudId } from "@/lib/talmudPull";
+import { useIsV3 } from "@/lib/uiTheme";
 
 // אישורי לימודים מתלמוד (מיגרציה 119): מדביקים רשימת מספרי ת.ז., המערכת מוצאת
 // לכל תלמיד את העמותה שלו, נכנסת לתלמוד בשם העמותה (סיסמה שמורה + SMS), ומורידה
@@ -50,6 +51,7 @@ export function TalmudCertificatesTab({ onStarted }: { onStarted: () => void }) 
   const [text, setText] = useState("");
   const [rows, setRows] = useState<Row[] | null>(null);
   const [fallbackOrg, setFallbackOrg] = useState("");
+  const isV3 = useIsV3();
 
   const orgs = useQuery({
     queryKey: ["talmud-credentials"],
@@ -114,9 +116,18 @@ export function TalmudCertificatesTab({ onStarted }: { onStarted: () => void }) 
 
       {rows && (
         <section className="space-y-3">
+          {/* v3: תוצאת הבדיקה במילים, לפני הטבלה */}
+          {isV3 && (
+            <p className="text-sm text-ink">
+              נבדקו <span className="tabular font-semibold">{rows.length}</span> מספרים:{" "}
+              <span className="font-semibold text-ok-ink">{items.length} אישורים יירדו</span>
+              {unknown.length > 0 && <> · <span className="font-semibold text-warn-ink">{unknown.length} לא נמצאו במערכת</span></>}
+              {noUser.length > 0 && <> · <span className="font-semibold text-danger-ink">{noUser.length} בלי משתמש תלמוד</span></>}
+            </p>
+          )}
           <div className="card overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-surface-muted text-right text-ink-muted">
+              <thead className="bg-surface-muted text-right text-ink-muted v3:text-xs v3:font-medium">
                 <tr>
                   <th className="px-3 py-2 font-semibold">מספר זהות</th>
                   <th className="px-3 py-2 font-semibold">שם</th>
@@ -126,7 +137,12 @@ export function TalmudCertificatesTab({ onStarted }: { onStarted: () => void }) 
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.externalId} className="border-t border-line">
-                    <td className="px-3 py-2 tabular" dir="ltr">{r.externalId}</td>
+                    {/* v3: כיוון שמאל-לימין רק על המספר, לא על כל התא */}
+                    {isV3 ? (
+                      <td className="px-3 py-2"><span className="ltr-num">{r.externalId}</span></td>
+                    ) : (
+                      <td className="px-3 py-2 tabular" dir="ltr">{r.externalId}</td>
+                    )}
                     <td className="px-3 py-2">{r.name ?? <span className="text-warn-ink">לא נמצא במערכת</span>}</td>
                     <td className="px-3 py-2">
                       {r.orgName
@@ -142,7 +158,7 @@ export function TalmudCertificatesTab({ onStarted }: { onStarted: () => void }) 
           {unknown.length > 0 && (
             <div className="rounded-control bg-warn-soft p-3 text-sm text-warn-ink">
               <p>{unknown.length === 1 ? "מספר אחד לא נמצא" : `${unknown.length} מספרים לא נמצאו`} במערכת. אפשר לחפש {unknown.length === 1 ? "אותו" : "אותם"} בתלמוד בעמותה:</p>
-              <select value={fallbackOrg} onChange={(e) => setFallbackOrg(e.target.value)} className="input-field mt-2 w-64">
+              <select value={fallbackOrg} onChange={(e) => setFallbackOrg(e.target.value)} aria-label="עמותה לחיפוש המספרים שלא נמצאו" className="input-field mt-2 w-64">
                 <option value="">— לדלג עליהם —</option>
                 {(orgs.data ?? []).filter((o) => withUser.has(o.organization_id)).map((o) => (
                   <option key={o.organization_id} value={o.organization_id}>{o.legal_name}</option>

@@ -159,13 +159,14 @@ function PortalShell({ onLogout }: { onLogout: () => void }) {
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 px-4" aria-label="אזורים">
+        {/* v3: בטלפון הלשוניות נגללות הצידה במקום להיחתך */}
+        <nav className="mx-auto flex max-w-6xl gap-1 px-4 v3:overflow-x-auto" aria-label="אזורים">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
               aria-current={tab === t.key ? "page" : undefined}
-              className={`flex items-center gap-2 border-b-[3px] px-4 py-3 text-base font-semibold transition ${
+              className={`flex items-center gap-2 border-b-[3px] px-4 py-3 text-base font-semibold transition v3:shrink-0 v3:whitespace-nowrap ${
                 tab === t.key ? "border-brand-500 text-ink" : "border-transparent text-ink-muted hover:text-ink"
               }`}
             >

@@ -14,6 +14,8 @@ import {
   writeJsonToFolder,
   type FolderStatus,
 } from "@/lib/folderAccess";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime as formatDateTimeV3 } from "@/lib/format";
 import { BankScraperConnectionPanel } from "./BankScraperConnectionPanel";
 
 // המבנה חייב להישאר תואם ל-bank-scraper/scheduler.ps1 שקורא את הקובץ הזה.
@@ -51,7 +53,9 @@ const DEFAULT_CONFIG: ScraperConfig = {
 
 const DAY_LABELS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
-function formatDateTime(value: string | null | undefined): string {
+// v3: הפורמט האחיד של המערכת (19.11.2026 · 14:05)
+function formatDateTime(value: string | null | undefined, isV3 = false): string {
+  if (isV3) return formatDateTimeV3(value);
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
@@ -73,6 +77,7 @@ function isSchedulerAlive(lastCheckAt: string | null | undefined): boolean {
 
 function StatusPanel({ status, onRefresh }: { status: ScraperStatus | null; onRefresh: () => void }) {
   const alive = isSchedulerAlive(status?.lastCheckAt);
+  const isV3 = useIsV3();
 
   return (
     <div className="card space-y-3 p-4">
@@ -96,7 +101,7 @@ function StatusPanel({ status, onRefresh }: { status: ScraperStatus | null; onRe
         <>
           <div className="flex items-center gap-2">
             {alive ? <StatusBadge severity="ok" label="פעיל" /> : <StatusBadge severity="critical" label="לא מגיב" />}
-            <span className="text-xs text-ink-subtle">נבדק לאחרונה: {formatDateTime(status.lastCheckAt)}</span>
+            <span className="text-xs text-ink-subtle">נבדק לאחרונה: {formatDateTime(status.lastCheckAt, isV3)}</span>
           </div>
 
           {!alive && (
@@ -108,7 +113,7 @@ function StatusPanel({ status, onRefresh }: { status: ScraperStatus | null; onRe
           <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-2">
             <div className="flex justify-between gap-2 sm:block">
               <dt className="text-ink-subtle">משיכה אחרונה</dt>
-              <dd className="text-ink">{formatDateTime(status.lastRunAt)}</dd>
+              <dd className="text-ink">{formatDateTime(status.lastRunAt, isV3)}</dd>
             </div>
             <div className="flex justify-between gap-2 sm:block">
               <dt className="text-ink-subtle">תוצאה</dt>

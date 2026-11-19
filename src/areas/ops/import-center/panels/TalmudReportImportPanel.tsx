@@ -7,6 +7,9 @@ import { STORED_REPORT_LABEL, storedReportRows, type StoredReportKey, type Store
 import { ErrorState } from "@/components/ErrorState";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
+import { Stepper } from "@/components/Stepper";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMonth } from "@/lib/format";
 
 // קליטת "תשלומים למוסד", "זכאות בעקבות בג"ץ" ו"הסבר תשלומים וקיזוזים" (מיגרציה 121).
 // מגיע ממשיכה מתלמוד, עם העמותה והחודש. תצוגה מקדימה, ואז קליטה - קליטה חוזרת לאותו
@@ -49,6 +52,7 @@ const PREVIEW: Record<StoredReportKey, { label: string; get: (r: StoredReportRow
 
 export function TalmudReportImportPanel({ file, reportKey, orgId, month }: Props) {
   const qc = useQueryClient();
+  const isV3 = useIsV3();
   const [rows, setRows] = useState<StoredReportRow[] | null>(null);
   const [hash, setHash] = useState("");
   const [parseError, setParseError] = useState<string | null>(null);
@@ -99,17 +103,28 @@ export function TalmudReportImportPanel({ file, reportKey, orgId, month }: Props
   const cols = PREVIEW[reportKey];
   return (
     <div className="max-w-5xl space-y-4">
+      {isV3 && (
+        <Stepper
+          steps={[
+            { key: "file", label: "קובץ מתלמוד" },
+            { key: "preview", label: "תצוגה מקדימה" },
+            { key: "done", label: "נקלט" },
+          ]}
+          currentStep={run.isSuccess ? "done" : "preview"}
+        />
+      )}
       <div className="card space-y-1 p-4">
         <p className="font-semibold">{STORED_REPORT_LABEL[reportKey]}</p>
         <p className="text-sm text-ink-muted">
-          {org.data || "…"} · חודש {monthText(month)} · {rows.length} שורות · {branches} סניפים
+          {org.data || "…"} · {isV3 ? formatMonth(month) : `חודש ${monthText(month)}`} · {rows.length} שורות · {branches} סניפים
         </p>
+        {isV3 && !run.isSuccess && <p className="text-sm font-semibold text-primary">תצוגה מקדימה - עוד לא נקלט דבר.</p>}
         {reportKey === "bagatz" && <p className="text-xs text-ink-subtle">כל שורה תשויך לתלמיד לפי מספר הזהות, ותופיע בכרטיס שלו.</p>}
       </div>
 
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-surface-muted text-right text-ink-muted">
+          <thead className="bg-surface-muted text-right text-ink-muted v3:text-xs v3:font-medium">
             <tr>{cols.map((c) => <th key={c.label} className="whitespace-nowrap px-3 py-2 font-semibold">{c.label}</th>)}</tr>
           </thead>
           <tbody>

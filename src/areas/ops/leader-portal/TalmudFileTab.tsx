@@ -216,7 +216,7 @@ function Section({ items, done, onMarked }: { items: Item[]; done: boolean; onMa
       <div className="px-4 pt-3"><ColumnFilterSummary ctrl={ctrl} /></div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="text-right text-ink-muted">
+          <thead className="text-right text-ink-muted v3:text-xs v3:font-medium">
             <tr>
               <th className="px-3 py-2">
                 <input type="checkbox" aria-label="בחירת הכול" checked={selectable.length > 0 && chosen.length === selectable.length}
@@ -232,7 +232,7 @@ function Section({ items, done, onMarked }: { items: Item[]; done: boolean; onMa
           </thead>
           <tbody>
             {ctrl.rows.map((i) => (
-              <tr key={i.request.id} className="border-t border-line align-top">
+              <tr key={i.request.id} className="border-t border-line align-top v3:hover:bg-brand-50/40">
                 <td className="px-3 py-2">
                   <input type="checkbox" disabled={!i.row} checked={selected.has(i.request.id)} onChange={() => toggle(i.request.id)} aria-label={`בחירת ${i.studentName}`} />
                 </td>

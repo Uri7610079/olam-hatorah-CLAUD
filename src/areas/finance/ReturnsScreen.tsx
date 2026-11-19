@@ -3,7 +3,7 @@ import { fetchAll } from "@/lib/fetchAll";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Undo2 } from "lucide-react";
+import { Undo2, CircleCheck, Circle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
@@ -12,6 +12,9 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMoney, formatMonth } from "@/lib/format";
+import { MASAV_STATUS_LABEL } from "./MasavScreen";
 
 interface OrgOption {
   id: string;
@@ -58,6 +61,22 @@ interface RetryLineOption {
 }
 
 const RETURN_STATUS_LABEL: Record<ReturnStatus, string> = { open: "פתוח", retried: "נשלח שוב", resolved: "טופל" };
+// v3: "נשלח שוב" (ממתין לביצוע) נראה אחרת מ"פתוח" (דורש טיפול)
+const RETURN_STATUS_SEVERITY_V3: Record<ReturnStatus, "medium" | "low" | "ok"> = { open: "medium", retried: "low", resolved: "ok" };
+
+/** v3: תנאי לסגירת ההחזרה, כשורה גלויה עם סימון - במקום הסבר בריחוף בלבד */
+function Condition({ met, children }: { met: boolean; children: React.ReactNode }) {
+  const Icon = met ? CircleCheck : Circle;
+  return (
+    <li className={`flex items-start gap-2 text-sm ${met ? "text-ok-ink" : "text-ink-muted"}`}>
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${met ? "text-ok" : "text-ink-subtle"}`} aria-hidden="true" />
+      <span>
+        <span className="sr-only">{met ? "התקיים: " : "טרם התקיים: "}</span>
+        {children}
+      </span>
+    </li>
+  );
+}
 
 async function fetchVerifiedAccounts(studentId: string): Promise<BankAccountOption[]> {
   const data = await fetchAll(() => supabase
@@ -138,6 +157,7 @@ async function fetchReturns(orgId: string): Promise<ReturnRow[]> {
 
 export function ReturnsScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canManage } = useHasPermission("payment_returns", "manage");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [searchParams] = useSearchParams();
@@ -237,14 +257,24 @@ export function ReturnsScreen() {
     queryClient.invalidateQueries({ queryKey: ["group-balances"] });
   };
 
+  const statusSeverity = (s: ReturnStatus) => (isV3 ? RETURN_STATUS_SEVERITY_V3[s] : s === "resolved" ? "ok" : "medium");
+
+  // v3: תאריך וסכום בתצוגה האחידה; סינון ומיון - לפי הערך המקורי
   const columns: DataTableColumn<ReturnRow>[] = [
-    { key: "date", header: "תאריך החזרה", className: "tabular", render: (r) => r.return_date },
+    { key: "date", header: "תאריך החזרה", className: "tabular", filterValue: (r) => r.return_date, render: (r) => (isV3 ? formatDate(r.return_date) : r.return_date) },
     { key: "id", header: "מזהה תלמיד", className: "tabular", render: (r) => r.masav_line.student.external_id },
     { key: "name", header: "שם", render: (r) => r.masav_line.student.full_name },
-    { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
-    { key: "reason", header: "סיבה", render: (r) => r.reason },
-    { key: "status", header: "סטטוס", render: (r) => <StatusBadge severity={r.status === "resolved" ? "ok" : "medium"} label={RETURN_STATUS_LABEL[r.status]} /> },
+    isV3
+      ? { key: "amount", header: "סכום", kind: "money", filterValue: (r) => r.amount, sortValue: (r) => r.amount, render: (r) => formatMoney(r.amount) }
+      : { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
+    { key: "reason", header: "סיבה", truncate: isV3, render: (r) => r.reason },
+    { key: "status", header: "סטטוס", render: (r) => <StatusBadge severity={statusSeverity(r.status)} label={RETURN_STATUS_LABEL[r.status]} /> },
   ];
+
+  // תנאי סגירת ההחזרה - אותו תנאי בדיוק שמכבה את כפתור "סימון כטופל"
+  const retryLinked = !!selectedReturn?.retry_masav_line_id;
+  const retryBatchStatus = selectedReturn?.retry_line?.batch.status ?? null;
+  const retryCompleted = retryBatchStatus === "bank_completed";
 
   return (
     <div>
@@ -289,7 +319,7 @@ export function ReturnsScreen() {
                 <option value="">— בחרי —</option>
                 {(batchesQuery.data ?? []).map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.period_month}
+                    {isV3 ? `${formatMonth(b.period_month)} · ${MASAV_STATUS_LABEL[b.status] ?? b.status}` : b.period_month}
                   </option>
                 ))}
               </select>
@@ -309,7 +339,7 @@ export function ReturnsScreen() {
                 <option value="">— בחרי —</option>
                 {(linesQuery.data ?? []).map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.student.full_name} ({l.student.external_id}) - {l.amount.toLocaleString("he-IL")}
+                    {l.student.full_name} ({l.student.external_id}) - {isV3 ? formatMoney(l.amount) : l.amount.toLocaleString("he-IL")}
                   </option>
                 ))}
               </select>
@@ -343,23 +373,40 @@ export function ReturnsScreen() {
           emptyTitle="אין החזרות רשומות"
           emptyIcon={Undo2}
           onRowClick={canManage ? (r) => setSelectedReturnId(r.id === selectedReturnId ? null : r.id) : undefined}
+          selectedKey={isV3 ? selectedReturnId : undefined}
         />
       )}
 
       {selectedReturn && canManage && (
         <div className="card mt-4 max-w-2xl space-y-3 p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink-muted">
+            <h2 className="text-sm font-semibold text-ink-muted v3:text-base v3:text-primary">
               טיפול בהחזרה · {selectedReturn.masav_line.student.full_name} ({selectedReturn.masav_line.student.external_id})
             </h2>
-            <StatusBadge severity={selectedReturn.status === "resolved" ? "ok" : "medium"} label={RETURN_STATUS_LABEL[selectedReturn.status]} />
+            <StatusBadge severity={statusSeverity(selectedReturn.status)} label={RETURN_STATUS_LABEL[selectedReturn.status]} />
           </div>
 
           {selectedReturn.status !== "resolved" && (
             <>
+              {isV3 ? (
+                // v3: מה חסר כדי לסגור - כרשימה גלויה ולא רק בריחוף על כפתור כבוי
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-ink">כדי לסמן "טופל" צריך:</p>
+                  <ul className="space-y-1">
+                    <Condition met={retryLinked}>לקשר תשלום חוזר - לחשבון בנק חדש שאומת, דרך שורת מס״ב</Condition>
+                    <Condition met={retryCompleted}>
+                      שהתשלום החוזר בוצע בפועל בבנק
+                      {retryLinked && !retryCompleted && retryBatchStatus && (
+                        <span className="text-ink-subtle"> (כרגע: {MASAV_STATUS_LABEL[retryBatchStatus] ?? retryBatchStatus})</span>
+                      )}
+                    </Condition>
+                  </ul>
+                </div>
+              ) : (
               <p className="text-xs text-ink-subtle">
                 לא ניתן לקשר תשלום חוזר בלי חשבון בנק חדש שאומת בפועל. סגירת ההחזרה (״טופל״) מותרת רק לאחר שהתשלום החוזר הותאם ואושר בפועל מול הבנק (התאמות בנק, שלב 12).
               </p>
+              )}
               {accountsQuery.isLoading || retryLinesQuery.isLoading ? (
                 <LoadingState rows={2} />
               ) : (
@@ -374,7 +421,7 @@ export function ReturnsScreen() {
                         </option>
                       ))}
                     </select>
-                    {(accountsQuery.data ?? []).length === 0 && <p className="mt-1 text-xs text-warn">אין לתלמיד זה חשבון בנק תקין ופעיל.</p>}
+                    {(accountsQuery.data ?? []).length === 0 && <p className="mt-1 text-xs text-warn v3:text-warn-ink">אין לתלמיד זה חשבון בנק תקין ופעיל.</p>}
                   </div>
                   <div>
                     <label className="field-label">שורת תשלום חוזר (מס״ב)</label>
@@ -382,7 +429,9 @@ export function ReturnsScreen() {
                       <option value="">— בחרי —</option>
                       {(retryLinesQuery.data ?? []).map((l) => (
                         <option key={l.id} value={l.id}>
-                          {l.batch.period_month} · {l.amount.toLocaleString("he-IL")} ({l.batch.status})
+                          {isV3
+                            ? `${formatMonth(l.batch.period_month)} · ${formatMoney(l.amount)} (${MASAV_STATUS_LABEL[l.batch.status] ?? l.batch.status})`
+                            : `${l.batch.period_month} · ${l.amount.toLocaleString("he-IL")} (${MASAV_STATUS_LABEL[l.batch.status] ?? l.batch.status})`}
                         </option>
                       ))}
                     </select>
@@ -391,13 +440,18 @@ export function ReturnsScreen() {
               )}
               {error && <ErrorState message={error} />}
               <div className="flex flex-wrap gap-2">
-                <button onClick={linkRetry} disabled={!retryAccountId || !retryLineId || linking} className="btn-secondary text-xs">
+                {/* v3: עד שהתשלום החוזר קושר - הקישור הוא הפעולה הראשית; אחריו - "סימון כטופל" */}
+                <button
+                  onClick={linkRetry}
+                  disabled={!retryAccountId || !retryLineId || linking}
+                  className={isV3 ? (retryLinked ? "btn-secondary" : "btn-primary") : "btn-secondary text-xs"}
+                >
                   {linking ? "מקשרת…" : "קישור תשלום חוזר"}
                 </button>
                 <button
                   onClick={resolveReturn}
                   disabled={resolving || !selectedReturn.retry_masav_line_id || selectedReturn.retry_line?.batch.status !== "bank_completed"}
-                  className="btn-primary text-xs"
+                  className={isV3 ? (retryLinked ? "btn-primary" : "btn-secondary") : "btn-primary text-xs"}
                   title={selectedReturn.retry_line?.batch.status !== "bank_completed" ? "התשלום החוזר טרם הותאם ואושר בפועל מול הבנק" : undefined}
                 >
                   {resolving ? "מסמנת…" : "סימון כטופל"}

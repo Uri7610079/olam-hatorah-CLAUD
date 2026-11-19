@@ -11,6 +11,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMoney, formatMonth, formatNumber } from "@/lib/format";
 
 type ReportRow = Record<string, string | number | null>;
 
@@ -45,6 +47,10 @@ const STUDENT_STATUS_LABEL: Record<string, string> = {
   active_with_error: "פעיל עם שגיאה",
   inactive: "לא פעיל",
 };
+
+// v3: עמודות סכום בדוחות (לפי שם העמודה) מוצגות עם ₪. תצוגה בלבד - הייצוא לאקסל
+// מקבל את הערך המספרי המקורי, בלי שינוי.
+const MONEY_COLUMNS = new Set(["ברוטו", "עמלה", "נטו", "סכום", "יתרה", "סכום קודם", "סכום נוכחי", "הפרש"]);
 
 function monthRange(month: string) {
   const start = month;
@@ -92,7 +98,10 @@ const REPORTS: ReportDef[] = [
     key: "active_not_in_report",
     label: "תלמידים פעילים שלא הופיעו בדוח האחרון",
     fetch: async ({ orgId }) => {
-      const { data: latest } = await supabase.from("monthly_eligibility").select("month").eq("organization_id", orgId).order("month", { ascending: false }).limit(1);
+      // כאן ובשאר הדוחות: שגיאת שאילתה נבלעה עד היום והדוח הוצג "ריק". עכשיו היא נזרקת
+      // ומוצגת (runPreview תופס ומציג), כדי שדוח שנכשל לא ייקרא כ"אין נתונים".
+      const { data: latest, error: latestErr } = await supabase.from("monthly_eligibility").select("month").eq("organization_id", orgId).order("month", { ascending: false }).limit(1);
+      if (latestErr) throw latestErr;
       const latestMonth = latest?.[0]?.month;
       const ids = await orgActiveStudentIds(orgId);
       if (!latestMonth || ids.length === 0) return [];
@@ -164,7 +173,8 @@ const REPORTS: ReportDef[] = [
     key: "quotas",
     label: "מכסות",
     fetch: async ({ orgId, month }) => {
-      const { data } = await supabase.from("monthly_quotas").select("approved_quota, notes, branch:branches(internal_name)").eq("organization_id", orgId).eq("month", month);
+      const { data, error } = await supabase.from("monthly_quotas").select("approved_quota, notes, branch:branches(internal_name)").eq("organization_id", orgId).eq("month", month);
+      if (error) throw error;
       return (data ?? []).map((r: any) => {
         const b = unwrap(r.branch);
         return { "סניף": b?.internal_name ?? "כל העמותה", "מכסה מאושרת": r.approved_quota, "הערות": r.notes ?? "—" };
@@ -175,7 +185,8 @@ const REPORTS: ReportDef[] = [
     key: "group_balances",
     label: "יתרות קבוצות",
     fetch: async ({ orgId }) => {
-      const { data } = await supabase.from("group_balances").select("group_name, balance").eq("organization_id", orgId);
+      const { data, error } = await supabase.from("group_balances").select("group_name, balance").eq("organization_id", orgId);
+      if (error) throw error;
       return (data ?? []).map((r) => ({ "קבוצה": r.group_name, "יתרה": r.balance }));
     },
   },
@@ -186,11 +197,13 @@ const REPORTS: ReportDef[] = [
     key: "group_leader_rows",
     label: "קבוצות לפי ראש קבוצה",
     fetch: async ({ orgId }) => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("group_leader_group_rows")
         .select("group_leader_id, group_name, branch_name, talmud_branch_code, balance")
         .eq("organization_id", orgId);
-      const { data: leaders } = await supabase.from("group_leaders").select("id, full_name");
+      if (error) throw error;
+      const { data: leaders, error: leadersErr } = await supabase.from("group_leaders").select("id, full_name");
+      if (leadersErr) throw leadersErr;
       const nameById = new Map((leaders ?? []).map((l) => [l.id, l.full_name]));
       return (data ?? [])
         .map((r) => ({
@@ -225,10 +238,12 @@ const REPORTS: ReportDef[] = [
       // donations_view (לא הטבלה הבסיסית) - donor_reference ממוסך כברירת מחדל, בדיוק כמו
       // בכל מסך אחר; ה-view היא view (לא טבלה) אז PostgREST לא יכול להסיק embed ל-groups
       // דרכה - שם הקבוצה נפתר בצד לקוח מרשימת קבוצות העמותה (אותו דפוס כמו מרכז החריגות).
-      const [{ data }, { data: groupsData }] = await Promise.all([
+      const [{ data, error }, { data: groupsData, error: groupsErr }] = await Promise.all([
         supabase.from("donations_view").select("donation_date, amount, donor_reference_masked, status, group_id").eq("organization_id", orgId).gte("donation_date", start).lt("donation_date", end),
         supabase.from("groups").select("id, name"),
       ]);
+      if (error) throw error;
+      if (groupsErr) throw groupsErr;
       const groupById = new Map((groupsData ?? []).map((g) => [g.id, g.name]));
       return (data ?? []).map((r) => ({
         "תאריך": r.donation_date,
@@ -291,7 +306,8 @@ const REPORTS: ReportDef[] = [
     key: "unclassified_transactions",
     label: "תנועות בנק לא מסווגות",
     fetch: async ({ orgId }) => {
-      const { data: accounts } = await supabase.from("organization_bank_accounts_view").select("id").eq("organization_id", orgId);
+      const { data: accounts, error: accountsErr } = await supabase.from("organization_bank_accounts_view").select("id").eq("organization_id", orgId);
+      if (accountsErr) throw accountsErr;
       const accountIds = (accounts ?? []).map((a) => a.id);
       if (accountIds.length === 0) return [];
       const data = await fetchAllIn(accountIds, (chunk) => supabase.from("bank_transactions").select("execution_date, direction, amount, description, classification_status").in("organization_bank_account_id", chunk).neq("classification_status", "confirmed").order("id"));
@@ -325,7 +341,8 @@ const REPORTS: ReportDef[] = [
     key: "phone_gaps",
     label: "פערי בימות המשיח",
     fetch: async ({ orgId }) => {
-      const { data: imports } = await supabase.from("phone_list_imports").select("id").eq("organization_id", orgId).eq("status", "committed").order("created_at", { ascending: false }).limit(1);
+      const { data: imports, error: importsErr } = await supabase.from("phone_list_imports").select("id").eq("organization_id", orgId).eq("status", "committed").order("created_at", { ascending: false }).limit(1);
+      if (importsErr) throw importsErr;
       const importId = imports?.[0]?.id;
       if (!importId) return [];
       const data = await fetchAll(() => supabase.from("phone_list_entries").select("raw_phone, normalized_phone, status").eq("import_id", importId).in("status", ["extra", "duplicate", "invalid"]).order("id"));
@@ -367,6 +384,7 @@ async function fetchGroups(orgId: string): Promise<GroupOption[]> {
 }
 
 export function ReportsScreen() {
+  const isV3 = useIsV3();
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [searchParams] = useSearchParams();
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
@@ -415,14 +433,22 @@ export function ReportsScreen() {
 
   const columns: DataTableColumn<ReportRow>[] =
     rows && rows.length > 0
-      ? Object.keys(rows[0]).map((k) => ({
-          key: k,
-          header: k,
-          // עמודות הדוח נבנות דינמית מהתוצאה, ולכן גם היישור: עמודה שערכיה מספריים
-          // (סכומים, ספירות) מקבלת ספרות ברוחב אחיד כדי שתיקרא כטור מיושר.
-          className: rows.some((r) => typeof r[k] === "number") ? "tabular" : undefined,
-          render: (r: ReportRow) => (r[k] != null ? String(r[k]) : "—"),
-        }))
+      ? Object.keys(rows[0]).map((k): DataTableColumn<ReportRow> => {
+          const numeric = rows.some((r) => typeof r[k] === "number");
+          const isMoney = isV3 && numeric && MONEY_COLUMNS.has(k);
+          return {
+            key: k,
+            header: k,
+            // עמודות הדוח נבנות דינמית מהתוצאה, ולכן גם היישור: עמודה שערכיה מספריים
+            // (סכומים, ספירות) מקבלת ספרות ברוחב אחיד כדי שתיקרא כטור מיושר.
+            className: numeric ? "tabular" : undefined,
+            // v3: מספרים מיושרים לשמאל (עשרות מתחת לעשרות), סכומים עם ₪; מיון וסינון לפי הערך המקורי
+            kind: isV3 && numeric ? (isMoney ? "money" : "number") : undefined,
+            filterValue: isMoney ? (r: ReportRow) => r[k] : undefined,
+            sortValue: isMoney ? (r: ReportRow) => r[k] : undefined,
+            render: (r: ReportRow) => (r[k] != null ? (isMoney && typeof r[k] === "number" ? formatMoney(r[k]) : String(r[k])) : "—"),
+          };
+        })
       : [];
 
   return (
@@ -478,16 +504,30 @@ export function ReportsScreen() {
       </div>
 
       <div className="mb-4 flex gap-2">
-        <button onClick={runPreview} disabled={!orgId || running || (report.needsGroup && !groupId)} className="btn-secondary">
+        {/* v3: לפני שיש תוצאה - התצוגה המקדימה היא הפעולה הראשית; אחריה - היצוא */}
+        <button onClick={runPreview} disabled={!orgId || running || (report.needsGroup && !groupId)} className={isV3 && !rows ? "btn-primary" : "btn-secondary"}>
           {running ? "מריצה…" : "תצוגה מקדימה"}
         </button>
         {rows && (
           <button onClick={runExport} disabled={exporting} className="btn-primary flex items-center gap-2">
             <Download className="h-4 w-4" aria-hidden="true" />
-            {exporting ? "מייצאת…" : `יצוא לאקסל (${rows.length} שורות)`}
+            {exporting ? "מייצאת…" : `יצוא לאקסל (${isV3 ? formatNumber(rows.length) : rows.length} שורות)`}
           </button>
         )}
       </div>
+
+      {/* v3: מה בדיוק מוצג - דוח, עמותה וחודש - כדי שהיצוא לא ייצא מהקשר */}
+      {isV3 && rows && !running && (
+        <p className="mb-2 text-sm text-ink-muted">
+          <span className="font-semibold text-primary">{report.label}</span>
+          {" · "}
+          {orgsQuery.data?.find((o) => o.id === orgId)?.legal_name ?? ""}
+          {" · "}
+          {formatMonth(month)}
+          {" · "}
+          <span className="tabular">{formatNumber(rows.length)}</span> שורות
+        </p>
+      )}
 
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
       {running && <LoadingState rows={4} />}

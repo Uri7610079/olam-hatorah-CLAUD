@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Loader2, MinusCircle, XCircle } from "lucide-react";
 import { autoImportPulledFiles, isTalmudAutoImportEnabled, type AutoImportResult } from "@/lib/talmudAutoImport";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMonth } from "@/lib/format";
 
 const monthText = (iso: string | null) => (iso ? iso.slice(0, 7).split("-").reverse().join("/") : "");
 const DONE_KEY = "talmud-auto-import-done";
@@ -27,6 +29,7 @@ export function TalmudAutoImportPanel({ jobId, auto }: { jobId: string | null; a
   const [disabled, setDisabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const started = useRef<string | null>(null);
+  const isV3 = useIsV3();
 
   const run = async () => {
     setRunning(true);
@@ -94,7 +97,7 @@ export function TalmudAutoImportPanel({ jobId, auto }: { jobId: string | null; a
             {r.status === "failed" && <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />}
             <span>
               <span className="font-medium">{r.reportLabel}</span>
-              <span className="text-ink-muted"> · {r.organization}{r.month ? ` · ${monthText(r.month)}` : ""} · </span>
+              <span className="text-ink-muted"> · {r.organization}{r.month ? ` · ${isV3 ? formatMonth(r.month) : monthText(r.month)}` : ""} · </span>
               <span className={r.status === "blocked" || r.status === "failed" ? "text-warn-ink" : "text-ink-muted"}>{r.detail}</span>
             </span>
           </li>

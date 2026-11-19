@@ -17,6 +17,8 @@ import {
 import { TalmudFileTab, countPendingTalmudFile } from "./TalmudFileTab";
 import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "@/components/ColumnFilter";
 import type { FilterColumn } from "@/lib/columnFilters";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useIsV3 } from "@/lib/uiTheme";
 
 // פורטל ראשי הקבוצות - הצד של המשרד (מיגרציה 111).
 //
@@ -86,11 +88,12 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-// פונקציית מסד שמחזירה { file_name, file_type, file_base64 } - והורדה בדפדפן
-async function downloadRpc(fn: string, args: Record<string, unknown>) {
+// פונקציית מסד שמחזירה { file_name, file_type, file_base64 } - והורדה בדפדפן.
+// מחזירה הודעת שגיאה כשההורדה נכשלה (עד היום הכשל נבלע בשקט), אחרת null.
+async function downloadRpc(fn: string, args: Record<string, unknown>): Promise<string | null> {
   const { data, error } = await supabase.rpc(fn, args);
   const file = Array.isArray(data) ? data[0] : data;
-  if (error || !file) return;
+  if (error || !file) return `הורדת הקובץ נכשלה${error ? `: ${error.message}` : ""}`;
   const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
   const url = URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" }));
   const a = document.createElement("a");
@@ -98,6 +101,7 @@ async function downloadRpc(fn: string, args: Record<string, unknown>) {
   a.download = file.file_name || "קובץ";
   a.click();
   URL.revokeObjectURL(url);
+  return null;
 }
 const errText = (e: unknown) => (e instanceof Error ? e.message : (e as { message?: string })?.message ?? "הפעולה נכשלה");
 
@@ -198,6 +202,7 @@ function PendingRequests({ query }: { query: ReturnType<typeof useQuery<RequestR
 
 function RequestCard({ r }: { r: RequestRow }) {
   const qc = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canDecide } = useHasPermission("students", "manage");
   const [rejecting, setRejecting] = useState(false);
   const [note, setNote] = useState("");
@@ -224,7 +229,7 @@ function RequestCard({ r }: { r: RequestRow }) {
       {r.student && r.student_id && (
         <p className="mt-1 text-sm">
           <Link to={`/ops/students/${r.student_id}`} className="link-action">{r.student.full_name}</Link>
-          <span className="text-ink-muted"> · {r.student.external_id}</span>
+          <span className="text-ink-muted"> · {isV3 ? <span className="ltr-num">{r.student.external_id}</span> : r.student.external_id}</span>
         </p>
       )}
       <ul className="mt-2 space-y-0.5 text-sm text-ink">
@@ -299,6 +304,8 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
   const [answer, setAnswer] = useState("");
   const [answerFile, setAnswerFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const isV3 = useIsV3();
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["portal-office-questions"] });
     qc.invalidateQueries({ queryKey: ["portal-office-counts"] });
@@ -325,7 +332,12 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
   const download = async () => {
     const { data, error } = await supabase.rpc("portal_question_attachment", { p_question_id: q.id });
     const file = Array.isArray(data) ? data[0] : data;
-    if (error || !file) return;
+    // עד היום כשל בהורדה נבלע בשקט
+    if (error || !file) {
+      setDownloadError(`הורדת הקובץ נכשלה${error ? `: ${error.message}` : ""}`);
+      return;
+    }
+    setDownloadError(null);
     const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
     const url = URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" }));
     const a = document.createElement("a");
@@ -344,7 +356,7 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
         <span className="font-semibold text-ink">{q.leader?.full_name ?? "—"}</span>
         {q.student && q.student_id ? (
           <span className="text-ink-muted">
-            · על <Link to={`/ops/students/${q.student_id}`} className="link-action">{q.student.full_name}</Link> ({q.student.external_id})
+            · על <Link to={`/ops/students/${q.student_id}`} className="link-action">{q.student.full_name}</Link> ({isV3 ? <span className="ltr-num">{q.student.external_id}</span> : q.student.external_id})
           </span>
         ) : (
           <span className="text-ink-muted">· שאלה כללית</span>
@@ -364,7 +376,7 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
         <div className="mt-3 rounded-control bg-ok-soft p-3 text-sm text-ok-ink">
           <span className="font-semibold">התשובה ({formatDate(q.answered_at)}):</span> {q.answer ?? ""}
           {q.answer_attachment_name && (
-            <button onClick={() => downloadRpc("portal_answer_attachment", { p_question_id: q.id })} className="link-action mt-1 flex items-center gap-1">
+            <button onClick={async () => setDownloadError(await downloadRpc("portal_answer_attachment", { p_question_id: q.id }))} className="link-action mt-1 flex items-center gap-1">
               <Paperclip className="h-4 w-4" aria-hidden="true" />
               {q.answer_attachment_name}
             </button>
@@ -411,6 +423,7 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
         ) : null}
       </div>
       {(send.isError || toTask.isError) && <div className="mt-2"><ErrorState message={errText(send.error ?? toTask.error)} /></div>}
+      {downloadError && <div className="mt-2"><ErrorState message={downloadError} /></div>}
     </article>
   );
 }
@@ -425,6 +438,9 @@ function accessStatus(a: AccessRow) {
 
 function AccessList() {
   const qc = useQueryClient();
+  const isV3 = useIsV3();
+  // איפוס סיסמה מוחק את הסיסמה שנקבעה - מאשרים קודם
+  const [confirmReset, setConfirmReset] = useState<AccessRow | null>(null);
   const { hasPermission: canManage } = useHasPermission("groups", "manage");
   const query = useQuery({
     queryKey: ["portal-office-access"],
@@ -491,10 +507,23 @@ function AccessList() {
       </p>
       {done && <p className="rounded-control bg-ok-soft p-2 text-sm text-ok-ink">{done}</p>}
       {(setPw.isError || setAccess.isError) && <ErrorState message={errText(setPw.error ?? setAccess.error)} />}
+      <ConfirmDialog
+        open={!!confirmReset}
+        title={confirmReset ? `לאפס את הסיסמה של ${confirmReset.full_name}?` : ""}
+        description="הסיסמה הנוכחית תוחלף ב-4 הספרות האחרונות של הטלפון, ואי אפשר לשחזר אותה. ראש הקבוצה ייכנס מעכשיו עם הסיסמה החדשה."
+        confirmLabel="איפוס הסיסמה"
+        danger
+        onCancel={() => setConfirmReset(null)}
+        onConfirm={() => {
+          const a = confirmReset;
+          setConfirmReset(null);
+          if (a) setPw.mutate({ id: a.group_leader_id, pw: null });
+        }}
+      />
       <ColumnFilterSummary ctrl={ctrl} />
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-surface-muted text-right text-ink-muted">
+          <thead className="bg-surface-muted text-right text-ink-muted v3:text-xs v3:font-medium">
             <tr>
               <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="group">שם קבוצה</ColumnHeader></th>
               <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="leader">ראש קבוצה</ColumnHeader></th>
@@ -508,7 +537,7 @@ function AccessList() {
             {ctrl.rows.map((a) => {
               const st = status(a);
               return (
-                <tr key={a.group_leader_id} className="border-t border-line align-top">
+                <tr key={a.group_leader_id} className="border-t border-line align-top v3:hover:bg-brand-50/40">
                   <td className="px-3 py-2 font-semibold">
                     {(groupsQuery.data?.get(a.group_leader_id) ?? []).join(", ") || "—"}
                   </td>
@@ -516,7 +545,11 @@ function AccessList() {
                     {a.full_name}
                     {a.problem && <div className="text-xs font-normal text-danger-ink">{a.problem}</div>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2" dir="ltr">{a.login_identifier ?? "—"}</td>
+                  {isV3 ? (
+                    <td className="whitespace-nowrap px-3 py-2">{a.login_identifier ? <span dir="ltr">{a.login_identifier}</span> : "—"}</td>
+                  ) : (
+                    <td className="whitespace-nowrap px-3 py-2" dir="ltr">{a.login_identifier ?? "—"}</td>
+                  )}
                   <td className="whitespace-nowrap px-3 py-2">{a.last_login_at ? formatDate(a.last_login_at) : "טרם נכנס"}</td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <StatusBadge severity={st.severity} label={st.label} />
@@ -543,7 +576,7 @@ function AccessList() {
                       <div className="flex flex-wrap gap-x-3 gap-y-1 whitespace-nowrap">
                         <button onClick={() => { setDone(null); setEditing(a.group_leader_id); setPassword(""); }} className="link-action">קביעת סיסמה</button>
                         {a.phone && (
-                          <button onClick={() => { setDone(null); setPw.mutate({ id: a.group_leader_id, pw: null }); }} className="link-action">איפוס ל-4 ספרות</button>
+                          <button onClick={() => { setDone(null); setConfirmReset(a); }} className="link-action">איפוס ל-4 ספרות</button>
                         )}
                         <button onClick={() => setAccess.mutate({ id: a.group_leader_id, enabled: !a.enabled })} className="link-action">
                           {a.enabled ? "חסימת גישה" : "ביטול החסימה"}
@@ -582,7 +615,7 @@ function RequestHistory() {
     <ColumnFilterSummary ctrl={ctrl} />
     <div className="card overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-surface-muted text-right text-ink-muted">
+        <thead className="bg-surface-muted text-right text-ink-muted v3:text-xs v3:font-medium">
           <tr>
             <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="group">שם קבוצה</ColumnHeader></th>
             <th className="whitespace-nowrap px-3 py-2 font-semibold"><ColumnHeader ctrl={ctrl} colKey="date">תאריך</ColumnHeader></th>
@@ -595,7 +628,7 @@ function RequestHistory() {
         </thead>
         <tbody>
           {ctrl.rows.map((r) => (
-            <tr key={r.id} className="border-t border-line align-top">
+            <tr key={r.id} className="border-t border-line align-top v3:hover:bg-brand-50/40">
               <td className="whitespace-nowrap px-3 py-2 font-semibold">{r.groupName ?? "—"}</td>
               <td className="whitespace-nowrap px-3 py-2">{formatDate(r.created_at)}</td>
               <td className="px-3 py-2">{r.leader?.full_name ?? "—"}</td>
@@ -757,7 +790,7 @@ function PortalSettings() {
         {groups.isLoading ? <LoadingState rows={4} /> : groups.isError ? <ErrorState message={errText(groups.error)} /> : (
           <div className="card overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-surface-muted text-right text-ink-muted">
+              <thead className="bg-surface-muted text-right text-ink-muted v3:text-xs v3:font-medium">
                 <tr>
                   <th className="whitespace-nowrap px-3 py-2 font-semibold">שם קבוצה</th>
                   <th className="whitespace-nowrap px-3 py-2 font-semibold">ראש קבוצה</th>
@@ -768,7 +801,7 @@ function PortalSettings() {
               </thead>
               <tbody>
                 {shownGroups.map((g) => (
-                  <tr key={g.id} className="border-t border-line">
+                  <tr key={g.id} className="border-t border-line v3:hover:bg-brand-50/40">
                     <td className="whitespace-nowrap px-3 py-2 font-semibold">{g.name}</td>
                     <td className="whitespace-nowrap px-3 py-2">{g.leader ?? "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2">{g.branch ?? "—"}</td>

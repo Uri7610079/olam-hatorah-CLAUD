@@ -23,6 +23,9 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 import { RawRowPreview } from "@/components/RawRowPreview";
+import { DuplicateFileNotice, ImportSteps, PreviewSummary, SavedForReviewNote, batchCountsText, batchImportStep } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMonth } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -92,6 +95,7 @@ interface ErrorsImportPanelProps {
 // שאינה חלק מפעולת היבוא עצמה. המסך המקורי נשאר כפי שהוא, זו נקודת גישה נוספת.
 export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: ErrorsImportPanelProps) {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canImport, isLoading: permLoading } = useHasPermission("talmud", "import");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
@@ -242,6 +246,7 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
   const reviewIsOpen = reviewBatchQuery.data ? OPEN_STATUSES.includes(reviewBatchQuery.data.status) : false;
+  const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: reviewBatchQuery.data?.status === "committed", previewing: !!parsedRows && !duplicateId });
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -278,8 +283,8 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-lg">
         <div>
-          <label className="field-label">עמותה</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+          <label htmlFor="erip-1" className="field-label">עמותה</label>
+          <select id="erip-1" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
             <option value="">— בחרי —</option>
             {(orgsQuery.data ?? []).map((o) => (
               <option key={o.id} value={o.id}>
@@ -289,8 +294,8 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
           </select>
         </div>
         <div>
-          <label className="field-label">חודש (לקובץ חדש)</label>
-          <input type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
+          <label htmlFor="erip-2" className="field-label">חודש (לקובץ חדש)</label>
+          <input id="erip-2" type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
         </div>
       </div>
 
@@ -303,12 +308,13 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
 
       {orgId && !reviewBatchId && (
         <div className="card max-w-2xl space-y-4 p-5">
+          <ImportSteps current={importStep} />
           <p className="text-xs text-ink-subtle">עמודות צפויות: מזהה תלמיד, קוד שגיאה, תיאור שגיאה (לא חובה).</p>
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+          <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ דוח שגויים" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
           {analyzing && <LoadingState rows={2} />}
           {duplicateId && (
             <div className="space-y-2">
-              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              <DuplicateFileNotice />
               <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
                 פתיחת האצווה הקיימת
               </button>
@@ -332,6 +338,7 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
             parsedRows &&
             !duplicateId && (
               <>
+                <PreviewSummary valid={localValid.length} needs={localNeeds.length} invalid={localInvalid.length} />
                 <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                   {(tab) => {
                     const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
@@ -354,16 +361,19 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
             <LoadingState rows={4} />
           ) : reviewBatchQuery.data ? (
             <>
+              <ImportSteps current={importStep} />
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
-                  <p className="text-xs text-ink-subtle">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                  <p className="text-xs text-ink-subtle">חודש: {isV3 ? formatMonth(reviewBatchQuery.data.period_month) : reviewBatchQuery.data.period_month ?? "—"}</p>
                 </div>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
                   label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
                 />
               </div>
+
+              {reviewIsOpen && <SavedForReviewNote what="דוח השגויים" />}
 
               {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הדוח.</p>}
 
@@ -402,13 +412,13 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
           <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא שגויים</h2>
           <DataTable
             columns={[
-              { key: "file", header: "קובץ", render: (b: ErrorsBatchSummary) => b.file_name },
-              { key: "month", header: "חודש", className: "tabular", render: (b: ErrorsBatchSummary) => b.period_month ?? "—" },
+              { key: "file", header: "קובץ", truncate: isV3, render: (b: ErrorsBatchSummary) => b.file_name },
+              { key: "month", header: "חודש", className: "tabular", sortValue: isV3 ? (b: ErrorsBatchSummary) => b.period_month : undefined, render: (b: ErrorsBatchSummary) => (isV3 ? formatMonth(b.period_month) : b.period_month ?? "—") },
               {
                 key: "counts",
-                header: "תקין / דורש החלטה / שגוי",
+                header: isV3 ? "שורות" : "תקין / דורש החלטה / שגוי",
                 className: "tabular",
-                render: (b: ErrorsBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+                render: (b: ErrorsBatchSummary) => (isV3 ? batchCountsText(b) : `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`),
               },
               {
                 key: "status",
@@ -417,7 +427,7 @@ export function ErrorsImportPanel({ initialFile, initialOrgId, initialMonth }: E
                   <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
                 ),
               },
-              { key: "date", header: "תאריך", className: "tabular", render: (b: ErrorsBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+              { key: "date", header: "תאריך", className: "tabular", sortValue: isV3 ? (b: ErrorsBatchSummary) => b.created_at : undefined, render: (b: ErrorsBatchSummary) => (isV3 ? formatDate(b.created_at) : new Date(b.created_at).toLocaleDateString("he-IL")) },
             ]}
             rows={batchesQuery.data ?? []}
             rowKey={(b: ErrorsBatchSummary) => b.id}

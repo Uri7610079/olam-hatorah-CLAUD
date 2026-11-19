@@ -1,5 +1,7 @@
 import { AlertTriangle, ArrowLeftRight, CheckCircle2, Copy, Info } from "lucide-react";
 import type { TalmudImportInfo } from "@/lib/importBatches";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMoney, formatMonth } from "@/lib/format";
 
 // סיכום מה שזוהה בדוח דרישת תשלום מתלמוד, לפני הקליטה.
 //
@@ -19,6 +21,8 @@ function monthLabel(iso: string | null): string {
 }
 
 export function TalmudReportSummaryCard({ info, orgNotFound }: { info: TalmudImportInfo; orgNotFound: string | null }) {
+  // v3: חודש במילים, סכום ב-₪ אחיד, וכיוון שמאל-לימין רק על המספרים עצמם
+  const isV3 = useIsV3();
   // אי-התאמה בין מה שחושב למה שהקובץ מצהיר עליו היא הבדיקה החשובה ביותר
   // כאן: היא תופסת קריאה של העמודה הלא נכונה, וקובץ חלקי.
   const balanced =
@@ -38,7 +42,7 @@ export function TalmudReportSummaryCard({ info, orgNotFound }: { info: TalmudImp
         </div>
         <div>
           <dt className="text-xs text-ink-subtle">חודש תשלום</dt>
-          <dd className="text-ink ltr-num">{monthLabel(info.month)}</dd>
+          {isV3 ? <dd className="text-ink">{info.month ? formatMonth(info.month) : "לא זוהה"}</dd> : <dd className="text-ink ltr-num">{monthLabel(info.month)}</dd>}
         </div>
         <div>
           <dt className="text-xs text-ink-subtle">סניפים</dt>
@@ -46,9 +50,15 @@ export function TalmudReportSummaryCard({ info, orgNotFound }: { info: TalmudImp
         </div>
         <div>
           <dt className="text-xs text-ink-subtle">זכאים</dt>
-          <dd className="text-ink ltr-num">
+          {isV3 ? (
+            <dd className="text-ink">
+              <span className="tabular">{info.eligibleCount}</span> מתוך <span className="tabular">{info.sourceRowCount}</span>
+            </dd>
+          ) : (
+            <dd className="text-ink ltr-num">
             {info.eligibleCount} מתוך {info.sourceRowCount}
           </dd>
+          )}
         </div>
       </dl>
 
@@ -60,12 +70,12 @@ export function TalmudReportSummaryCard({ info, orgNotFound }: { info: TalmudImp
         )}
         <div>
           <div className="text-ink">
-            סך הזכאות בקובץ: <span className="ltr-num font-medium">{money(info.totalAmount)} ₪</span>
+            סך הזכאות בקובץ: {isV3 ? <span className="tabular font-medium">{formatMoney(info.totalAmount)}</span> : <span className="ltr-num font-medium">{money(info.totalAmount)} ₪</span>}
           </div>
           <div className="text-xs text-ink-muted">
             {balanced
               ? "תואם לסכום שהקובץ עצמו מצהיר עליו."
-              : `הקובץ מצהיר על ${money(info.declaredTotal ?? 0)} ₪ — יש פער. לא לקלוט לפני בירור.`}
+              : `הקובץ מצהיר על ${isV3 ? formatMoney(info.declaredTotal ?? 0) : `${money(info.declaredTotal ?? 0)} ₪`} — יש פער. לא לקלוט לפני בירור.`}
           </div>
         </div>
       </div>

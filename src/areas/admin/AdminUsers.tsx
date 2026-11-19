@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserCog } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
+import { useIsV3 } from "@/lib/uiTheme";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge, type Severity } from "@/components/StatusBadge";
@@ -52,8 +53,13 @@ const STATUS_SEVERITY: Record<ProfileStatus, Severity> = { pending: "medium", ap
 const STATUS_LABEL: Record<ProfileStatus, string> = { pending: "ממתין לאישור", approved: "מאושר", disabled: "מושבת" };
 const AREA_LABEL: Record<Area, string> = { ops: "תפעול שוטף", finance: "כספים ובקרה", admin: "ניהול", tasks: "משימות ותזכורות" };
 
+// v3: משתמשים שממתינים לאישור ראשונים - הם הסיבה שנכנסים למסך. מיון יציב בצד
+// הלקוח בלבד; בתוך כל קבוצה נשמר הסדר שהגיע מהשאילתה (החדשים קודם).
+const STATUS_ORDER: Record<ProfileStatus, number> = { pending: 0, approved: 1, disabled: 2 };
+
 export function AdminUsers() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission, isLoading: permissionLoading } = useHasPermission("users", "manage");
   const profilesQuery = useQuery({ queryKey: ["admin-profiles"], queryFn: fetchProfiles, enabled: hasPermission });
   const rolesQuery = useQuery({ queryKey: ["roles-catalog"], queryFn: fetchRoles, enabled: hasPermission });
@@ -135,7 +141,30 @@ export function AdminUsers() {
     {
       key: "actions",
       header: "פעולות",
-      render: (r) => (
+      render: (r) =>
+        isV3 ? (
+          // v3: כפתורים רגילים במקום קישורים זעירים - אותן פעולות ואותם תנאים בדיוק
+          <div className="flex flex-wrap gap-1.5">
+            {r.status !== "approved" && (
+              <button onClick={() => openAction(r, "approved")} className="btn-primary px-2.5 py-1 text-xs">
+                {r.status === "pending" ? "אישור" : "הפעלה מחדש"}
+              </button>
+            )}
+            {r.status === "approved" && (
+              <button onClick={() => openRoleChange(r)} className="btn-secondary px-2.5 py-1 text-xs">
+                שינוי תפקיד
+              </button>
+            )}
+            <button onClick={() => setPermissionsUser(r)} className="btn-secondary px-2.5 py-1 text-xs">
+              ניהול הרשאות
+            </button>
+            {r.status !== "disabled" && (
+              <button onClick={() => openAction(r, "disabled")} className="inline-flex items-center rounded-control border border-danger/40 bg-surface px-2.5 py-1 text-xs font-semibold text-danger-ink transition hover:bg-danger-soft">
+                {r.status === "pending" ? "דחייה" : "השבתה"}
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="flex gap-3">
           {r.status !== "approved" && (
             <button onClick={() => openAction(r, "approved")} className="link-action text-xs">
@@ -156,9 +185,13 @@ export function AdminUsers() {
             ניהול הרשאות
           </button>
         </div>
-      ),
+        ),
     },
   ];
+
+  const profiles = profilesQuery.data ?? [];
+  const rows = isV3 ? [...profiles].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) : profiles;
+  const pendingCount = profiles.filter((p) => p.status === "pending").length;
 
   return (
     <div>
@@ -167,9 +200,19 @@ export function AdminUsers() {
         description="הוספת משתמש עם תפקיד מראש, ואישור, דחייה או השבתה של קיימים."
       />
       <InviteUserPanel roles={rolesQuery.data ?? []} />
+      {isV3 && pendingCount > 0 && (
+        <p className="mb-3 rounded-control border border-warn/30 bg-warn-soft px-3 py-2 text-sm text-warn-ink">
+          {pendingCount === 1 ? "משתמש אחד ממתין לאישור" : `${pendingCount} משתמשים ממתינים לאישור`} - מוצגים בראש הרשימה.
+        </p>
+      )}
+      {profilesQuery.isError && (
+        <div className="mb-3">
+          <ErrorState message="לא ניתן לטעון את רשימת המשתמשים. נסו לרענן את הדף." />
+        </div>
+      )}
       <DataTable
         columns={columns}
-        rows={profilesQuery.data ?? []}
+        rows={rows}
         rowKey={(r) => r.id}
         loading={profilesQuery.isLoading}
         emptyTitle="אין משתמשים עדיין"
@@ -186,20 +229,21 @@ export function AdminUsers() {
               : "דחייה / השבתת משתמש"
         }
         danger={pendingAction?.status === "disabled"}
-        confirmLabel={submitting ? "מעדכנת…" : pendingAction?.kind === "changeRole" ? "שמירה" : "אישור"}
+        confirmLabel={submitting ? (isV3 ? "מעדכן…" : "מעדכנת…") : pendingAction?.kind === "changeRole" ? "שמירה" : "אישור"}
         onCancel={() => setPendingAction(null)}
         onConfirm={runStatusChange}
         description={
           pendingAction?.status === "approved" ? (
             <div className="space-y-3 text-right">
               <div>
-                <label className="field-label text-xs">תפקיד</label>
+                <label className="field-label text-xs" htmlFor="admin-user-role">תפקיד</label>
                 <select
+                  id="admin-user-role"
                   value={roleChoice}
                   onChange={(e) => setRoleChoice(e.target.value)}
                   className="input-field"
                 >
-                  <option value="">— בחרי תפקיד —</option>
+                  <option value="">{isV3 ? "— בחירת תפקיד —" : "— בחרי תפקיד —"}</option>
                   {(rolesQuery.data ?? []).map((role) => (
                     <option key={role.key} value={role.key}>
                       {role.label_he}
@@ -208,8 +252,9 @@ export function AdminUsers() {
                 </select>
               </div>
               <div>
-                <label className="field-label text-xs">אזור ברירת מחדל</label>
+                <label className="field-label text-xs" htmlFor="admin-user-area">אזור ברירת מחדל</label>
                 <select
+                  id="admin-user-area"
                   value={areaChoice}
                   onChange={(e) => setAreaChoice(e.target.value)}
                   className="input-field"

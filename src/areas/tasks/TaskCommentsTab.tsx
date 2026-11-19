@@ -13,6 +13,8 @@ import {
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 
 interface TaskCommentsTabProps {
   taskId: string;
@@ -23,6 +25,7 @@ interface TaskCommentsTabProps {
 // הערות ניתנות לעריכה ללא הגבלת זמן (סעיף 19/22 באפיון) - "נערך" מוצג כש-updated_at
 // לא ריק, בלי צורך בעמודה נפרדת. RLS מתיר עריכה למחבר עצמו תמיד, או למי שיש לו tasks.edit.
 export function TaskCommentsTab({ taskId, canEdit, userId }: TaskCommentsTabProps) {
+  const isV3 = useIsV3();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newComment, setNewComment] = useState("");
@@ -103,7 +106,7 @@ export function TaskCommentsTab({ taskId, canEdit, userId }: TaskCommentsTabProp
                 <>
                   <p className="whitespace-pre-wrap text-sm text-ink-muted">{c.body}</p>
                   <div className="mt-1 flex items-center gap-2 text-xs text-ink-subtle">
-                    <span>{new Date(c.created_at).toLocaleString("he-IL")}</span>
+                    <span>{(isV3 ? formatDateTime(c.created_at) : new Date(c.created_at).toLocaleString("he-IL"))}</span>
                     {c.updated_at && <span>· נערך</span>}
                     {(c.author_id === userId || canEdit) && (
                       <button onClick={() => startEdit(c.id, c.body)} className="link-action">

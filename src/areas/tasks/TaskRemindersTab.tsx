@@ -4,6 +4,8 @@ import { addReminder, deleteReminder, fetchAssignableUsers, fetchReminders } fro
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState } from "@/components/ErrorState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 
 interface TaskRemindersTabProps {
   taskId: string;
@@ -16,6 +18,7 @@ interface TaskRemindersTabProps {
 // מחיקה); ה"הגיע-הזמן" מוצג במסך הבית (due_reminders_for_me), לא כאן.
 export function TaskRemindersTab({ taskId, canEdit, userId, hasDueDate }: TaskRemindersTabProps) {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const [mode, setMode] = useState<"absolute" | "relative">("absolute");
   const [absoluteAt, setAbsoluteAt] = useState("");
   const [daysBefore, setDaysBefore] = useState(1);
@@ -63,10 +66,10 @@ export function TaskRemindersTab({ taskId, canEdit, userId, hasDueDate }: TaskRe
               ? r.days_before_due === 0
                 ? "ביום היעד"
                 : `${r.days_before_due} ימים לפני היעד`
-              : r.remind_at && new Date(r.remind_at).toLocaleString("he-IL")}
+              : r.remind_at && (isV3 ? formatDateTime(r.remind_at) : new Date(r.remind_at).toLocaleString("he-IL"))}
             {" · "}
             {r.user_id ? (usersById.get(r.user_id) ?? "משתמש") : "כל האחראים"}
-            {r.snoozed_until && <span className="text-warn"> · נדחתה ל-{new Date(r.snoozed_until).toLocaleString("he-IL")}</span>}
+            {r.snoozed_until && <span className="text-warn"> · נדחתה ל-{(isV3 ? formatDateTime(r.snoozed_until) : new Date(r.snoozed_until).toLocaleString("he-IL"))}</span>}
             {r.is_dismissed && <span className="text-ink-subtle"> · נסגרה</span>}
           </span>
           {canEdit && (

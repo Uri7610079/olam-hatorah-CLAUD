@@ -9,6 +9,8 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SensitiveValue } from "@/components/SensitiveValue";
 import { ErrorState } from "@/components/ErrorState";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useIsV3 } from "@/lib/uiTheme";
 import { checkIsraeliBankAccount } from "@/lib/israeliBankAccount";
 import { RELATIONSHIP_LABEL, bankAccountStateLabel, type StudentBankAccount } from "./types";
 
@@ -62,6 +64,11 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isV3 = useIsV3();
+  // אישור עקיפה (חשבון שהבדיקה פסלה) - חלון אישור של המערכת במקום window.confirm
+  const [pendingApproveId, setPendingApproveId] = useState<string | null>(null);
+  // שגיאות של פעולות בטבלה (אישור עקיפה, פתיחת מסמך) - עד היום נבלעו בשקט
+  const [rowError, setRowError] = useState<string | null>(null);
 
   // חשבון תקין יכול להעביר את התלמיד ל"מוכן לתלמוד" אוטומטית (מיגרציה 114), ולכן
   // מרעננים גם את התלמיד עצמו ואת הרשימה - לא רק את טבלת החשבונות.
@@ -119,14 +126,20 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
 
   // עקיפה בלבד: חשבון שהבדיקה פסלה, ומישהו במשרד יודע שהוא נכון.
   const approveAnyway = async (id: string) => {
-    if (!window.confirm("הבדיקה מצאה שמספר החשבון שגוי. לאשר אותו בכל זאת? העברה לחשבון שגוי תחזור מהבנק.")) return;
+    setRowError(null);
     const { error } = await supabase.rpc("set_student_bank_account_verification", { p_account_id: id, p_status: "verified" });
-    if (!error) refresh();
+    if (error) {
+      setRowError(`האישור נכשל: ${error.message}`);
+      return;
+    }
+    refresh();
   };
 
   const openDocument = async (path: string) => {
+    setRowError(null);
     const { data, error } = await supabase.storage.from("student-documents").createSignedUrl(path, 60);
     if (!error && data) window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    else setRowError(`פתיחת המסמך נכשלה${error ? `: ${error.message}` : ""}`);
   };
 
   const columns: DataTableColumn<StudentBankAccount>[] = [
@@ -174,7 +187,7 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
       header: "",
       render: (r) =>
         canManage && r.is_active && r.verification_status === "rejected" ? (
-          <button onClick={() => approveAnyway(r.id)} className="link-action text-xs">
+          <button onClick={() => setPendingApproveId(r.id)} className="link-action text-xs">
             אישור למרות זאת
           </button>
         ) : null,
@@ -213,20 +226,31 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
               </select>
             </div>
             <div>
-              <label className="field-label">סניף</label>
-              <input value={form.bank_branch_code} onChange={(e) => setForm((f) => ({ ...f, bank_branch_code: e.target.value }))} className="input-field tabular" />
+              <label htmlFor="student-bank-branch" className="field-label">סניף</label>
+              <input
+                id="student-bank-branch"
+                value={form.bank_branch_code}
+                onChange={(e) => setForm((f) => ({ ...f, bank_branch_code: e.target.value }))}
+                className={`input-field tabular ${isV3 ? "ltr-num" : ""}`}
+              />
             </div>
             <div>
-              <label className="field-label">מספר חשבון</label>
-              <input value={form.account_number} onChange={(e) => setForm((f) => ({ ...f, account_number: e.target.value }))} className="input-field tabular" />
+              <label htmlFor="student-bank-account" className="field-label">מספר חשבון</label>
+              <input
+                id="student-bank-account"
+                value={form.account_number}
+                onChange={(e) => setForm((f) => ({ ...f, account_number: e.target.value }))}
+                className={`input-field tabular ${isV3 ? "ltr-num" : ""}`}
+              />
             </div>
             <div>
-              <label className="field-label">בעל החשבון</label>
-              <input value={form.account_holder_name} onChange={(e) => setForm((f) => ({ ...f, account_holder_name: e.target.value }))} className="input-field" />
+              <label htmlFor="student-bank-holder" className="field-label">בעל החשבון</label>
+              <input id="student-bank-holder" value={form.account_holder_name} onChange={(e) => setForm((f) => ({ ...f, account_holder_name: e.target.value }))} className="input-field" />
             </div>
             <div>
-              <label className="field-label">קשר לתלמיד</label>
+              <label htmlFor="student-bank-relationship" className="field-label">קשר לתלמיד</label>
               <select
+                id="student-bank-relationship"
                 value={form.student_relationship}
                 onChange={(e) => setForm((f) => ({ ...f, student_relationship: e.target.value as typeof f.student_relationship }))}
                 className="input-field"
@@ -239,8 +263,8 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
               </select>
             </div>
             <div>
-              <label className="field-label">מסמך אסמכתה (לא חובה)</label>
-              <input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="input-field" />
+              <label htmlFor="student-bank-document" className="field-label">מסמך אסמכתה (לא חובה)</label>
+              <input id="student-bank-document" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="input-field" />
             </div>
           </div>
           {formCheck === "invalid" && (
@@ -258,6 +282,11 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
         </form>
       )}
 
+      {rowError && (
+        <div className="mb-3">
+          <ErrorState message={rowError} />
+        </div>
+      )}
       <DataTable
         columns={columns}
         rows={query.data ?? []}
@@ -265,6 +294,20 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
         loading={query.isLoading}
         emptyTitle="אין חשבון בנק רשום"
         emptyIcon={Wallet}
+      />
+
+      <ConfirmDialog
+        open={pendingApproveId !== null}
+        danger
+        title="אישור חשבון שהבדיקה פסלה"
+        description="הבדיקה מצאה שמספר החשבון שגוי. לאשר אותו בכל זאת? העברה לחשבון שגוי תחזור מהבנק."
+        confirmLabel="אישור למרות זאת"
+        onCancel={() => setPendingApproveId(null)}
+        onConfirm={() => {
+          const id = pendingApproveId;
+          setPendingApproveId(null);
+          if (id) void approveAnyway(id);
+        }}
       />
     </div>
   );

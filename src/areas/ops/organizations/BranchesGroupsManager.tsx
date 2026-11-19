@@ -11,6 +11,7 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useIsV3 } from "@/lib/uiTheme";
 
 interface BranchRow {
   id: string;
@@ -123,6 +124,10 @@ async function fetchAllGroups(orgId: string): Promise<AllGroupRow[]> {
   return rows;
 }
 
+// "01 - בית שמש"; סניף שהשם הפנימי שלו הוא הקוד עצמו - בלי "00 - 00"
+const branchLabel = (r: Pick<BranchRow, "talmud_branch_code" | "internal_name">) =>
+  r.internal_name && r.internal_name !== r.talmud_branch_code ? `${r.talmud_branch_code} - ${r.internal_name}` : r.talmud_branch_code;
+
 const EMPTY_BRANCH_FORM = { talmud_branch_code: "", internal_name: "", address: "", responsible_person: "", phone_system_id: "" };
 const EMPTY_GROUP_FORM = {
   branch_id: "",
@@ -137,8 +142,10 @@ const EMPTY_GROUP_FORM = {
 // ניהול הסניפים והקבוצות של עמותה אחת. עד שלב 36 זה היה מסך נפרד ("סניפים וקבוצות");
 // מאז הוא מוצג בתוך מסך העמותות, מתחת לעמותה שנבחרה, ובלשונית "סניפים וקבוצות"
 // בכרטיס העמותה. הקישורים הישנים (?org=&branch=&group=) ממשיכים לעבוד.
-export function BranchesGroupsManager({ orgId }: { orgId: string }) {
+// orgName - לכותרת הקבוצות בערכה v3 ("עמותה › סניף 01 – שם"); לא חובה.
+export function BranchesGroupsManager({ orgId, orgName }: { orgId: string; orgName?: string }) {
   const [searchParams] = useSearchParams();
+  const isV3 = useIsV3();
   const queryClient = useQueryClient();
   const { hasPermission: canManageBranches } = useHasPermission("branches", "manage");
   const { hasPermission: canManageGroups } = useHasPermission("groups", "manage");
@@ -341,8 +348,11 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
   const [changingLeaderGroupId, setChangingLeaderGroupId] = useState<string | null>(null);
   const [leaderChoice, setLeaderChoice] = useState("");
   const [leaderChangeSubmitting, setLeaderChangeSubmitting] = useState(false);
+  // שגיאה בהחלפת ראש קבוצה - עד היום נבלעה, והשורה פשוט נשארה במצב עריכה
+  const [leaderChangeError, setLeaderChangeError] = useState<string | null>(null);
 
   const startChangeLeader = (group: GroupRow) => {
+    setLeaderChangeError(null);
     setChangingLeaderGroupId(group.id);
     setLeaderChoice(group.group_leader_id ?? "");
   };
@@ -356,10 +366,13 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
       p_start_date: todayLocalIso(),
     });
     setLeaderChangeSubmitting(false);
-    if (!error) {
-      setChangingLeaderGroupId(null);
-      queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
+    if (error) {
+      setLeaderChangeError(`החלפת ראש הקבוצה נכשלה: ${error.message}`);
+      return;
     }
+    setLeaderChangeError(null);
+    setChangingLeaderGroupId(null);
+    queryClient.invalidateQueries({ queryKey: ["groups", selectedBranchId] });
   };
 
   const submitNewLeader = async (e: FormEvent) => {
@@ -421,20 +434,27 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
       header: "",
       render: (r) => (
         <div className="flex gap-3">
-          <button onClick={() => setSelectedBranchId(r.id)} className="link-action text-xs">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBranchId(r.id);
+            }}
+            className="link-action text-xs"
+          >
             קבוצות
           </button>
           {studentsLink("branch", r.id)}
           {canManageBranches && r.status === "active" && (
             <button
-              onClick={() =>
+              onClick={(e) => {
+                e.stopPropagation();
                 setPendingClose({
                   kind: "branch",
                   id: r.id,
                   // סניף שהשם הפנימי שלו הוא הקוד עצמו - בלי "00 - 00"
-                  label: r.internal_name && r.internal_name !== r.talmud_branch_code ? `${r.talmud_branch_code} - ${r.internal_name}` : r.talmud_branch_code,
-                })
-              }
+                  label: branchLabel(r),
+                });
+              }}
               className="text-xs text-danger underline hover:text-danger-ink"
             >
               סגירה
@@ -469,7 +489,7 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
             >
               {leaderChangeSubmitting ? "שומרת…" : "אישור"}
             </button>
-            <button onClick={() => setChangingLeaderGroupId(null)} className="text-xs text-ink-subtle underline">
+            <button onClick={() => { setChangingLeaderGroupId(null); setLeaderChangeError(null); }} className="text-xs text-ink-subtle underline">
               ביטול
             </button>
           </div>
@@ -520,6 +540,8 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
   ];
 
   const selectedBranch = branchesQuery.data?.find((b) => b.id === selectedBranchId);
+  // v3: הקשר מלא לכותרת הקבוצות - שם קבוצה חוזר בכמה סניפים ובכמה עמותות
+  const groupsContext = selectedBranch ? `סניף ${branchLabel(selectedBranch).replace(" - ", " – ")}` : "";
 
   const activeBranches = (branchesQuery.data ?? []).filter((b) => b.status === "active");
 
@@ -857,13 +879,28 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
               loading={branchesQuery.isLoading}
               emptyTitle="אין סניפים לעמותה זו"
               emptyIcon={Network}
+              // v3: הסניף שהקבוצות שלו מוצגות מסומן, ולחיצה על שורה פותחת את הקבוצות שלו
+              selectedKey={isV3 ? selectedBranchId : undefined}
+              onRowClick={isV3 ? (r) => setSelectedBranchId(r.id) : undefined}
             />
+            {isV3 && !selectedBranchId && (branchesQuery.data ?? []).length > 0 && (
+              <p className="mt-2 text-sm text-ink-subtle">לחיצה על סניף מציגה מתחתיו את הקבוצות שלו.</p>
+            )}
           </div>
 
           {selectedBranchId && (
-            <div>
+            // v3: הקבוצות מוזחות מתחת לסניף, עם פס בצד - כדי שההיררכיה עמותה ← סניף ← קבוצה תיראה
+            <div className="v3:border-r-2 v3:border-brand-200 v3:pr-4">
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-ink-muted">קבוצות — {selectedBranch?.internal_name}</h3>
+                {isV3 ? (
+                  <h3 className="text-sm font-semibold text-primary">
+                    קבוצות —{" "}
+                    {orgName && <span className="font-normal text-ink-muted">{orgName} › </span>}
+                    {groupsContext}
+                  </h3>
+                ) : (
+                  <h3 className="text-sm font-semibold text-ink-muted">קבוצות — {selectedBranch?.internal_name}</h3>
+                )}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleExportGroups}
@@ -881,6 +918,11 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
                 </div>
               </div>
 
+              {leaderChangeError && (
+                <div className="mb-2">
+                  <ErrorState message={leaderChangeError} />
+                </div>
+              )}
               <DataTable
                 columns={groupColumns}
                 rows={groupsQuery.data ?? []}

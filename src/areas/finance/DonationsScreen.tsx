@@ -14,6 +14,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { SensitiveValue } from "@/components/SensitiveValue";
 import { ErrorState } from "@/components/ErrorState";
 import { DonationsImportPanel } from "./DonationsImportPanel";
+import { CountChips, type CountChip } from "@/components/CountChips";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -86,6 +89,7 @@ const EMPTY_FORM = {
 
 export function DonationsScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canManage } = useHasPermission("donations", "manage");
   const { hasPermission: canApprove } = useHasPermission("donations", "approve");
   const { hasPermission: canReveal } = useHasPermission("bank_accounts", "view_sensitive");
@@ -123,6 +127,22 @@ export function DonationsScreen() {
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["donations", orgId] });
+
+  // v3: צ'יפים לפי סטטוס + "לא משויכות" - סינון בצד הלקוח על השורות שכבר נטענו.
+  // הסינון לא משנה את מה שנטען ולא את הייצוא לאקסל.
+  const [chipFilter, setChipFilter] = useState<string | null>(null);
+  const allDonations = donationsQuery.data ?? [];
+  const donationChips: CountChip[] = [
+    { value: "pending", label: "ממתינות לאישור", count: allDonations.filter((d) => d.status === "pending").length, tone: "warn" },
+    { value: "unassigned", label: "לא משויכות לקבוצה", count: allDonations.filter((d) => !d.group_id).length, tone: "high" },
+    { value: "approved", label: "מאושרות", count: allDonations.filter((d) => d.status === "approved").length, tone: "ok" },
+    { value: "rejected", label: "נדחו", count: allDonations.filter((d) => d.status === "rejected").length, tone: "neutral" },
+  ];
+  const shownDonations =
+    isV3 && chipFilter
+      ? allDonations.filter((d) => (chipFilter === "unassigned" ? !d.group_id : d.status === chipFilter))
+      : allDonations;
+  const shownTotal = shownDonations.reduce((sum, d) => sum + Number(d.amount), 0);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -231,8 +251,11 @@ export function DonationsScreen() {
   };
 
   const columns: DataTableColumn<DonationRow>[] = [
-    { key: "date", header: "תאריך", className: "tabular", render: (r) => r.donation_date },
-    { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
+    // v3: תאריך וסכום בתצוגה האחידה; סינון ומיון - לפי הערך המקורי
+    { key: "date", header: "תאריך", className: "tabular", filterValue: (r) => r.donation_date, render: (r) => (isV3 ? formatDate(r.donation_date) : r.donation_date) },
+    isV3
+      ? { key: "amount", header: "סכום", kind: "money", filterValue: (r) => r.amount, sortValue: (r) => r.amount, render: (r) => formatMoney(r.amount) }
+      : { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
     {
       key: "source",
       header: "מקור",
@@ -275,7 +298,7 @@ export function DonationsScreen() {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <span>{r.group?.name ?? "לא משויך"}</span>
+            <span className={!r.group && isV3 ? "text-ink-subtle" : undefined}>{r.group?.name ?? "לא משויך"}</span>
             {canManage && (
               <button
                 onClick={() => {
@@ -400,7 +423,8 @@ export function DonationsScreen() {
             ))}
           </select>
         </div>
-        {orgId && (
+        {/* v3: הצ'יפ "לא משויכות לקבוצה" מחליף את תיבת הסימון (היא נשארת רק אם כבר סומנה) */}
+        {orgId && (!isV3 || unassignedOnly) && (
           <label className="flex items-center gap-2 pb-2 text-sm text-ink-muted">
             <input type="checkbox" checked={unassignedOnly} onChange={(e) => setUnassignedOnly(e.target.checked)} />
             הצג רק תרומות לא משויכות לקבוצה
@@ -461,14 +485,33 @@ export function DonationsScreen() {
       )}
 
       {rowError && <div className="mb-4"><ErrorState message={rowError} /></div>}
+      {/* שגיאת טעינה הוצגה עד היום כ"אין תרומות רשומות" - מטעה */}
+      {donationsQuery.isError && <div className="mb-4"><ErrorState message="שגיאה בטעינת התרומות." /></div>}
+
+      {orgId && isV3 && allDonations.length > 0 && (
+        <>
+          <CountChips
+            ariaLabel="סינון תרומות לפי מצב"
+            chips={donationChips}
+            total={allDonations.length}
+            allLabel="כל התרומות"
+            active={chipFilter}
+            onSelect={setChipFilter}
+          />
+          <p className="mb-2 text-sm text-ink-muted">
+            בתצוגה: <span className="tabular font-semibold text-ink">{formatNumber(shownDonations.length)}</span> תרומות · סך{" "}
+            <span className="tabular font-semibold text-ink">{formatMoney(shownTotal)}</span>
+          </p>
+        </>
+      )}
 
       {orgId && (
         <DataTable
           columns={columns}
-          rows={donationsQuery.data ?? []}
+          rows={isV3 ? shownDonations : donationsQuery.data ?? []}
           rowKey={(r) => r.id}
           loading={donationsQuery.isLoading}
-          emptyTitle={unassignedOnly ? "אין תרומות לא משויכות" : "אין תרומות רשומות"}
+          emptyTitle={isV3 && chipFilter ? "אין תרומות במצב הזה" : unassignedOnly ? "אין תרומות לא משויכות" : "אין תרומות רשומות"}
           emptyIcon={HeartHandshake}
         />
       )}

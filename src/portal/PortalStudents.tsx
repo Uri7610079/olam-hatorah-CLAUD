@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, UserPlus, MessageCircleQuestion, AlertTriangle, FileDown, FileUp } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useIsV3 } from "@/lib/uiTheme";
 import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "@/components/ColumnFilter";
 import type { FilterColumn } from "@/lib/columnFilters";
 import { ELIGIBILITY, monthLabel } from "@/lib/portalRequests";
@@ -18,6 +19,7 @@ const currentMonth = () => {
 };
 
 export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
+  const isV3 = useIsV3();
   const months = useQuery({ queryKey: ["portal-months"], queryFn: () => portalRpc<string[]>("portal_months") });
   const [picked, setPicked] = useState<string | null>(null);
   const month = picked ?? months.data?.[0] ?? currentMonth();
@@ -158,7 +160,49 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
       ) : shown.length === 0 ? (
         <p className="card p-8 text-center text-ink-muted">{all.length === 0 ? "אין תלמידים בקבוצות שלך." : "אין תלמידים שמתאימים לסינון."}</p>
       ) : (
-        <div className="card overflow-x-auto">
+        <>
+        {/* v3: בטלפון - כרטיס לכל תלמיד (שם, מצב, פעולות) במקום טבלה של שש עמודות
+            שנגללת הצידה. אותה רשימה מסוננת בדיוק (shown), ואותן פעולות. */}
+        {isV3 && (
+          <ul className="space-y-3 sm:hidden">
+            {shown.map((s) => (
+              <li key={s.student_id} className="card space-y-2 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{s.full_name}</p>
+                    <p className="text-sm text-ink-muted">
+                      <span className="tabular-nums">{s.external_id}</span> · {s.group_name}
+                      {multiGroup && [s.branch_name, s.organization_name].filter(Boolean).length > 0 && (
+                        <> · {[s.branch_name, s.organization_name].filter(Boolean).join(" · ")}</>
+                      )}
+                    </p>
+                  </div>
+                  <span className="shrink-0">
+                    <StatusBadge severity={ELIGIBILITY[s.eligibility].severity} label={ELIGIBILITY[s.eligibility].label} />
+                  </span>
+                </div>
+                {s.eligibility === "not_eligible" && (
+                  <p className="text-sm text-ink-muted">{s.reasons.length ? s.reasons.join(" · ") : "הסיבה טרם התקבלה מתלמוד"}</p>
+                )}
+                {(!s.has_bank_account || s.pending_requests > 0 || s.open_questions > 0) && (
+                  <div className="flex flex-wrap gap-1.5 text-xs">
+                    {!s.has_bank_account && <span className="rounded-full bg-warn-soft px-2 py-0.5 text-warn-ink">בלי חשבון בנק</span>}
+                    {s.pending_requests > 0 && <span className="rounded-full bg-info-soft px-2 py-0.5 text-info-ink">עדכון ממתין לאישור</span>}
+                    {s.open_questions > 0 && <span className="rounded-full bg-info-soft px-2 py-0.5 text-info-ink">שאלה ממתינה לתשובה</span>}
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setOpenStudent(s)} className="btn-secondary h-11 flex-1 px-3 text-base">פרטים ועדכון</button>
+                  <button onClick={() => setAskAbout(s)} className="btn-secondary flex h-11 items-center gap-1 px-3 text-base">
+                    <MessageCircleQuestion className="h-4 w-4" aria-hidden="true" />
+                    שאלה
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className={`card overflow-x-auto ${isV3 ? "hidden sm:block" : ""}`}>
           <table className="w-full text-base">
             <thead className="bg-surface-muted text-right text-sm text-ink-muted">
               <tr>
@@ -210,6 +254,7 @@ export function PortalStudents({ groups }: { groups: PortalGroup[] }) {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {openStudent && (

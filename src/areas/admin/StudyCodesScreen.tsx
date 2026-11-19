@@ -180,17 +180,17 @@ export function StudyCodesScreen() {
             <form onSubmit={submitCode} className="card mb-4 max-w-lg space-y-3 p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="field-label">קוד</label>
-                  <input required value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} className="input-field tabular" />
+                  <label className="field-label" htmlFor="study-code-field-1">קוד</label>
+                  <input id="study-code-field-1" required value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} className="input-field tabular" />
                 </div>
                 <div>
-                  <label className="field-label">קטגוריה (לא חובה)</label>
-                  <input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="input-field" />
+                  <label className="field-label" htmlFor="study-code-field-2">קטגוריה (לא חובה)</label>
+                  <input id="study-code-field-2" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="input-field" />
                 </div>
               </div>
               <div>
-                <label className="field-label">תיאור</label>
-                <input required value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="input-field" />
+                <label className="field-label" htmlFor="study-code-field-3">תיאור</label>
+                <input id="study-code-field-3" required value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="input-field" />
               </div>
               {error && <ErrorState message={error} />}
               <button type="submit" disabled={submitting} className="btn-primary">

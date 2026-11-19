@@ -8,6 +8,8 @@ import { useHasPermission } from "@/lib/permissions";
 import { ErrorState } from "@/components/ErrorState";
 import { ALL_PASSPORT_COUNTRIES } from "@/lib/passportCountries";
 import { TALMUD_VISA_TYPES } from "@/lib/talmudCodes";
+import { formatPhone } from "@/lib/format";
+import { useIsV3 } from "@/lib/uiTheme";
 import { formatStudentAddress, ID_TYPE_LABEL, type Student, type StudentIdType } from "./types";
 
 interface StudentDetailsTabProps {
@@ -17,6 +19,7 @@ interface StudentDetailsTabProps {
 export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
   const queryClient = useQueryClient();
   const { hasPermission: canManage } = useHasPermission("students", "manage");
+  const isV3 = useIsV3();
   const [values, setValues] = useState({
     id_type: student.id_type,
     external_id: student.external_id,
@@ -100,7 +103,7 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           <span className="font-medium text-ink">שם מלא:</span> {student.full_name}
         </p>
         <p>
-          <span className="font-medium text-ink">טלפון:</span> <span className="ltr-num">{student.phone_raw ?? "—"}</span>
+          <span className="font-medium text-ink">טלפון:</span> <span className="ltr-num">{isV3 && student.phone_raw ? formatPhone(student.phone_raw) || student.phone_raw : student.phone_raw ?? "—"}</span>
         </p>
         <p>
           <span className="font-medium text-ink">כתובת:</span> {formatStudentAddress(student)}
@@ -113,8 +116,9 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
     <form onSubmit={handleSave} className="max-w-xl space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="field-label">סוג מזהה</label>
+          <label htmlFor="student-id-type" className="field-label">סוג מזהה</label>
           <select
+            id="student-id-type"
             value={values.id_type}
             onChange={(e) => setValues((v) => ({ ...v, id_type: e.target.value as StudentIdType }))}
             className="input-field"
@@ -127,12 +131,13 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           </select>
         </div>
         <div>
-          <label className="field-label">מספר מזהה</label>
+          <label htmlFor="student-external-id" className="field-label">מספר מזהה</label>
           <input
+            id="student-external-id"
             required
             value={values.external_id}
             onChange={(e) => setValues((v) => ({ ...v, external_id: e.target.value }))}
-            className="input-field tabular"
+            className={`input-field tabular ${isV3 ? "ltr-num" : ""}`}
             aria-describedby={idWarning ? "external-id-warning" : undefined}
           />
           {/* אזהרה ולא חסימה: ספרת ביקורת שגויה היא כמעט תמיד טעות הקלדה,
@@ -147,8 +152,8 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
         </div>
       </div>
       <div>
-        <label className="field-label">שם מלא</label>
-        <input required value={values.full_name} onChange={(e) => setValues((v) => ({ ...v, full_name: e.target.value }))} className="input-field" />
+        <label htmlFor="student-full-name" className="field-label">שם מלא</label>
+        <input id="student-full-name" required value={values.full_name} onChange={(e) => setValues((v) => ({ ...v, full_name: e.target.value }))} className="input-field" />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
@@ -190,8 +195,8 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="field-label">תאריך לידה</label>
-          <input type="date" value={values.birth_date} onChange={(e) => setValues((v) => ({ ...v, birth_date: e.target.value }))} className="input-field" />
+          <label htmlFor="student-birth-date" className="field-label">תאריך לידה</label>
+          <input id="student-birth-date" type="date" value={values.birth_date} onChange={(e) => setValues((v) => ({ ...v, birth_date: e.target.value }))} className="input-field" />
         </div>
         <PhoneField
           id="student-phone"
@@ -202,16 +207,16 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-          <label className="field-label">רחוב</label>
-          <input value={values.address_street} onChange={(e) => setValues((v) => ({ ...v, address_street: e.target.value }))} placeholder="חסר נתון" className="input-field placeholder:text-danger-ink" />
+          <label htmlFor="student-street" className="field-label">רחוב</label>
+          <input id="student-street" value={values.address_street} onChange={(e) => setValues((v) => ({ ...v, address_street: e.target.value }))} placeholder="חסר נתון" className="input-field placeholder:text-danger-ink" />
         </div>
         <div>
-          <label className="field-label">מספר בית</label>
-          <input value={values.address_house_number} onChange={(e) => setValues((v) => ({ ...v, address_house_number: e.target.value }))} className="input-field" />
+          <label htmlFor="student-house" className="field-label">מספר בית</label>
+          <input id="student-house" value={values.address_house_number} onChange={(e) => setValues((v) => ({ ...v, address_house_number: e.target.value }))} className="input-field" />
         </div>
         <div>
-          <label className="field-label">עיר</label>
-          <input value={values.address_city} onChange={(e) => setValues((v) => ({ ...v, address_city: e.target.value }))} placeholder="חסר נתון" className="input-field placeholder:text-danger-ink" />
+          <label htmlFor="student-city" className="field-label">עיר</label>
+          <input id="student-city" value={values.address_city} onChange={(e) => setValues((v) => ({ ...v, address_city: e.target.value }))} placeholder="חסר נתון" className="input-field placeholder:text-danger-ink" />
         </div>
       </div>
       {/* מצב משפחתי והיקף לימוד - נקבעים בפורטל ראשי הקבוצות בהוספת תלמיד, וקובעים את קוד הלימוד */}
@@ -242,12 +247,12 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="field-label">סוג תלמיד</label>
-          <input value={values.student_type} onChange={(e) => setValues((v) => ({ ...v, student_type: e.target.value }))} className="input-field" />
+          <label htmlFor="student-type" className="field-label">סוג תלמיד</label>
+          <input id="student-type" value={values.student_type} onChange={(e) => setValues((v) => ({ ...v, student_type: e.target.value }))} className="input-field" />
         </div>
         <div>
-          <label className="field-label">קוד לימוד</label>
-          <input value={values.study_code} onChange={(e) => setValues((v) => ({ ...v, study_code: e.target.value }))} className="input-field tabular" />
+          <label htmlFor="student-study-code" className="field-label">קוד לימוד</label>
+          <input id="student-study-code" value={values.study_code} onChange={(e) => setValues((v) => ({ ...v, study_code: e.target.value }))} className="input-field tabular" />
         </div>
       </div>
       <p className="text-xs text-ink-subtle">

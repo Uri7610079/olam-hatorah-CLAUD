@@ -299,17 +299,17 @@ function RecurringRulesSection() {
             </h2>
             <div className="space-y-3">
               <div>
-                <label className="field-label">כותרת המשימה שתיווצר</label>
-                <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="input-field" />
+                <label className="field-label" htmlFor="tasks-settings-field-1">כותרת המשימה שתיווצר</label>
+                <input id="tasks-settings-field-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="input-field" />
               </div>
               <div>
-                <label className="field-label">תיאור</label>
-                <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="input-field" />
+                <label className="field-label" htmlFor="tasks-settings-field-2">תיאור</label>
+                <textarea id="tasks-settings-field-2" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="input-field" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="field-label">עדיפות</label>
-                  <select value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as TaskPriority }))} className="input-field">
+                  <label className="field-label" htmlFor="tasks-settings-field-3">עדיפות</label>
+                  <select id="tasks-settings-field-3" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as TaskPriority }))} className="input-field">
                     {(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((p) => (
                       <option key={p} value={p}>
                         {PRIORITY_LABEL[p]}
@@ -318,8 +318,8 @@ function RecurringRulesSection() {
                   </select>
                 </div>
                 <div>
-                  <label className="field-label">קטגוריה</label>
-                  <select value={form.categoryId} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))} className="input-field">
+                  <label className="field-label" htmlFor="tasks-settings-field-4">קטגוריה</label>
+                  <select id="tasks-settings-field-4" value={form.categoryId} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))} className="input-field">
                     <option value="">— ללא —</option>
                     {(categoriesQuery.data ?? []).map((c) => (
                       <option key={c.id} value={c.id}>
@@ -331,8 +331,8 @@ function RecurringRulesSection() {
               </div>
 
               <div>
-                <label className="field-label">תדירות</label>
-                <select value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value as RecurrenceFrequency }))} className="input-field">
+                <label className="field-label" htmlFor="tasks-settings-field-5">תדירות</label>
+                <select id="tasks-settings-field-5" value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value as RecurrenceFrequency }))} className="input-field">
                   {(Object.keys(FREQUENCY_LABEL) as RecurrenceFrequency[]).map((freq) => (
                     <option key={freq} value={freq}>
                       {FREQUENCY_LABEL[freq]}
@@ -343,8 +343,8 @@ function RecurringRulesSection() {
 
               {form.frequency === "weekly" && (
                 <div>
-                  <label className="field-label">יום בשבוע</label>
-                  <select value={form.dayOfWeek} onChange={(e) => setForm((f) => ({ ...f, dayOfWeek: Number(e.target.value) }))} className="input-field">
+                  <label className="field-label" htmlFor="tasks-settings-field-6">יום בשבוע</label>
+                  <select id="tasks-settings-field-6" value={form.dayOfWeek} onChange={(e) => setForm((f) => ({ ...f, dayOfWeek: Number(e.target.value) }))} className="input-field">
                     {DAY_OF_WEEK_LABEL.map((label, i) => (
                       <option key={i} value={i}>
                         {label}
@@ -355,8 +355,8 @@ function RecurringRulesSection() {
               )}
               {form.frequency === "monthly" && (
                 <div>
-                  <label className="field-label">יום בחודש</label>
-                  <input
+                  <label className="field-label" htmlFor="tasks-settings-field-7">יום בחודש</label>
+                  <input id="tasks-settings-field-7"
                     type="number"
                     min={1}
                     max={31}
@@ -368,8 +368,8 @@ function RecurringRulesSection() {
               )}
               {form.frequency === "custom" && (
                 <div>
-                  <label className="field-label">כל כמה ימים</label>
-                  <input
+                  <label className="field-label" htmlFor="tasks-settings-field-8">כל כמה ימים</label>
+                  <input id="tasks-settings-field-8"
                     type="number"
                     min={1}
                     value={form.intervalDays}
@@ -381,18 +381,18 @@ function RecurringRulesSection() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="field-label">תאריך התחלה</label>
-                  <input type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} className="input-field" />
+                  <label className="field-label" htmlFor="tasks-settings-field-9">תאריך התחלה</label>
+                  <input id="tasks-settings-field-9" type="date" value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} className="input-field" />
                 </div>
                 <div>
-                  <label className="field-label">תאריך סיום (לא חובה)</label>
-                  <input type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} className="input-field" />
+                  <label className="field-label" htmlFor="tasks-settings-field-10">תאריך סיום (לא חובה)</label>
+                  <input id="tasks-settings-field-10" type="date" value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} className="input-field" />
                 </div>
               </div>
 
               <div>
-                <label className="field-label">תזכורת (ימים לפני היעד, לא חובה)</label>
-                <input
+                <label className="field-label" htmlFor="tasks-settings-field-11">תזכורת (ימים לפני היעד, לא חובה)</label>
+                <input id="tasks-settings-field-11"
                   type="number"
                   min={0}
                   value={form.reminderDaysBeforeDue}
@@ -583,17 +583,17 @@ function TaskTemplatesSection() {
             </h2>
             <div className="space-y-3">
               <div>
-                <label className="field-label">כותרת</label>
-                <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="input-field" />
+                <label className="field-label" htmlFor="tasks-settings-field-12">כותרת</label>
+                <input id="tasks-settings-field-12" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} className="input-field" />
               </div>
               <div>
-                <label className="field-label">תיאור</label>
-                <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="input-field" />
+                <label className="field-label" htmlFor="tasks-settings-field-13">תיאור</label>
+                <textarea id="tasks-settings-field-13" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="input-field" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="field-label">עדיפות</label>
-                  <select value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as TaskPriority }))} className="input-field">
+                  <label className="field-label" htmlFor="tasks-settings-field-14">עדיפות</label>
+                  <select id="tasks-settings-field-14" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as TaskPriority }))} className="input-field">
                     {(Object.keys(PRIORITY_LABEL) as TaskPriority[]).map((p) => (
                       <option key={p} value={p}>
                         {PRIORITY_LABEL[p]}
@@ -602,8 +602,8 @@ function TaskTemplatesSection() {
                   </select>
                 </div>
                 <div>
-                  <label className="field-label">קטגוריה</label>
-                  <select value={form.categoryId} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))} className="input-field">
+                  <label className="field-label" htmlFor="tasks-settings-field-15">קטגוריה</label>
+                  <select id="tasks-settings-field-15" value={form.categoryId} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))} className="input-field">
                     <option value="">— ללא —</option>
                     {(categoriesQuery.data ?? []).map((c) => (
                       <option key={c.id} value={c.id}>
@@ -614,12 +614,12 @@ function TaskTemplatesSection() {
                 </div>
               </div>
               <div>
-                <label className="field-label">יעד יחסי (ימים מרגע היצירה, לא חובה)</label>
-                <input type="number" min={0} value={form.dueInDays} onChange={(e) => setForm((f) => ({ ...f, dueInDays: e.target.value }))} className="input-field" />
+                <label className="field-label" htmlFor="tasks-settings-field-16">יעד יחסי (ימים מרגע היצירה, לא חובה)</label>
+                <input id="tasks-settings-field-16" type="number" min={0} value={form.dueInDays} onChange={(e) => setForm((f) => ({ ...f, dueInDays: e.target.value }))} className="input-field" />
               </div>
               <div>
-                <label className="field-label">Checklist (שורה לכל פריט, לא חובה)</label>
-                <textarea value={form.checklist} onChange={(e) => setForm((f) => ({ ...f, checklist: e.target.value }))} rows={3} className="input-field" />
+                <label className="field-label" htmlFor="tasks-settings-field-17">Checklist (שורה לכל פריט, לא חובה)</label>
+                <textarea id="tasks-settings-field-17" value={form.checklist} onChange={(e) => setForm((f) => ({ ...f, checklist: e.target.value }))} rows={3} className="input-field" />
               </div>
 
               {error && <ErrorState message={error} />}

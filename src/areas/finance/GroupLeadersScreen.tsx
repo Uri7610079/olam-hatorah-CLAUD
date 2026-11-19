@@ -8,6 +8,8 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useLastSelected } from "@/lib/useLastSelected";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMoney, formatNumber } from "@/lib/format";
 
 interface LeaderBalanceRow {
   group_leader_id: string;
@@ -80,6 +82,7 @@ function money(value: number): string {
 // נפרד ומשלמת בנפרד. מספר מאוחד בין עמותות היה מספר שאי אפשר לשלם ואי אפשר להתאים
 // מול הבנק, ולכן מוצגת במקומו שורה שאומרת זאת במפורש.
 export function GroupLeadersScreen() {
+  const isV3 = useIsV3();
   const balancesQuery = useQuery({ queryKey: ["group-leader-balances"], queryFn: fetchLeaderBalances });
   const mismatchQuery = useQuery({ queryKey: ["group-leader-commission-mismatches"], queryFn: fetchMismatches });
   const [leaderId, setLeaderId] = useLastSelected<string>("last-group-leader", "");
@@ -165,6 +168,10 @@ export function GroupLeadersScreen() {
                   </span>
                 </div>
 
+                {/* שגיאות שעד היום נבלעו בשקט: טבלאות הקבוצות נשארו ריקות, ואזהרת כללי העמלה פשוט לא הופיעה */}
+                {groupsQuery.error && <ErrorState message={`שגיאה בטעינת הקבוצות: ${(groupsQuery.error as Error).message}`} />}
+                {mismatchQuery.error && <ErrorState message={`לא ניתן היה לבדוק התאמת כללי עמלה: ${(mismatchQuery.error as Error).message}`} />}
+
                 {leaderMismatches.length > 0 && (
                   <div className="flex items-start gap-2 rounded-control border border-warn bg-warn-soft p-3 text-sm text-warn-ink">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -190,16 +197,26 @@ export function GroupLeadersScreen() {
                         </span>
                         <span className="text-sm">
                           <span className="text-ink-subtle">יתרה: </span>
-                          <span className={`font-semibold tabular ${org.balance < 0 ? "text-danger" : "text-ink"}`}>{money(org.balance)} ₪</span>
+                          {isV3 ? (
+                            // v3: מינוס מפורש ו"חוב" - לא בצבע בלבד
+                            <span className={`font-semibold tabular ${org.balance < 0 ? "text-danger-ink" : "text-primary"}`}>
+                              {formatMoney(org.balance)}
+                              {org.balance < 0 && " · חוב"}
+                            </span>
+                          ) : (
+                            <span className={`font-semibold tabular ${org.balance < 0 ? "text-danger" : "text-ink"}`}>{money(org.balance)} ₪</span>
+                          )}
                         </span>
                       </header>
 
+                      {/* v3: גלילה אופקית במסך צר במקום טבלה שנחתכת */}
+                      <div className={isV3 ? "overflow-x-auto" : undefined}>
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-line text-xs text-ink-subtle">
-                            <th className="px-4 py-2 text-right font-medium">קבוצה</th>
-                            <th className="px-4 py-2 text-right font-medium">סניף</th>
-                            <th className="px-4 py-2 text-right font-medium">יתרה</th>
+                          <tr className="border-b border-line text-xs text-ink-subtle v3:text-ink-muted">
+                            <th className="px-4 py-2 text-right font-medium v3:font-semibold">קבוצה</th>
+                            <th className="px-4 py-2 text-right font-medium v3:font-semibold">סניף</th>
+                            <th className="px-4 py-2 text-right font-medium v3:text-left v3:font-semibold">יתרה</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -211,7 +228,7 @@ export function GroupLeadersScreen() {
                             </tr>
                           ) : (
                             rows.map((g) => (
-                              <tr key={g.group_id} className="border-b border-line last:border-0">
+                              <tr key={g.group_id} className="border-b border-line last:border-0 v3:hover:bg-brand-50/60">
                                 <td className="px-4 py-2 text-ink">
                                   {g.group_name}
                                   {g.group_status !== "active" && (
@@ -223,12 +240,24 @@ export function GroupLeadersScreen() {
                                 <td className="px-4 py-2 text-ink-muted">
                                   {g.branch_name} <span className="text-ink-subtle ltr-num">({g.talmud_branch_code})</span>
                                 </td>
-                                <td className={`px-4 py-2 tabular ${g.balance < 0 ? "text-danger" : "text-ink"}`}>{money(g.balance)}</td>
+                                {isV3 ? (
+                                  <td className={`whitespace-nowrap px-4 py-2 text-left tabular ${g.balance < 0 ? "text-danger-ink" : "text-ink"}`}>
+                                    {formatMoney(g.balance)}
+                                    {g.balance < 0 && <span className="mr-1.5 rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium">חוב</span>}
+                                  </td>
+                                ) : (
+                                  <td className={`px-4 py-2 tabular ${g.balance < 0 ? "text-danger" : "text-ink"}`}>{money(g.balance)}</td>
+                                )}
                               </tr>
                             ))
                           )}
                         </tbody>
                       </table>
+                      </div>
+                      {/* v3: כמה קבוצות בעמותה הזו - ספירה מהשורות שכבר נטענו */}
+                      {isV3 && !groupsQuery.isLoading && rows.length > 1 && (
+                        <p className="border-t border-line px-4 py-2 text-xs text-ink-subtle">{formatNumber(rows.length)} קבוצות · היתרה שבכותרת היא הסכום שלהן</p>
+                      )}
                     </section>
                   );
                 })}

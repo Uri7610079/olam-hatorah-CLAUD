@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Paperclip } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { REQUEST_KIND_LABEL, REQUEST_STATUS, formatDate, requestChanges } from "@/lib/portalRequests";
 import { portalRpc, type PortalQuestion, type PortalRequest } from "./portalApi";
 
@@ -11,14 +13,21 @@ export function PortalRequests() {
     mutationFn: (id: string) => portalRpc("portal_cancel_request", { p_request_id: id }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-requests"] }),
   });
+  // ביטול בקשה עובר דרך אישור - עד היום לחיצה אחת ביטלה מיד
+  const [cancelId, setCancelId] = useState<string | null>(null);
 
   if (q.isLoading) return <p className="py-10 text-center text-ink-muted">טוען…</p>;
+  // עד היום שגיאת טעינה הוצגה כ"עדיין לא שלחת עדכונים" - כאילו הרשימה ריקה
+  if (q.isError) return <p className="rounded-control bg-danger-soft p-4 text-danger-ink">לא ניתן לטעון את העדכונים. נסו לרענן את הדף.</p>;
   if (!q.data?.length) {
     return <p className="card p-8 text-center text-ink-muted">עדיין לא שלחת עדכונים. עדכון פרטים נעשה מתוך "פרטים ועדכון" ליד כל תלמיד.</p>;
   }
 
   return (
     <div className="space-y-3">
+      {cancel.isError && (
+        <p role="alert" className="rounded-control bg-danger-soft p-3 text-base text-danger-ink">ביטול הבקשה לא הצליח. נסו שוב.</p>
+      )}
       {q.data.map((r) => {
         const st = REQUEST_STATUS[r.status];
         return (
@@ -39,7 +48,7 @@ export function PortalRequests() {
             )}
             {r.status === "pending" && (
               <button
-                onClick={() => cancel.mutate(r.id)}
+                onClick={() => setCancelId(r.id)}
                 disabled={cancel.isPending}
                 className="mt-3 text-sm text-ink-muted underline hover:text-danger"
               >
@@ -49,6 +58,19 @@ export function PortalRequests() {
           </article>
         );
       })}
+      <ConfirmDialog
+        open={cancelId !== null}
+        title="ביטול הבקשה"
+        description="הבקשה תבוטל ולא תגיע לטיפול המשרד. אפשר לשלוח בקשה חדשה בכל עת."
+        confirmLabel="ביטול הבקשה"
+        cancelLabel="חזרה"
+        danger
+        onCancel={() => setCancelId(null)}
+        onConfirm={() => {
+          if (cancelId) cancel.mutate(cancelId);
+          setCancelId(null);
+        }}
+      />
     </div>
   );
 }
@@ -70,8 +92,10 @@ async function downloadAnswerFile(questionId: string) {
 
 export function PortalQuestions({ onAsk }: { onAsk: () => void }) {
   const q = useQuery({ queryKey: ["portal-questions"], queryFn: () => portalRpc<PortalQuestion[]>("portal_my_questions") });
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   if (q.isLoading) return <p className="py-10 text-center text-ink-muted">טוען…</p>;
+  if (q.isError) return <p className="rounded-control bg-danger-soft p-4 text-danger-ink">לא ניתן לטעון את השאלות. נסו לרענן את הדף.</p>;
   if (!q.data?.length) {
     return (
       <div className="card space-y-4 p-8 text-center">
@@ -83,6 +107,7 @@ export function PortalQuestions({ onAsk }: { onAsk: () => void }) {
 
   return (
     <div className="space-y-3">
+      {downloadError && <p role="alert" className="rounded-control bg-danger-soft p-3 text-base text-danger-ink">{downloadError}</p>}
       {q.data.map((item) => (
         <article key={item.id} className="card p-5">
           <div className="flex flex-wrap items-center gap-3">
@@ -106,7 +131,12 @@ export function PortalQuestions({ onAsk }: { onAsk: () => void }) {
               <p className="text-sm font-semibold">תשובת המשרד · {formatDate(item.answered_at)}</p>
               {item.answer && <p className="mt-1 whitespace-pre-line text-base">{item.answer}</p>}
               {item.answer_attachment_name && (
-                <button onClick={() => downloadAnswerFile(item.id)} className="mt-2 inline-flex items-center gap-2 rounded-control border border-ok/40 bg-surface px-3 py-2 text-base text-ok-ink hover:bg-ok-soft">
+                <button
+                  onClick={() => {
+                    setDownloadError(null);
+                    // עד היום כישלון בהורדה נבלע - הכפתור פשוט "לא עשה כלום"
+                    downloadAnswerFile(item.id).catch(() => setDownloadError("הורדת הקובץ לא הצליחה. נסו שוב."));
+                  }} className="mt-2 inline-flex items-center gap-2 rounded-control border border-ok/40 bg-surface px-3 py-2 text-base text-ok-ink hover:bg-ok-soft">
                   <Download className="h-5 w-5" aria-hidden="true" />
                   הורדת הקובץ: {item.answer_attachment_name}
                 </button>

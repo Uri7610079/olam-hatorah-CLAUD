@@ -92,7 +92,7 @@ export function AutoDetectPanel({ onRouteToTab }: AutoDetectPanelProps) {
         לפני שממשיכים. הקליטה עצמה תמיד דורשת אישור שלך.
       </p>
 
-      <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} className="input-field" />
+      <input type="file" aria-label="קובץ לזיהוי" accept=".csv,.xlsx,.xls" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} className="input-field" />
 
       {legacyWarning && (
         <div className="flex items-start gap-2 rounded-control border border-warn bg-warn-soft p-3 text-sm text-warn-ink">

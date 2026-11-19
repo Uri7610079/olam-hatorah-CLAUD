@@ -53,8 +53,8 @@ export function BankImportPanel({ initialFile }: BankImportPanelProps) {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-2xl">
         <div>
-          <label className="field-label">עמותה</label>
-          <select
+          <label htmlFor="bip-1" className="field-label">עמותה</label>
+          <select id="bip-1"
             value={orgId}
             onChange={(e) => {
               setOrgId(e.target.value);
@@ -71,8 +71,8 @@ export function BankImportPanel({ initialFile }: BankImportPanelProps) {
           </select>
         </div>
         <div>
-          <label className="field-label">חשבון עמותה</label>
-          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input-field" disabled={!orgId}>
+          <label htmlFor="bip-2" className="field-label">חשבון עמותה</label>
+          <select id="bip-2" value={accountId} onChange={(e) => setAccountId(e.target.value)} className="input-field" disabled={!orgId}>
             <option value="">— בחרי —</option>
             {(bankAccountsQuery.data ?? []).map((a) => (
               <option key={a.id} value={a.id}>

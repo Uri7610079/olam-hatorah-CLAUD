@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
+import { useIsV3 } from "@/lib/uiTheme";
 import { ErrorState } from "@/components/ErrorState";
 import { AuthLayout } from "./AuthLayout";
+import { PasswordInput } from "./PasswordInput";
 
 // מסך "סיסמה חדשה": מופיע אחרי לחיצה על הקישור שנשלח ב"שכחתי סיסמה".
 // הקישור כבר פתח session זמני, ולכן כאן רק קובעים את הסיסמה (updateUser).
@@ -15,6 +17,7 @@ function hebrewError(message: string): string {
 }
 
 export function SetNewPasswordForm({ onDone }: { onDone: () => void }) {
+  const isV3 = useIsV3();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +54,8 @@ export function SetNewPasswordForm({ onDone }: { onDone: () => void }) {
           <label htmlFor="new-password" className="field-label">
             סיסמה חדשה
           </label>
-          <input
+          <PasswordInput
             id="new-password"
-            type="password"
             dir="ltr"
             required
             minLength={8}
@@ -67,9 +69,8 @@ export function SetNewPasswordForm({ onDone }: { onDone: () => void }) {
           <label htmlFor="new-password-confirm" className="field-label">
             הסיסמה שוב, לאימות
           </label>
-          <input
+          <PasswordInput
             id="new-password-confirm"
-            type="password"
             dir="ltr"
             required
             autoComplete="new-password"
@@ -80,7 +81,7 @@ export function SetNewPasswordForm({ onDone }: { onDone: () => void }) {
         </div>
         {error && <ErrorState message={error} />}
         <button type="submit" disabled={submitting} className="btn-primary w-full">
-          {submitting ? "שומר…" : "שמירת הסיסמה"}
+          {submitting ? (isV3 ? "בשמירה…" : "שומר…") : "שמירת הסיסמה"}
         </button>
       </form>
     </AuthLayout>

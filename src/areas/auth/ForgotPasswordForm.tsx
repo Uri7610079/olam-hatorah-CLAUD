@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
+import { useIsV3 } from "@/lib/uiTheme";
 import { ErrorState } from "@/components/ErrorState";
 import { AuthLayout } from "./AuthLayout";
+import { hebrewAuthError } from "./authErrors";
 
 interface ForgotPasswordFormProps {
   onBackToLogin: () => void;
 }
 
 export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
+  const isV3 = useIsV3();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -21,7 +24,7 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
     setSubmitting(false);
     if (error) {
-      setError(error.message);
+      setError(hebrewAuthError(error.message, "שליחת הקישור נכשלה"));
       return;
     }
     setDone(true);
@@ -58,7 +61,7 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
         </div>
         {error && <ErrorState message={error} />}
         <button type="submit" disabled={submitting} className="btn-primary w-full">
-          {submitting ? "שולחת…" : "שליחת קישור איפוס"}
+          {submitting ? (isV3 ? "בשליחה…" : "שולחת…") : "שליחת קישור איפוס"}
         </button>
       </form>
       <button onClick={onBackToLogin} className="link-action mt-4 text-xs">

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Info, UserPlus, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LoadingState } from "@/components/LoadingState";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // הוספת משתמש עם הרשאות ישירות ממסך הניהול.
 //
@@ -59,6 +60,8 @@ export function InviteUserPanel({ roles }: { roles: RoleOption[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // ביטול הזמנה עובר דרך אישור - עד היום לחיצה אחת ביטלה מיד, בלי דרך חזרה.
+  const [revokeTarget, setRevokeTarget] = useState<Invitation | null>(null);
 
   const invitationsQuery = useQuery({ queryKey: ["user-invitations"], queryFn: fetchInvitations });
 
@@ -214,7 +217,7 @@ export function InviteUserPanel({ roles }: { roles: RoleOption[] }) {
                   <button
                     type="button"
                     className="link-action flex items-center gap-1 text-xs text-danger"
-                    onClick={() => void revoke(inv.id)}
+                    onClick={() => setRevokeTarget(inv)}
                   >
                     <X className="h-3 w-3" aria-hidden="true" />
                     ביטול
@@ -225,6 +228,27 @@ export function InviteUserPanel({ roles }: { roles: RoleOption[] }) {
           </div>
         )
       )}
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        title="ביטול הזמנה"
+        description={
+          revokeTarget && (
+            <>
+              ההזמנה של <span className="ltr-num">{revokeTarget.email}</span> תבוטל. אם יירשם בהמשך, החשבון ימתין לאישור כמו כל הרשמה רגילה.
+            </>
+          )
+        }
+        confirmLabel="ביטול ההזמנה"
+        cancelLabel="חזרה"
+        danger
+        onCancel={() => setRevokeTarget(null)}
+        onConfirm={() => {
+          const target = revokeTarget;
+          setRevokeTarget(null);
+          if (target) void revoke(target.id);
+        }}
+      />
     </div>
   );
 }

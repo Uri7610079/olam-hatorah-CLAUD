@@ -10,6 +10,8 @@ import { LoadingState } from "@/components/LoadingState";
 import { findExistingImport } from "./FolderInboxPanel";
 import { TalmudAutoImportPanel } from "@/areas/ops/talmud/TalmudAutoImportPanel";
 import { STORED_REPORT_KEYS, nonEntitlementToErrorsFile, type StoredReportKey } from "@/lib/talmudReports";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMonth } from "@/lib/format";
 
 // "קבצים מתלמוד": הדוחות שירדו במשיכה מתלמוד (מיגרציה 118), מזוהים ומוכנים לקליטה.
 // כמו "קבצים מהתיקייה" - הזיהוי והניתוב אוטומטיים, והקליטה עצמה עוברת במסך היבוא
@@ -91,6 +93,9 @@ const isStored = (key: string): key is StoredReportKey => (STORED_REPORT_KEYS as
 
 export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string, file: File, meta?: RouteMeta) => void }) {
   const navigate = useNavigate();
+  const isV3 = useIsV3();
+  // v3: חודש במילים ("נובמבר 2026") במקום 11/2026
+  const month = (iso: string | null) => (isV3 ? (iso ? formatMonth(iso) : "") : monthText(iso));
   const query = useQuery({ queryKey: ["talmud-files-for-import"], queryFn: loadEntries });
 
   if (query.isLoading) {
@@ -162,7 +167,7 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
           <div key={entry.pulled.id} className="card space-y-2 p-3.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{entry.pulled.report_label}</span>
-              <span className="text-sm text-ink-muted">· {entry.pulled.legal_name}{entry.pulled.month ? ` · ${monthText(entry.pulled.month)}` : ""}</span>
+              <span className="text-sm text-ink-muted">· {entry.pulled.legal_name}{entry.pulled.month ? ` · ${month(entry.pulled.month)}` : ""}</span>
             </div>
             {entry.state.kind === "detected" && (
               <>
@@ -170,8 +175,9 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
                   זוהה כ<span className="font-semibold text-ink">{entry.state.candidate.signature.label}</span>
                   <span className="text-ink-subtle"> · {entry.state.rowCount} שורות</span>
                 </p>
+                {/* v3: הפעולה הראשית במסך היא "קליטה אוטומטית של כל הקבצים"; כפתורי הקבצים הבודדים משניים */}
                 {importable(entry) ? (
-                  <button onClick={() => void go(entry)} className="btn-primary text-xs">
+                  <button onClick={() => void go(entry)} className={isV3 ? "btn-secondary text-xs" : "btn-primary text-xs"}>
                     {entry.pulled.report_key === "non_entitlement" ? "המשך ליבוא (למרכז השגיאות)" : "המשך ליבוא"}
                   </button>
                 ) : entry.state.candidate.signature.target.kind === "route" ? (
@@ -197,7 +203,7 @@ export function TalmudFilesPanel({ onRouteToTab }: { onRouteToTab: (tab: string,
 
       {imported.length > 0 && (
         <p className="text-xs text-ink-subtle">
-          כבר נקלטו: {imported.map((e) => `${e.pulled.report_label} (${e.pulled.legal_name}${e.pulled.month ? ` ${monthText(e.pulled.month)}` : ""})`).join(" · ")}
+          כבר נקלטו: {imported.map((e) => `${e.pulled.report_label} (${e.pulled.legal_name}${e.pulled.month ? ` ${month(e.pulled.month)}` : ""})`).join(" · ")}
         </p>
       )}
     </div>

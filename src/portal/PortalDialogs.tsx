@@ -16,7 +16,7 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center v3:bg-ink/40" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"

@@ -14,6 +14,9 @@ import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
 import { TalmudCertificatesTab } from "./TalmudCertificatesTab";
 import { TalmudReportRowsView } from "./TalmudReportRowsView";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatDateTime, formatMonth } from "@/lib/format";
 
 // משיכה מתלמוד (מיגרציה 118): המזכיר לוחץ, המערכת נכנסת לתלמוד בשם כל עמותה
 // עם הסיסמה השמורה, והוא מקליד רק את קוד ה-SMS. ההתקדמות עצמה נעשית בשרת
@@ -92,6 +95,8 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
   const qc = useQueryClient();
   const [month, setMonth] = useState(lastClosedMonth());
   const [stepError, setStepError] = useState<string | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const isV3 = useIsV3();
 
   const credentials = useQuery({
     queryKey: ["talmud-credentials"],
@@ -180,10 +185,11 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
                   <div key={c.organization_id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                     <span className="font-semibold">{c.legal_name}</span>
                     <span className="text-sm text-ink-muted" dir="ltr">{c.username}</span>
+                    {/* v3: כשיש כמה עמותות, אין "פעולה ראשית" אחת מבין כפתורי השורות - כולם משניים */}
                     <button
                       onClick={() => start.mutate(c.organization_id)}
                       disabled={!month || start.isPending}
-                      className="btn-primary ms-auto flex items-center gap-2"
+                      className={`${isV3 && ready.length > 1 ? "btn-secondary" : "btn-primary"} ms-auto flex items-center gap-2`}
                     >
                       <Download className="h-4 w-4" aria-hidden="true" />
                       {start.isPending && start.variables === c.organization_id ? "מתחיל…" : "משיכה לעמותה זו"}
@@ -201,12 +207,12 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
         <section className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="font-semibold">
-              {active ? "משיכה פעילה" : "המשיכה האחרונה"} · {rows[0].job_kind === "certificates" ? "אישורי לימודים" : `חודש ${monthText(rows[0].job_month)}`}
+              {active ? "משיכה פעילה" : "המשיכה האחרונה"} · {rows[0].job_kind === "certificates" ? "אישורי לימודים" : isV3 ? formatMonth(rows[0].job_month) : `חודש ${monthText(rows[0].job_month)}`}
             </h2>
             {active && (
               <>
                 <span className="text-sm text-ink-muted">יש להשאיר את המסך פתוח עד הסוף.</span>
-                <button onClick={() => cancel.mutate(rows[0].job_id)} className="btn-secondary ms-auto text-sm">ביטול המשיכה</button>
+                <button onClick={() => setConfirmCancel(true)} className="btn-secondary ms-auto text-sm">ביטול המשיכה</button>
               </>
             )}
             {!active && rows[0].job_kind === "reports" && rows.some((r) => r.files_done > 0) && (
@@ -216,6 +222,20 @@ function PullTab({ onNeedUsers }: { onNeedUsers: () => void }) {
             )}
           </div>
           {stepError && <ErrorState message={stepError} />}
+          {cancel.isError && <ErrorState message={errText(cancel.error)} />}
+          <ConfirmDialog
+            open={confirmCancel}
+            title="לבטל את המשיכה?"
+            description="המשיכה תיעצר עכשיו. כדי להמשיך יהיה צורך להתחיל משיכה חדשה ולהקליד קוד SMS חדש."
+            confirmLabel="ביטול המשיכה"
+            cancelLabel="המשך המשיכה"
+            danger
+            onCancel={() => setConfirmCancel(false)}
+            onConfirm={() => {
+              setConfirmCancel(false);
+              cancel.mutate(rows[0].job_id);
+            }}
+          />
           <div className="space-y-2">
             {rows.map((r) => <OrgRow key={r.job_org_id} r={r} />)}
           </div>
@@ -311,10 +331,17 @@ function PulledFiles({ jobId, refreshKey, autoSave }: { jobId: string; refreshKe
       return (data ?? []) as PulledFile[];
     },
   });
+  const isV3 = useIsV3();
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const download = async (f: PulledFile) => {
     const { data, error } = await supabase.rpc("talmud_pulled_file", { p_file_id: f.id });
     const row = Array.isArray(data) ? data[0] : data;
-    if (error || !row) return;
+    // עד היום כשל בהורדה נבלע בשקט - הלחיצה פשוט לא עשתה כלום
+    if (error || !row) {
+      setDownloadError(`הורדת ${f.file_name} נכשלה${error ? `: ${error.message}` : ""}`);
+      return;
+    }
+    setDownloadError(null);
     const bytes = Uint8Array.from(atob(row.file_base64), (c) => c.charCodeAt(0));
     const url = URL.createObjectURL(new Blob([bytes], { type: row.file_type || "application/octet-stream" }));
     const a = document.createElement("a");
@@ -342,22 +369,34 @@ function PulledFiles({ jobId, refreshKey, autoSave }: { jobId: string; refreshKe
 
   if (!files.data?.length) return null;
   return (
+    <>
+    {downloadError && <ErrorState message={downloadError} />}
     <div className="card overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="bg-surface-muted text-right text-ink-muted">
+        <thead className="bg-surface-muted text-right text-ink-muted v3:text-xs v3:font-medium">
           <tr>
             <th className="px-3 py-2 font-semibold">עמותה</th>
             <th className="px-3 py-2 font-semibold">דוח</th>
             <th className="px-3 py-2 font-semibold">קובץ</th>
+            {isV3 && <th className="px-3 py-2 font-semibold">התקבל</th>}
             <th className="px-3 py-2"><span className="sr-only">הורדה</span></th>
           </tr>
         </thead>
         <tbody>
           {files.data.map((f) => (
-            <tr key={f.id} className="border-t border-line">
+            <tr key={f.id} className="border-t border-line v3:hover:bg-brand-50/40">
               <td className="px-3 py-2">{f.legal_name}</td>
               <td className="px-3 py-2">{f.report_label}</td>
-              <td className="px-3 py-2 text-ink-muted" dir="ltr">{f.file_name} · {Math.max(1, Math.round(f.size_bytes / 1024))}KB</td>
+              {/* v3: כיוון שמאל-לימין רק על שם הקובץ - התא עצמו נשאר מיושר לימין כמו שאר הטבלה */}
+              {isV3 ? (
+                <td className="px-3 py-2 text-ink-muted">
+                  <span dir="ltr" className="inline-block max-w-[22rem] truncate align-bottom" title={f.file_name}>{f.file_name}</span>
+                  <span className="tabular text-ink-subtle"> · {Math.max(1, Math.round(f.size_bytes / 1024))} KB</span>
+                </td>
+              ) : (
+                <td className="px-3 py-2 text-ink-muted" dir="ltr">{f.file_name} · {Math.max(1, Math.round(f.size_bytes / 1024))}KB</td>
+              )}
+              {isV3 && <td className="px-3 py-2 tabular text-ink-muted">{formatDateTime(f.created_at)}</td>}
               <td className="px-3 py-2">
                 <button onClick={() => download(f)} className="link-action inline-flex items-center gap-1">
                   <Download className="h-4 w-4" aria-hidden="true" /> הורדה
@@ -368,6 +407,7 @@ function PulledFiles({ jobId, refreshKey, autoSave }: { jobId: string; refreshKe
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
@@ -420,9 +460,23 @@ function CredentialCard({ c }: { c: CredentialRow }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["talmud-credentials"] }),
   });
   const saved = c.username && c.has_password;
+  const isV3 = useIsV3();
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   return (
     <div className="card p-4">
+      <ConfirmDialog
+        open={confirmRemove}
+        title={`למחוק את משתמש התלמוד של ${c.legal_name}?`}
+        description="שם המשתמש והסיסמה השמורה יימחקו, ולא תהיה אפשרות למשוך לעמותה הזו עד שיוגדרו מחדש. את הסיסמה אי אפשר לשחזר מכאן."
+        confirmLabel="מחיקת המשתמש"
+        danger
+        onCancel={() => setConfirmRemove(false)}
+        onConfirm={() => {
+          setConfirmRemove(false);
+          remove.mutate();
+        }}
+      />
       <div className="flex flex-wrap items-center gap-3">
         <span className="font-semibold">{c.legal_name}</span>
         {saved ? (
@@ -430,7 +484,7 @@ function CredentialCard({ c }: { c: CredentialRow }) {
         ) : (
           <span className="text-sm text-ink-subtle">לא הוגדר</span>
         )}
-        {c.last_login_ok_at && <span className="text-sm text-ok-ink">· כניסה אחרונה הצליחה {new Date(c.last_login_ok_at).toLocaleDateString("he-IL")}</span>}
+        {c.last_login_ok_at && <span className="text-sm text-ok-ink">· כניסה אחרונה הצליחה {isV3 ? formatDate(c.last_login_ok_at) : new Date(c.last_login_ok_at).toLocaleDateString("he-IL")}</span>}
         {c.last_login_error && <span className="text-sm text-danger-ink">· הכניסה האחרונה נכשלה: {c.last_login_error}</span>}
         {!editing && (
           <button onClick={() => setEditing(true)} className="btn-secondary ms-auto text-sm">{saved ? "עדכון" : "הגדרה"}</button>
@@ -455,7 +509,7 @@ function CredentialCard({ c }: { c: CredentialRow }) {
           </button>
           <button type="button" onClick={() => { setEditing(false); setPassword(""); setUsername(c.username ?? ""); }} className="btn-secondary">ביטול</button>
           {saved && (
-            <button type="button" onClick={() => remove.mutate()} className="link-action text-sm text-danger-ink">מחיקת המשתמש</button>
+            <button type="button" onClick={() => setConfirmRemove(true)} className="link-action text-sm text-danger-ink">מחיקת המשתמש</button>
           )}
           {(save.isError || remove.isError) && <p className="w-full text-sm text-danger-ink">{errText(save.error ?? remove.error)}</p>}
         </form>

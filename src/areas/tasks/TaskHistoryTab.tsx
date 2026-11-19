@@ -3,6 +3,8 @@ import { fetchHistory } from "./api";
 import { HISTORY_EVENT_LABEL } from "./types";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 
 interface TaskHistoryTabProps {
   taskId: string;
@@ -10,6 +12,7 @@ interface TaskHistoryTabProps {
 
 // יומן שינויים מינימלי לתפעול/שחזור תקלה בלבד (סעיף 20 באפיון) - לא לניתוח ביצועי עובדים.
 export function TaskHistoryTab({ taskId }: TaskHistoryTabProps) {
+  const isV3 = useIsV3();
   const query = useQuery({ queryKey: ["task-history", taskId], queryFn: () => fetchHistory(taskId) });
 
   if (query.isLoading) return <LoadingState rows={4} />;
@@ -23,7 +26,7 @@ export function TaskHistoryTab({ taskId }: TaskHistoryTabProps) {
         <li key={ev.id} className="rounded-control border border-line p-2.5 text-sm">
           <div className="flex items-center justify-between">
             <span className="font-medium text-ink-muted">{HISTORY_EVENT_LABEL[ev.event_type] ?? ev.event_type}</span>
-            <span className="text-xs text-ink-subtle">{new Date(ev.created_at).toLocaleString("he-IL")}</span>
+            <span className="text-xs text-ink-subtle">{(isV3 ? formatDateTime(ev.created_at) : new Date(ev.created_at).toLocaleString("he-IL"))}</span>
           </div>
           {ev.detail && Object.keys(ev.detail).length > 0 && (
             <p className="mt-0.5 text-xs text-ink-subtle">{JSON.stringify(ev.detail)}</p>

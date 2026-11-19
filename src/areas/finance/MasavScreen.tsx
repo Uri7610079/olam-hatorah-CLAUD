@@ -5,7 +5,7 @@ import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
-import { Landmark, AlertTriangle, Download } from "lucide-react";
+import { Landmark, AlertTriangle, Download, FilePen, Clock, Hourglass, BadgeCheck, FileDown, Send, CircleCheck, CircleAlert, Ban, type LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLastSelected } from "@/lib/useLastSelected";
 import { useHasPermission } from "@/lib/permissions";
@@ -15,6 +15,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Stepper } from "@/components/Stepper";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMoney, formatMonth, formatNumber } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -63,7 +66,8 @@ interface LineRow {
   bank_account: { account_number_masked: string | null } | null;
 }
 
-const STATUS_LABEL: Record<MasavStatus, string> = {
+// מיוצא גם למסך ההחזרות - שם הסטטוס של אצוות התשלום החוזר הוצג עד היום באנגלית.
+export const MASAV_STATUS_LABEL: Record<string, string> = {
   draft: "טיוטה",
   pending_review: "ממתין לבדיקה",
   pending_approval: "ממתין לאישור",
@@ -74,6 +78,7 @@ const STATUS_LABEL: Record<MasavStatus, string> = {
   needs_correction: "דורש תיקון",
   cancelled: "בוטל",
 };
+const STATUS_LABEL = MASAV_STATUS_LABEL as Record<MasavStatus, string>;
 const STATUS_SEVERITY: Record<MasavStatus, "neutral" | "medium" | "ok" | "critical"> = {
   draft: "neutral",
   pending_review: "medium",
@@ -86,6 +91,36 @@ const STATUS_SEVERITY: Record<MasavStatus, "neutral" | "medium" | "ok" | "critic
   cancelled: "neutral",
 };
 const LINE_STATUS_LABEL: Record<LineStatus, string> = { pending: "טרם נבדק", valid: "תקין", rejected: "נדחה", returned: "חזר" };
+
+// v3: המסלול הרגיל של אצווה, לפי ערכי הסטטוס האמיתיים. needs_correction ו-cancelled
+// אינם שלב במסלול - הם מוצגים כהודעה נפרדת מעליו.
+const MAIN_PATH: MasavStatus[] = ["draft", "pending_review", "pending_approval", "approved", "file_generated", "transmitted", "bank_completed"];
+const MAIN_PATH_STEPS = MAIN_PATH.map((s) => ({ key: s, label: STATUS_LABEL[s] }));
+
+// v3: תג נפרד לכל סטטוס. עד היום "מאושר", "קובץ הופק", "שודר" ו"בוצע בבנק" היו
+// כולם אותו ירוק - ו"שודר" (הקובץ נשלח) נראה בדיוק כמו "בוצע" (הכסף יצא). צבע + אייקון + טקסט.
+const V3_BADGE: Record<MasavStatus, { cls: string; icon: LucideIcon }> = {
+  draft: { cls: "bg-neutral-soft text-neutral-ink ring-neutral/25", icon: FilePen },
+  pending_review: { cls: "bg-warn-soft text-warn-ink ring-warn/25", icon: Clock },
+  pending_approval: { cls: "bg-warn-soft text-warn-ink ring-warn/25", icon: Hourglass },
+  approved: { cls: "bg-info-soft text-info-ink ring-info/25", icon: BadgeCheck },
+  file_generated: { cls: "bg-primary-soft text-primary ring-primary/25", icon: FileDown },
+  transmitted: { cls: "bg-accent-soft text-accent-ink ring-accent/50", icon: Send },
+  bank_completed: { cls: "bg-ok-soft text-ok-ink ring-ok/25", icon: CircleCheck },
+  needs_correction: { cls: "bg-danger-soft text-danger-ink ring-danger/25", icon: CircleAlert },
+  cancelled: { cls: "bg-neutral-soft text-neutral-ink ring-neutral/25", icon: Ban },
+};
+
+function MasavStatusBadge({ status }: { status: MasavStatus }) {
+  const style = V3_BADGE[status] ?? V3_BADGE.draft;
+  const Icon = style.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${style.cls}`}>
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
 
 async function fetchOrgs(): Promise<OrgOption[]> {
   const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
@@ -163,6 +198,9 @@ function buildMasavExportWorkbook(lines: LineRow[], revealed: Map<string, string
 
 export function MasavScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
+  // v3: כפתורים בגודל רגיל במקום text-xs (בערכות הקודמות - בלי שינוי)
+  const xs = isV3 ? "" : " text-xs";
   const { hasPermission: canManage } = useHasPermission("masav", "manage");
   const { hasPermission: canApprove } = useHasPermission("masav", "approve");
   const { hasPermission: canReveal } = useHasPermission("bank_accounts", "view_sensitive");
@@ -179,6 +217,9 @@ export function MasavScreen() {
   const [confirmTransmit, setConfirmTransmit] = useState(false);
   const [reasonAction, setReasonAction] = useState<"cancel" | "correction" | null>(null);
   const [reasonText, setReasonText] = useState("");
+  // אישור לפני פעולות שאין מהן חזרה: ביטול אצווה, וסימון שהבנק ביצע את התשלום.
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmCompleted, setConfirmCompleted] = useState(false);
 
   useEffect(() => {
     const orgParam = searchParams.get("org");
@@ -282,11 +323,19 @@ export function MasavScreen() {
     }
   };
 
+  // v3: חודש בשם, סכום עם ₪, ותג סטטוס נפרד לכל שלב. מיון וסינון - לפי הערכים המקוריים.
   const batchColumns: DataTableColumn<BatchRow>[] = [
-    { key: "month", header: "חודש", className: "tabular", render: (r) => r.period_month },
-    { key: "amount", header: "סכום", className: "tabular", render: (r) => r.total_amount.toLocaleString("he-IL") },
-    { key: "count", header: "מס' תשלומים", className: "tabular", render: (r) => r.payment_count },
-    { key: "status", header: "סטטוס", render: (r) => <StatusBadge severity={STATUS_SEVERITY[r.status]} label={STATUS_LABEL[r.status]} /> },
+    { key: "month", header: "חודש", className: "tabular", filterValue: (r) => r.period_month, render: (r) => (isV3 ? formatMonth(r.period_month) : r.period_month) },
+    isV3
+      ? { key: "amount", header: "סכום", kind: "money", filterValue: (r) => r.total_amount, sortValue: (r) => r.total_amount, render: (r) => formatMoney(r.total_amount) }
+      : { key: "amount", header: "סכום", className: "tabular", render: (r) => r.total_amount.toLocaleString("he-IL") },
+    { key: "count", header: "מס' תשלומים", className: "tabular", kind: isV3 ? "number" : undefined, render: (r) => r.payment_count },
+    {
+      key: "status",
+      header: "סטטוס",
+      filterValue: (r) => STATUS_LABEL[r.status],
+      render: (r) => (isV3 ? <MasavStatusBadge status={r.status} /> : <StatusBadge severity={STATUS_SEVERITY[r.status]} label={STATUS_LABEL[r.status]} />),
+    },
   ];
 
   const lineColumns: DataTableColumn<LineRow>[] = [
@@ -294,7 +343,9 @@ export function MasavScreen() {
     { key: "name", header: "שם", render: (r) => r.student.full_name },
     { key: "group", header: "קבוצה", render: (r) => r.group.name },
     { key: "account", header: "חשבון", className: "ltr-num", render: (r) => r.bank_account?.account_number_masked ?? "—" },
-    { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
+    isV3
+      ? { key: "amount", header: "סכום", kind: "money", filterValue: (r) => r.amount, sortValue: (r) => r.amount, render: (r) => formatMoney(r.amount) }
+      : { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
     {
       key: "status",
       header: "סטטוס שורה",
@@ -382,68 +433,111 @@ export function MasavScreen() {
           emptyTitle="אין עדיין אצוות מס״ב"
           emptyIcon={Landmark}
           onRowClick={(r) => setSelectedBatchId(r.id)}
+          selectedKey={isV3 ? selectedBatchId : undefined}
         />
       )}
 
       {selectedBatchId && selectedBatch && (
         <div className="card mt-6 max-w-5xl space-y-4 p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink-muted">אצוות מס״ב · {selectedBatch.period_month}</h2>
-            <StatusBadge severity={STATUS_SEVERITY[selectedBatch.status]} label={STATUS_LABEL[selectedBatch.status]} />
+            <h2 className="text-sm font-semibold text-ink-muted v3:text-base v3:text-primary">
+              אצוות מס״ב · {isV3 ? formatMonth(selectedBatch.period_month) : selectedBatch.period_month}
+            </h2>
+            {isV3 ? (
+              <MasavStatusBadge status={selectedBatch.status} />
+            ) : (
+              <StatusBadge severity={STATUS_SEVERITY[selectedBatch.status]} label={STATUS_LABEL[selectedBatch.status]} />
+            )}
           </div>
-          {selectedBatch.status_reason && <p className="text-xs text-ink-subtle">סיבה: {selectedBatch.status_reason}</p>}
+
+          {/* v3: איפה האצווה נמצאת במסלול. תיקון/ביטול אינם שלב - הודעה ברורה במקום המסלול */}
+          {isV3 && selectedBatch.status === "needs_correction" && (
+            <div className="flex items-start gap-2 rounded-control border border-danger/30 bg-danger-soft p-3 text-sm text-danger-ink" role="status">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">האצווה הוחזרה לתיקון</p>
+                {selectedBatch.status_reason && <p className="mt-0.5">סיבה: {selectedBatch.status_reason}</p>}
+              </div>
+            </div>
+          )}
+          {isV3 && selectedBatch.status === "cancelled" && (
+            <div className="flex items-start gap-2 rounded-control border border-line-strong bg-neutral-soft p-3 text-sm text-neutral-ink" role="status">
+              <Ban className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <p className="font-semibold">האצווה בוטלה - לא יוצא ממנה תשלום</p>
+                {selectedBatch.status_reason && <p className="mt-0.5">סיבה: {selectedBatch.status_reason}</p>}
+              </div>
+            </div>
+          )}
+          {isV3 && MAIN_PATH.includes(selectedBatch.status) && (
+            <>
+              <Stepper steps={MAIN_PATH_STEPS} currentStep={selectedBatch.status} />
+              {selectedBatch.status === "transmitted" && (
+                <p className="-mt-3 text-sm text-ink-muted">הקובץ שודר לבנק. התשלום ייחשב כבוצע רק אחרי שתסמני שהבנק ביצע אותו בפועל.</p>
+              )}
+            </>
+          )}
+
+          {selectedBatch.status_reason && !(isV3 && (selectedBatch.status === "needs_correction" || selectedBatch.status === "cancelled")) && (
+            <p className="text-xs text-ink-subtle">סיבה: {selectedBatch.status_reason}</p>
+          )}
 
           {linesQuery.isLoading ? <LoadingState rows={3} /> : <DataTable columns={lineColumns} rows={linesQuery.data ?? []} rowKey={(r) => r.id} emptyTitle="אין שורות" />}
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-ink-muted">
-              סה"כ: <span className="tabular">{selectedBatch.total_amount.toLocaleString("he-IL")}</span> ·{" "}
-              <span className="tabular">{selectedBatch.payment_count}</span> תשלומים
+              סה"כ: <span className="tabular v3:font-semibold v3:text-primary">{isV3 ? formatMoney(selectedBatch.total_amount) : selectedBatch.total_amount.toLocaleString("he-IL")}</span> ·{" "}
+              <span className="tabular">{isV3 ? formatNumber(selectedBatch.payment_count) : selectedBatch.payment_count}</span> תשלומים
             </p>
+            {/* v3: פעולה ראשית אחת לכל שלב; שאר הפעולות משניות */}
             <div className="flex flex-wrap gap-2">
               {selectedBatch.status === "draft" && canManage && (
-                <button onClick={() => runAction("submit_masav_for_review", { p_batch_id: selectedBatchId })} disabled={busy} className="btn-primary text-xs">
+                <button onClick={() => runAction("submit_masav_for_review", { p_batch_id: selectedBatchId })} disabled={busy} className={`btn-primary${xs}`}>
                   הגשה לבדיקה
                 </button>
               )}
               {selectedBatch.status === "pending_review" && canManage && (
-                <button onClick={() => runAction("run_masav_validation", { p_batch_id: selectedBatchId })} disabled={busy} className="btn-secondary text-xs">
+                <button
+                  onClick={() => runAction("run_masav_validation", { p_batch_id: selectedBatchId })}
+                  disabled={busy}
+                  className={isV3 && !selectedBatch.reviewed_at ? "btn-primary" : `btn-secondary${xs}`}
+                >
                   הרצת בדיקה
                 </button>
               )}
               {selectedBatch.status === "pending_review" && canManage && selectedBatch.reviewed_at && (
-                <button onClick={() => runAction("submit_masav_for_approval", { p_batch_id: selectedBatchId })} disabled={busy} className="btn-primary text-xs">
+                <button onClick={() => runAction("submit_masav_for_approval", { p_batch_id: selectedBatchId })} disabled={busy} className={`btn-primary${xs}`}>
                   הגשה לאישור
                 </button>
               )}
               {selectedBatch.status === "pending_approval" && canApprove && (
-                <button onClick={() => runAction("approve_masav_batch", { p_batch_id: selectedBatchId })} disabled={busy} className="btn-primary text-xs">
+                <button onClick={() => runAction("approve_masav_batch", { p_batch_id: selectedBatchId })} disabled={busy} className={`btn-primary${xs}`}>
                   אישור
                 </button>
               )}
               {selectedBatch.status === "approved" && canApprove && (
-                <button onClick={runExport} disabled={exporting} className="btn-primary flex items-center gap-2 text-xs">
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                <button onClick={runExport} disabled={exporting} className={`btn-primary flex items-center gap-2${xs}`}>
+                  <Download className={isV3 ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden="true" />
                   {exporting ? "מייצאת…" : "ייצוא קובץ (טיוטה)"}
                 </button>
               )}
               {selectedBatch.status === "file_generated" && canApprove && (
-                <button onClick={() => setConfirmTransmit(true)} disabled={busy} className="btn-primary text-xs">
+                <button onClick={() => setConfirmTransmit(true)} disabled={busy} className={`btn-primary${xs}`}>
                   סימון כמשודר
                 </button>
               )}
               {selectedBatch.status === "transmitted" && canApprove && (
-                <button onClick={() => runAction("mark_masav_bank_completed", { p_batch_id: selectedBatchId })} disabled={busy} className="btn-secondary text-xs">
+                <button onClick={() => setConfirmCompleted(true)} disabled={busy} className={isV3 ? "btn-primary" : "btn-secondary text-xs"}>
                   סימון ידני כבוצע בבנק
                 </button>
               )}
               {canManage && ["draft", "pending_review", "pending_approval"].includes(selectedBatch.status) && (
                 <>
-                  <button onClick={() => setReasonAction("correction")} className="text-xs text-warn-ink underline">
+                  <button onClick={() => setReasonAction("correction")} className={isV3 ? "btn-secondary" : "text-xs text-warn-ink underline"}>
                     דרישת תיקון
                   </button>
-                  <button onClick={() => setReasonAction("cancel")} className="text-xs text-danger underline">
-                    ביטול
+                  <button onClick={() => setReasonAction("cancel")} className={isV3 ? "btn-secondary !text-danger-ink" : "text-xs text-danger underline"}>
+                    {isV3 ? "ביטול האצווה" : "ביטול"}
                   </button>
                 </>
               )}
@@ -452,14 +546,21 @@ export function MasavScreen() {
 
           {reasonAction && (
             <div className="rounded-control border border-line bg-surface-muted p-3">
-              <label className="field-label">{reasonAction === "cancel" ? "סיבת ביטול" : "סיבת דרישת תיקון"}</label>
+              <label className="field-label" htmlFor="masav-reason">
+                {reasonAction === "cancel" ? "סיבת ביטול" : "סיבת דרישת תיקון"}
+              </label>
               <div className="flex gap-2">
-                <input value={reasonText} onChange={(e) => setReasonText(e.target.value)} className="input-field" />
-                <button onClick={submitReasonAction} disabled={!reasonText.trim() || busy} className="btn-primary text-xs shrink-0">
+                <input id="masav-reason" value={reasonText} onChange={(e) => setReasonText(e.target.value)} className="input-field" />
+                <button
+                  onClick={() => (reasonAction === "cancel" ? setConfirmCancel(true) : submitReasonAction())}
+                  disabled={!reasonText.trim() || busy}
+                  className={`btn-primary shrink-0${xs}`}
+                >
                   אישור
                 </button>
-                <button onClick={() => setReasonAction(null)} className="text-xs text-ink-subtle underline shrink-0">
-                  ביטול
+                <button onClick={() => setReasonAction(null)} className={isV3 ? "btn-secondary shrink-0" : "text-xs text-ink-subtle underline shrink-0"}>
+                  {/* v3: "סגירה" - כדי שלא יתבלבל עם "ביטול האצווה" */}
+                  {isV3 ? "סגירה" : "ביטול"}
                 </button>
               </div>
             </div>
@@ -476,6 +577,32 @@ export function MasavScreen() {
           runAction("mark_masav_transmitted", { p_batch_id: selectedBatchId });
         }}
         onCancel={() => setConfirmTransmit(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmCancel}
+        danger
+        title="ביטול אצוות מס״ב"
+        description="האצווה תבוטל ולא ניתן יהיה להחזיר אותה. כדי לשלם את אותן הוראות חלוקה תצטרכי ליצור אצווה חדשה."
+        confirmLabel="ביטול האצווה"
+        cancelLabel="חזרה"
+        onConfirm={() => {
+          setConfirmCancel(false);
+          void submitReasonAction();
+        }}
+        onCancel={() => setConfirmCancel(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmCompleted}
+        title="סימון כבוצע בבנק"
+        description='סמני רק אחרי שראית בבנק שהכסף אכן יצא. "שודר" פירושו שהקובץ נשלח; "בוצע בבנק" פירושו שהתשלום בוצע בפועל - ואין חזרה מהסימון.'
+        confirmLabel="סימון כבוצע"
+        onConfirm={() => {
+          setConfirmCompleted(false);
+          runAction("mark_masav_bank_completed", { p_batch_id: selectedBatchId });
+        }}
+        onCancel={() => setConfirmCompleted(false)}
       />
     </div>
   );

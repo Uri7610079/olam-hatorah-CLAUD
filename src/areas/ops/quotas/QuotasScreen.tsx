@@ -11,6 +11,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
+import { MetricCard } from "@/components/MetricCard";
+import { formatMonth, formatNumber } from "@/lib/format";
+import { useIsV3 } from "@/lib/uiTheme";
 
 interface OrgOption {
   id: string;
@@ -118,6 +121,7 @@ export function QuotasScreen() {
   const [saving, setSaving] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isV3 = useIsV3();
 
   const branchesQuery = useQuery({ queryKey: ["quota-branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
   const quotasQuery = useQuery({
@@ -225,7 +229,7 @@ export function QuotasScreen() {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <span>{r.approvedQuota ?? "לא הוגדרה"}</span>
+            {isV3 && r.approvedQuota == null ? <span className="text-ink-subtle">לא הוגדרה</span> : <span>{r.approvedQuota ?? "לא הוגדרה"}</span>}
             {canManage && (
               <button onClick={() => startEdit(r)} className="link-action text-xs">
                 עריכה
@@ -234,12 +238,18 @@ export function QuotasScreen() {
           </div>
         ),
     },
-    { key: "registered", header: "רשומים", className: "tabular", render: (r) => r.registeredCount },
-    { key: "eligible", header: "זכאים", className: "tabular", render: (r) => r.eligibleCount },
+    isV3
+      ? { key: "registered", header: "רשומים", kind: "number", sortValue: (r) => r.registeredCount, render: (r) => formatNumber(r.registeredCount) }
+      : { key: "registered", header: "רשומים", className: "tabular", render: (r) => r.registeredCount },
+    isV3
+      ? { key: "eligible", header: "זכאים", kind: "number", sortValue: (r) => r.eligibleCount, render: (r) => formatNumber(r.eligibleCount) }
+      : { key: "eligible", header: "זכאים", className: "tabular", render: (r) => r.eligibleCount },
     {
       key: "utilization",
       header: "ניצול",
+      ...(isV3 ? { sortValue: (r: QuotaRow) => utilizationPct(r), filterValue: (r: QuotaRow) => utilizationLabel(r) } : {}),
       render: (r) => {
+        if (isV3) return <UtilizationBar row={r} />;
         // מכסה שלא הוגדרה בכלל (null) שונה ממכסה שאושרה כ-0 (מסלול לגיטימי - סניף שעדיין
         // לא אושר לקלוט אף תלמיד) - בדיקת truthy הייתה מתייחסת לשתיהן אותו דבר.
         if (r.approvedQuota == null) return <span className="text-ink-subtle">—</span>;
@@ -251,6 +261,17 @@ export function QuotasScreen() {
     },
   ];
 
+  // v3: סיכום מהשורות שכבר נטענו. ניצול כולל - רק בסניפים שהוגדרה להם מכסה, כדי
+  // שזכאים בסניף בלי מכסה לא ייראו כחריגה מהמכסה של סניף אחר.
+  const rows = quotasQuery.data ?? [];
+  const withQuota = rows.filter((r) => r.approvedQuota != null);
+  const totalQuota = withQuota.reduce((n, r) => n + (r.approvedQuota ?? 0), 0);
+  const eligibleInQuota = withQuota.reduce((n, r) => n + r.eligibleCount, 0);
+  const totalRegistered = rows.reduce((n, r) => n + r.registeredCount, 0);
+  const totalEligible = rows.reduce((n, r) => n + r.eligibleCount, 0);
+  const overBranches = withQuota.filter((r) => r.eligibleCount > (r.approvedQuota ?? 0)).length;
+  const totalPct = totalQuota > 0 ? Math.round((eligibleInQuota / totalQuota) * 100) : null;
+
   return (
     <div>
       <PageHeader
@@ -260,8 +281,8 @@ export function QuotasScreen() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-lg mb-4">
         <div>
-          <label className="field-label">עמותה</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+          <label htmlFor="quota-org" className="field-label">עמותה</label>
+          <select id="quota-org" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
             <option value="">— בחרי —</option>
             {(orgsQuery.data ?? []).map((o) => (
               <option key={o.id} value={o.id}>
@@ -271,8 +292,8 @@ export function QuotasScreen() {
           </select>
         </div>
         <div>
-          <label className="field-label">חודש</label>
-          <input type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
+          <label htmlFor="quota-month" className="field-label">חודש</label>
+          <input id="quota-month" type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
         </div>
       </div>
 
@@ -283,6 +304,32 @@ export function QuotasScreen() {
       )}
 
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
+      {/* שגיאת טעינה מוצגת - עד היום הטבלה פשוט נשארה ריקה */}
+      {orgId && quotasQuery.isError && <div className="mb-4"><ErrorState message="שגיאה בטעינת נתוני המכסות." /></div>}
+
+      {isV3 && orgId && rows.length > 0 && (
+        <div className="mb-4">
+          <p className="mb-2 text-sm text-ink-muted">{formatMonth(month)} · {formatNumber(rows.length)} סניפים פעילים</p>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MetricCard
+              label="מכסה מאושרת"
+              value={withQuota.length ? formatNumber(totalQuota) : "—"}
+              hint={withQuota.length < rows.length ? `${formatNumber(rows.length - withQuota.length)} סניפים בלי מכסה` : "לכל הסניפים הוגדרה מכסה"}
+              tone="primary"
+              muted={withQuota.length === 0}
+            />
+            <MetricCard label="רשומים" value={formatNumber(totalRegistered)} hint="שיוך פעיל כרגע" muted={totalRegistered === 0} />
+            <MetricCard label="זכאים בחודש" value={formatNumber(totalEligible)} hint="זכאות פעילה לחודש שנבחר" muted={totalEligible === 0} />
+            <MetricCard
+              label="ניצול כולל"
+              value={totalPct === null ? "—" : `${totalPct}%`}
+              hint={overBranches ? `${formatNumber(overBranches)} סניפים בחריגה` : "בסניפים שהוגדרה להם מכסה"}
+              tone={overBranches ? "high" : "ok"}
+              muted={totalPct === null}
+            />
+          </div>
+        </div>
+      )}
 
       {orgId && (
         <DataTable
@@ -294,6 +341,47 @@ export function QuotasScreen() {
           emptyIcon={Gauge}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ערכה v3: ניצול כפס - זכאים מתוך המכסה. אותו חישוב ואותם ספים של התג הקודם
+// (חריגה = יותר זכאים מהמכסה, 90% ומעלה = קרוב לגבול); הפס רק מצייר אותם.
+
+function utilizationPct(r: QuotaRow): number | null {
+  if (r.approvedQuota == null) return null;
+  if (r.approvedQuota === 0) return r.eligibleCount > 0 ? Infinity : 0;
+  return Math.round((r.eligibleCount / r.approvedQuota) * 100);
+}
+
+function utilizationLabel(r: QuotaRow): string {
+  const pct = utilizationPct(r);
+  if (pct === null) return "";
+  if (pct === Infinity) return "חריגה (מכסה 0)";
+  return `${pct}%${r.eligibleCount > (r.approvedQuota ?? 0) ? " (חריגה)" : ""}`;
+}
+
+function UtilizationBar({ row }: { row: QuotaRow }) {
+  const pct = utilizationPct(row);
+  if (pct === null) return <span className="text-ink-subtle">לא הוגדרה מכסה</span>;
+  const over = row.eligibleCount > (row.approvedQuota ?? 0);
+  const fill = over ? "bg-high" : pct >= 90 ? "bg-warn" : "bg-ok";
+  const text = over ? "text-high-ink" : pct >= 90 ? "text-warn-ink" : "text-ink";
+  const width = pct === Infinity ? 100 : Math.min(pct, 100);
+  return (
+    <div className="flex min-w-[11rem] items-center gap-2">
+      <div
+        className="h-2 flex-1 overflow-hidden rounded-full bg-surface-muted"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={row.approvedQuota ?? 0}
+        aria-valuenow={row.eligibleCount}
+        aria-label={`ניצול מכסה: ${formatNumber(row.eligibleCount)} זכאים מתוך ${formatNumber(row.approvedQuota)}`}
+      >
+        <div className={`h-full rounded-full ${fill}`} style={{ width: `${width}%` }} />
+      </div>
+      <span className={`tabular whitespace-nowrap text-xs font-semibold ${text}`}>{utilizationLabel(row)}</span>
     </div>
   );
 }

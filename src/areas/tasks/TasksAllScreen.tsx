@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { CheckSquare, ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Plus } from "lucide-react";
 import { useHasPermission } from "@/lib/permissions";
+import { useIsV3 } from "@/lib/uiTheme";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
@@ -16,19 +17,22 @@ import { TaskDrawer } from "./TaskDrawer";
 import { PriorityBadge } from "./PriorityBadge";
 import { localDateIso, todayIso } from "./dateUtils";
 import { getHolidayInfo, hebrewDateLabel } from "./hebrewCalendar";
+import { DueDateLabel } from "./DueDateLabel";
 
 // מחליף את שלושת המסכים הנפרדים שהיו (כל המשימות / לוח / לוח שנה) - שלושתם הציגו את
 // אותה קבוצת משימות בדיוק, רק בתצוגה שונה - וגם את "משימות צוותים" (שהיה בעצם תת-קבוצה
 // מסוננת של אותה רשימה). כאן יש שאילתת נתונים אחת (fetchAllTasks) ומתג תצוגה, וסינון
 // צוות זמין בכל התצוגות. אף לוגיקה קיימת לא השתנתה - כל תצוגה היא בדיוק אותו קוד שהיה.
 
+// v3: הסגול הקשיח של "ממתינה" והענבר של החגים מוחלפים באסימונים (הזהב של
+// ההדגשה). בערכות הקודמות הגוונים נשארים בדיוק כמו שהיו.
 const BOARD_STATUSES: TaskStatus[] = ["open", "in_progress", "waiting", "blocked", "completed", "cancelled"];
 
 const COLUMN_CLASSES: Record<TaskStatus, string> = {
   draft: "border-line bg-surface-muted",
   open: "border-info/30 bg-info-soft/60",
   in_progress: "border-warn/30 bg-warn-soft/60",
-  waiting: "border-violet-200 bg-violet-50/60",
+  waiting: "border-violet-200 bg-violet-50/60 v3:border-accent/40 v3:bg-accent-soft/60",
   blocked: "border-danger/30 bg-danger-soft/60",
   completed: "border-ok/30 bg-ok-soft/60",
   cancelled: "border-line bg-surface-muted",
@@ -38,7 +42,7 @@ const COLUMN_HEADER_CLASSES: Record<TaskStatus, string> = {
   draft: "text-ink-muted",
   open: "text-info-ink",
   in_progress: "text-warn-ink",
-  waiting: "text-violet-700",
+  waiting: "text-violet-700 v3:text-accent-ink",
   blocked: "text-danger-ink",
   completed: "text-ok-ink",
   cancelled: "text-ink-muted",
@@ -71,6 +75,7 @@ type ViewMode = "list" | "board" | "calendar";
 
 export function TasksAllScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canCreate } = useHasPermission("tasks", "create");
   const query = useQuery({ queryKey: ["all-tasks"], queryFn: fetchAllTasks });
   const usersQuery = useQuery({ queryKey: ["assignable-users"], queryFn: fetchAssignableUsers });
@@ -140,7 +145,16 @@ export function TasksAllScreen() {
     { key: "status", header: "סטטוס", render: (t) => <StatusBadge severity={STATUS_SEVERITY[t.status]} label={STATUS_LABEL[t.status]} /> },
     { key: "priority", header: "עדיפות", render: (t) => <PriorityBadge priority={t.priority} /> },
     { key: "category", header: "קטגוריה", render: (t) => (t.category_id ? categoriesById.get(t.category_id) ?? "—" : "—") },
-    { key: "due_date", header: "יעד", className: "tabular", render: (t) => t.due_date ?? "—" },
+    isV3
+      ? {
+          key: "due_date",
+          header: "יעד",
+          render: (t) => (t.due_date ? <DueDateLabel date={t.due_date} done={t.status === "completed" || t.status === "cancelled"} /> : "—"),
+          // סינון ומיון לפי התאריך עצמו, לא לפי הטקסט המוצג
+          filterValue: (t) => t.due_date ?? "",
+          sortValue: (t) => t.due_date,
+        }
+      : { key: "due_date", header: "יעד", className: "tabular", render: (t) => t.due_date ?? "—" },
     {
       key: "owners",
       header: "אחראים",
@@ -226,7 +240,7 @@ export function TasksAllScreen() {
     <div>
       <PageHeader
         title="כל המשימות"
-        description="כל המשימות שמורשית לראות - ברשימה, בלוח, או בלוח שנה."
+        description={isV3 ? "כל המשימות שיש לך הרשאה לראות - ברשימה, בלוח, או בלוח שנה." : "כל המשימות שמורשית לראות - ברשימה, בלוח, או בלוח שנה."}
         primaryAction={
           canCreate && (
             <button onClick={() => openTask(null)} className="btn-primary">
@@ -331,8 +345,14 @@ export function TasksAllScreen() {
                         <p className="truncate font-medium text-ink">{t.title}</p>
                         <p className="mt-1.5 flex items-center justify-between text-xs text-ink-subtle">
                           <PriorityBadge priority={t.priority} />
-                          {t.due_date && <span className="tabular">{t.due_date}</span>}
+                          {t.due_date && <DueDateLabel date={t.due_date} done={t.status === "completed" || t.status === "cancelled"} />}
                         </p>
+                        {/* v3: האחראים בכרטיס - מתוך רשימת המשתמשים שכבר נטענה למסך */}
+                        {isV3 && t.owners.length > 0 && (
+                          <p className="mt-1 truncate text-xs text-ink-muted">
+                            {t.owners.map((id) => usersById.get(id) ?? "—").join(", ")}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -395,7 +415,7 @@ export function TasksAllScreen() {
                       !inMonth
                         ? "border-line bg-surface-muted text-ink-subtle"
                         : holiday
-                          ? "border-amber-300 bg-amber-50/70"
+                          ? "border-amber-300 bg-amber-50/70 v3:border-accent/50 v3:bg-accent-soft/70"
                           : isWeekend
                             ? "border-tasks-light bg-tasks-light/40"
                             : "border-line bg-surface"
@@ -418,7 +438,7 @@ export function TasksAllScreen() {
                       {hebrewDateLabel(day)}
                     </div>
                     {holiday && (
-                      <div className="mb-1 truncate rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-800" title={`חג: ${holiday.name}`}>
+                      <div className="mb-1 truncate rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-800 v3:bg-accent-soft v3:text-accent-ink" title={`חג: ${holiday.name}`}>
                         {holiday.emoji ? `${holiday.emoji} ` : ""}
                         {holiday.name}
                       </div>

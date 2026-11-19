@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
@@ -7,6 +8,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingState } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
 import { EmptyState } from "@/components/EmptyState";
+import { formatMoney } from "@/lib/format";
+import { useIsV3 } from "@/lib/uiTheme";
 
 // שיוך מרוכז של תלמידים שנדחו מדוח תלמוד בגלל חוסר שיוך.
 //
@@ -69,6 +72,10 @@ export function UnassignedBulkAssignScreen() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isV3 = useIsV3();
+  // v3: סכום אחיד "1,234.50 ₪"; בשאר הערכות - כמו קודם
+  const shekel = (n: number, cls = "") =>
+    isV3 ? <span className={`tabular ${cls}`}>{formatMoney(n)}</span> : <><span className={`ltr-num ${cls}`}>{money(n)}</span> ₪</>;
 
   // קיבוץ לפי סניף. מפתח הקבוצה הוא עמותה+קוד סניף ולא קוד הסניף לבדו:
   // קוד "01" קיים בכל עמותה בנפרד, ומיזוג ביניהם היה משייך תלמיד
@@ -130,6 +137,17 @@ export function UnassignedBulkAssignScreen() {
       return next;
     });
 
+  // v3: בחירת כל התלמידים בסניף או ניקוי שלהם - מצב בחירה מקומי בלבד (אותו excluded)
+  const setBranchSelected = (b: (typeof branches)[number], selected: boolean) =>
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      for (const s of b.students) {
+        if (selected) next.delete(s.student_id);
+        else next.add(s.student_id);
+      }
+      return next;
+    });
+
   const assignAll = async () => {
     setBusy(true);
     setError(null);
@@ -176,7 +194,19 @@ export function UnassignedBulkAssignScreen() {
       {result && (
         <div className="mb-4 flex items-start gap-2 rounded-control border border-ok/30 bg-ok-soft p-3 text-sm text-ok-ink">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{result}</span>
+          <span>
+            {result}
+            {/* v3: קישור ישיר למקום שבו מריצים את ההשלמה - קישור בלבד, ההשלמה לא מופעלת מכאן */}
+            {isV3 && (
+              <>
+                {" "}
+                <Link to="/ops/talmud/eligibility" className="link-action font-medium">
+                  למסך זכאות
+                </Link>{" "}
+                (בלשונית "היסטוריית יבוא זכאות", ליד האצווה).
+              </>
+            )}
+          </span>
         </div>
       )}
       {error && (
@@ -206,8 +236,18 @@ export function UnassignedBulkAssignScreen() {
                       <Users className="h-4 w-4 shrink-0 text-brand-500" aria-hidden="true" />
                       {b.label}
                       <span className="text-sm font-normal text-ink-muted">
-                        · {count} מתוך {b.students.length} · <span className="ltr-num">{money(sum)}</span> ₪
+                        · {count} מתוך {b.students.length} · {shekel(sum)}
                       </span>
+                      {isV3 && b.branchId !== null && (
+                        <span className="flex items-center gap-2 text-xs font-normal">
+                          <button type="button" className="link-action" disabled={count === b.students.length} onClick={() => setBranchSelected(b, true)}>
+                            בחירת הכול
+                          </button>
+                          <button type="button" className="link-action" disabled={count === 0} onClick={() => setBranchSelected(b, false)}>
+                            ניקוי
+                          </button>
+                        </span>
+                      )}
                     </div>
 
                     {/* סניף שאינו קיים במערכת אינו ניתן לשיוך בכלל - אין לו קבוצות.
@@ -250,9 +290,12 @@ export function UnassignedBulkAssignScreen() {
                           />
                           <span className="truncate">{s.full_name}</span>
                           <span className="ltr-num text-xs text-ink-subtle">{s.external_id}</span>
-                          {Number(s.amount) > 0 && (
-                            <span className="ltr-num text-xs text-ink-muted">{money(Number(s.amount))} ₪</span>
-                          )}
+                          {Number(s.amount) > 0 &&
+                            (isV3 ? (
+                              <span className="tabular text-xs text-ink-muted">{formatMoney(Number(s.amount))}</span>
+                            ) : (
+                              <span className="ltr-num text-xs text-ink-muted">{money(Number(s.amount))} ₪</span>
+                            ))}
                         </label>
                       </li>
                     ))}
@@ -267,7 +310,7 @@ export function UnassignedBulkAssignScreen() {
               {totalSelected > 0 ? (
                 <>
                   מוכנים לשיוך: <span className="font-medium">{totalSelected}</span> תלמידים ב-{readyBranches.length}{" "}
-                  סניפים · <span className="ltr-num font-medium">{money(totalAmount)}</span> ₪ שייכנסו אחרי ההשלמה
+                  סניפים · {shekel(totalAmount, "font-medium")} שייכנסו אחרי ההשלמה
                 </>
               ) : (
                 <span className="text-ink-muted">יש לבחור קבוצה לכל סניף כדי לשייך.</span>

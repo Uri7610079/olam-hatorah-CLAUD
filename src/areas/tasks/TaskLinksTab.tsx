@@ -66,8 +66,8 @@ export function TaskLinksTab({ taskId, canEdit, userId }: TaskLinksTabProps) {
 
       {canEdit && (
         <div className="space-y-2 border-t border-line pt-3">
-          <label className="field-label">סוג ישות</label>
-          <select value={entityType} onChange={(e) => setEntityType(e.target.value)} className="input-field">
+          <label className="field-label" htmlFor="task-link-field-1">סוג ישות</label>
+          <select id="task-link-field-1" value={entityType} onChange={(e) => setEntityType(e.target.value)} className="input-field">
             {Object.entries(ENTITY_TYPE_LABEL).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}

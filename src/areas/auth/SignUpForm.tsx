@@ -1,7 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
+import { useIsV3 } from "@/lib/uiTheme";
 import { ErrorState } from "@/components/ErrorState";
 import { AuthLayout } from "./AuthLayout";
+import { PasswordInput } from "./PasswordInput";
+import { hebrewAuthError } from "./authErrors";
 
 interface SignUpFormProps {
   onBackToLogin: () => void;
@@ -10,6 +13,7 @@ interface SignUpFormProps {
 // ההרשמה יוצרת auth.users + profiles(status=pending) + access_requests בטריגר בצד השרת
 // (migration 002) - אין כאן שום נתיב שמעניק גישה מיידית לאפליקציה.
 export function SignUpForm({ onBackToLogin }: SignUpFormProps) {
+  const isV3 = useIsV3();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +33,7 @@ export function SignUpForm({ onBackToLogin }: SignUpFormProps) {
     });
     setSubmitting(false);
     if (error) {
-      setError(error.message);
+      setError(hebrewAuthError(error.message, "שליחת הבקשה נכשלה"));
       return;
     }
     setDone(true);
@@ -39,8 +43,9 @@ export function SignUpForm({ onBackToLogin }: SignUpFormProps) {
     return (
       <AuthLayout title="הבקשה נשלחה">
         <p className="text-sm text-ink-muted">
-          הבקשה שלך נקלטה. אם נדרש אימות מייל תקבלי קישור לתיבת הדואר — לאחר מכן החשבון ימתין
-          לאישור מנהל מערכת, ורק אז יהיה אפשר להיכנס.
+          {isV3
+            ? "הבקשה נקלטה. אם נדרש אימות מייל, יישלח קישור לתיבת הדואר — לאחר מכן החשבון ימתין לאישור מנהל מערכת, ורק אז יהיה אפשר להיכנס."
+            : "הבקשה שלך נקלטה. אם נדרש אימות מייל תקבלי קישור לתיבת הדואר — לאחר מכן החשבון ימתין לאישור מנהל מערכת, ורק אז יהיה אפשר להיכנס."}
         </p>
         <button onClick={onBackToLogin} className="link-action mt-4 text-sm">
           חזרה למסך כניסה
@@ -77,9 +82,8 @@ export function SignUpForm({ onBackToLogin }: SignUpFormProps) {
           <label htmlFor="signup-password" className="field-label">
             סיסמה
           </label>
-          <input
+          <PasswordInput
             id="signup-password"
-            type="password"
             required
             minLength={8}
             autoComplete="new-password"
@@ -102,7 +106,7 @@ export function SignUpForm({ onBackToLogin }: SignUpFormProps) {
         </div>
         {error && <ErrorState message={error} />}
         <button type="submit" disabled={submitting} className="btn-primary w-full">
-          {submitting ? "שולחת…" : "שליחת בקשה"}
+          {submitting ? (isV3 ? "בשליחה…" : "שולחת…") : "שליחת בקשה"}
         </button>
       </form>
       <button onClick={onBackToLogin} className="link-action mt-4 text-xs">

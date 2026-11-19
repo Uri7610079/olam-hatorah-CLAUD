@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/StatusBadge";
 
 interface Setting {
@@ -29,6 +32,8 @@ const KIND_LABEL: Record<string, string> = {
 // לבד יהיה גלוי - ולא קופסה שחורה שאף אחד לא יודע מה היא עשתה.
 export function AutomationSettingsSection() {
   const qc = useQueryClient();
+  const isV3 = useIsV3();
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const settings = useQuery({
     queryKey: ["automation-settings"],
     queryFn: async () => {
@@ -52,14 +57,15 @@ export function AutomationSettingsSection() {
 
   const toggle = async (s: Setting) => {
     const { error } = await supabase.rpc("set_automation_setting", { p_key: s.key, p_enabled: !s.is_enabled });
-    if (error) window.alert(error.message);
+    // הודעה בתוך המסך במקום חלון קופץ של הדפדפן
+    setToggleError(error ? `השינוי לא נשמר (${error.message}).` : null);
     qc.invalidateQueries({ queryKey: ["automation-settings"] });
   };
 
   return (
     <section className="card mt-6 max-w-4xl space-y-4 p-5">
       <div>
-        <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-ink v3:text-primary">
           <Bot className="h-4 w-4" aria-hidden="true" />
           פעולות אוטומטיות
         </h2>
@@ -69,7 +75,8 @@ export function AutomationSettingsSection() {
         </p>
       </div>
 
-      {settings.error && <p className="text-sm text-danger-ink">ההגדרות עוד לא זמינות - צריך להריץ את מיגרציה 124.</p>}
+      {settings.error && <p className="text-sm text-danger-ink">לא ניתן לטעון את ההגדרות כרגע. אם זה חוזר - יש לפנות לתמיכה הטכנית.</p>}
+      {toggleError && <p role="alert" className="text-sm text-danger-ink">{toggleError}</p>}
       <div className="divide-y divide-line">
         {(settings.data ?? []).map((s) => (
           <label key={s.key} className="flex items-center justify-between gap-3 py-2.5">
@@ -87,11 +94,13 @@ export function AutomationSettingsSection() {
               const org = Array.isArray(r.organization) ? r.organization[0] : r.organization;
               return (
                 <li key={r.id} className="flex flex-wrap items-start gap-2">
-                  <span className="ltr-num text-ink-subtle">{new Date(r.created_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })}</span>
+                  <span className="ltr-num text-ink-subtle">
+                    {isV3 ? formatDateTime(r.created_at) : new Date(r.created_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })}
+                  </span>
                   <StatusBadge severity={r.status === "done" ? "ok" : r.status === "failed" ? "critical" : "neutral"} label={r.status === "done" ? "בוצע" : r.status === "failed" ? "נכשל" : "דולג"} />
                   <span className="font-medium">{KIND_LABEL[r.kind] ?? r.kind}</span>
                   {org && <span className="text-ink-muted">· {org.legal_name}</span>}
-                  <span className="text-ink-muted">· {r.detail}</span>
+                  {(!isV3 || r.detail) && <span className="text-ink-muted">· {r.detail}</span>}
                 </li>
               );
             })}

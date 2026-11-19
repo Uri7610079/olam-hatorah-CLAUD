@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare } from "lucide-react";
 import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDateTime } from "@/lib/format";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingState } from "@/components/LoadingState";
 import { EmptyState } from "@/components/EmptyState";
@@ -100,6 +102,7 @@ function ConvertForm({ message, onDone }: ConvertFormProps) {
 
 export function TasksWhatsAppScreen() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canConvert, isLoading: canConvertLoading } = useHasPermission("tasks", "convert_whatsapp");
   const { hasPermission: canManageWhatsApp, isLoading: canManageLoading } = useHasPermission("tasks", "manage_whatsapp");
   const canView = canConvert || canManageWhatsApp;
@@ -146,7 +149,7 @@ export function TasksWhatsAppScreen() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs text-ink-subtle">
-                    {groupLabel(m.group_id)} · {m.sender_name ?? "לא ידוע"} · {new Date(m.received_at).toLocaleString("he-IL")}
+                    {groupLabel(m.group_id)} · {m.sender_name ?? "לא ידוע"} · {isV3 ? formatDateTime(m.received_at) : new Date(m.received_at).toLocaleString("he-IL")}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{m.body ?? "(ללא טקסט)"}</p>
                   {m.attachment_url && isSafeHttpUrl(m.attachment_url) && (

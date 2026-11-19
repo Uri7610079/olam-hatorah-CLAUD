@@ -8,6 +8,10 @@ import { exportRowsToExcel } from "@/lib/reportExport";
 import { DataTable } from "@/components/DataTable";
 import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
+import { SegmentedChips } from "@/components/SegmentedChips";
+import { ActionsMenu } from "@/components/ActionsMenu";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMonth, formatPhone } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -88,6 +92,9 @@ function downloadCsv(rows: Record<string, string>[], fileName: string) {
 // מכרטיס התלמיד (מיגרציה 116). רק הזכאים - כי רק הם צריכים התראה לפני ביקורת.
 export function EligibilityCallListTab() {
   const [searchParams] = useSearchParams();
+  const isV3 = useIsV3();
+  // v3: חודש במילים ("נובמבר 2026")
+  const fmtMonth = (iso: string) => (isV3 ? formatMonth(iso) : monthLabel(iso));
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState<string>(searchParams.get("month") ?? "");
   const [branch, setBranch] = useState<string>("");
@@ -154,6 +161,21 @@ export function EligibilityCallListTab() {
   const orgName = orgsQuery.data?.find((o) => o.id === orgId)?.legal_name ?? "";
   const fileBase = `call-list-${month.slice(0, 7)}${branch ? `-branch-${branch}` : ""}`;
   const phoneSystemRows = forPhoneSystem.map((r) => ({ "שם פרטי": r.first, "שם משפחה": r.last, "טלפון": r.phone }));
+  const exportFull = () =>
+    exportRowsToExcel(
+      inBranch.map((r) => ({
+        "שם פרטי": r.first_name ?? "",
+        "שם משפחה": r.last_name ?? "",
+        "טלפון": r.phone ?? "",
+        "ת.ז/דרכון": r.external_id,
+        "סניף": r.branch_code ?? "",
+        "שם הסניף": r.branch_name ?? "",
+        "קבוצה": r.group_name ?? "",
+        "מצב": CATEGORY_LABEL[r.category],
+      })),
+      "זכאים",
+      `eligible-full-${month.slice(0, 7)}${branch ? `-branch-${branch}` : ""}.xlsx`,
+    );
 
   return (
     <div className="space-y-4">
@@ -180,7 +202,7 @@ export function EligibilityCallListTab() {
             {(listsQuery.data ?? []).length === 0 && <option value="">— אין דוח —</option>}
             {(listsQuery.data ?? []).map((l) => (
               <option key={l.id} value={l.month}>
-                {monthLabel(l.month)}
+                {fmtMonth(l.month)}
               </option>
             ))}
           </select>
@@ -211,7 +233,7 @@ export function EligibilityCallListTab() {
           <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="text-sm">
               <p className="font-semibold text-ink">
-                {orgName} · {monthLabel(month)}
+                {orgName} · {fmtMonth(month)}
                 {branch ? ` · סניף ${branch}` : ""}
               </p>
               <p className="mt-1 text-ink-muted">
@@ -230,41 +252,45 @@ export function EligibilityCallListTab() {
                 <PhoneCall className="h-4 w-4" aria-hidden="true" />
                 ייצוא למערכת הטלפונית (אקסל)
               </button>
-              <button className="btn-secondary text-sm" disabled={forPhoneSystem.length === 0} onClick={() => downloadCsv(phoneSystemRows, `${fileBase}.csv`)}>
-                CSV
-              </button>
-              <button
-                className="btn-secondary flex items-center gap-2 text-sm"
-                disabled={inBranch.length === 0}
-                onClick={() =>
-                  exportRowsToExcel(
-                    inBranch.map((r) => ({
-                      "שם פרטי": r.first_name ?? "",
-                      "שם משפחה": r.last_name ?? "",
-                      "טלפון": r.phone ?? "",
-                      "ת.ז/דרכון": r.external_id,
-                      "סניף": r.branch_code ?? "",
-                      "שם הסניף": r.branch_name ?? "",
-                      "קבוצה": r.group_name ?? "",
-                      "מצב": CATEGORY_LABEL[r.category],
-                    })),
-                    "זכאים",
-                    `eligible-full-${month.slice(0, 7)}${branch ? `-branch-${branch}` : ""}.xlsx`,
-                  )
-                }
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                ייצוא מלא
-              </button>
+              {/* v3: CSV וייצוא מלא - פעולות משניות, בתפריט; הייצוא למערכת הטלפונית נשאר הפעולה הראשית */}
+              {isV3 ? (
+                <ActionsMenu
+                  label="ייצוא נוסף"
+                  actions={[
+                    { key: "csv", label: "CSV למערכת הטלפונית", hint: "אותם מספרים, בקובץ CSV", disabled: forPhoneSystem.length === 0, onSelect: () => downloadCsv(phoneSystemRows, `${fileBase}.csv`) },
+                    { key: "full", label: "ייצוא מלא", hint: "כל הזכאים, כולל בלי טלפון ומי שלא נמצא", icon: Download, disabled: inBranch.length === 0, onSelect: exportFull },
+                  ]}
+                />
+              ) : (
+                <>
+                  <button className="btn-secondary text-sm" disabled={forPhoneSystem.length === 0} onClick={() => downloadCsv(phoneSystemRows, `${fileBase}.csv`)}>
+                    CSV
+                  </button>
+                  <button className="btn-secondary flex items-center gap-2 text-sm" disabled={inBranch.length === 0} onClick={exportFull}>
+                    <Download className="h-4 w-4" aria-hidden="true" />
+                    ייצוא מלא
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-          <Tabs
-            tabs={(Object.keys(CATEGORY_LABEL) as Category[]).map((k) => ({ key: k, label: CATEGORY_LABEL[k], badge: counts[k] }))}
-            activeTab={category}
-            onChange={setCategory}
-            ariaLabel="סינון רשימת החיוג"
-          />
+          {/* v3: הסינון לפי מצב כשורת צ'יפים - לא רמה שלישית של לשוניות */}
+          {isV3 ? (
+            <SegmentedChips
+              options={(Object.keys(CATEGORY_LABEL) as Category[]).map((k) => ({ key: k, label: CATEGORY_LABEL[k], count: counts[k] }))}
+              active={category}
+              onChange={setCategory}
+              ariaLabel="סינון רשימת החיוג"
+            />
+          ) : (
+            <Tabs
+              tabs={(Object.keys(CATEGORY_LABEL) as Category[]).map((k) => ({ key: k, label: CATEGORY_LABEL[k], badge: counts[k] }))}
+              activeTab={category}
+              onChange={setCategory}
+              ariaLabel="סינון רשימת החיוג"
+            />
+          )}
           {category === "no_phone" && counts.no_phone > 0 && (
             <p className="text-xs text-warn-ink">התלמידים האלה זכאים אבל לא יקבלו התראה, כי אין להם טלפון במערכת. כדאי להשלים בכרטיס התלמיד.</p>
           )}
@@ -275,7 +301,13 @@ export function EligibilityCallListTab() {
             columns={[
               { key: "first", header: "שם פרטי", render: (r: CallRow) => r.first_name ?? "—" },
               { key: "last", header: "שם משפחה", render: (r: CallRow) => r.last_name ?? "—" },
-              { key: "phone", header: "טלפון", className: "ltr-num tabular", render: (r: CallRow) => r.phone ?? "—" },
+              {
+                key: "phone",
+                header: "טלפון",
+                className: "ltr-num tabular",
+                // v3: תצוגה בלבד (052-1234567); הייצוא נשאר עם הטלפון כפי שהוא במערכת
+                render: (r: CallRow) => (isV3 && r.phone ? formatPhone(r.phone) || r.phone : r.phone ?? "—"),
+              },
               { key: "id", header: "ת.ז/דרכון", className: "ltr-num tabular", render: (r: CallRow) => r.external_id },
               { key: "branch", header: "סניף", className: "tabular", render: (r: CallRow) => r.branch_code ?? "—" },
               { key: "group", header: "קבוצה", render: (r: CallRow) => r.group_name ?? "—" },

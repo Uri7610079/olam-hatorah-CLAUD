@@ -14,6 +14,8 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { SearchAndFilters } from "@/components/SearchAndFilters";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatNumber } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -146,6 +148,7 @@ export function TalmudExportScreen() {
   const [error, setError] = useState<string | null>(null);
   const [resultFileName, setResultFileName] = useState<string | null>(null);
   const [candidateSearch, setCandidateSearch] = useState("");
+  const isV3 = useIsV3();
 
   const branchesQuery = useQuery({ queryKey: ["branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
   const groupsQuery = useQuery({ queryKey: ["groups", branchId], queryFn: () => fetchGroups(branchId), enabled: !!branchId });
@@ -252,7 +255,7 @@ export function TalmudExportScreen() {
       header: "",
       render: (s) =>
         selectable.some((c) => c.id === s.id) ? (
-          <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} />
+          <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleOne(s.id)} aria-label={`בחירת ${s.full_name} ליצוא`} />
         ) : (
           <span className="text-xs text-ink-subtle" title="כבר יוצא / לא במצב מוכן לתלמוד">
             —
@@ -279,8 +282,9 @@ export function TalmudExportScreen() {
       <div className="card mb-6 max-w-3xl space-y-4 p-5">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
-            <label className="field-label">עמותה</label>
+            <label htmlFor="talmud-export-org" className="field-label">עמותה</label>
             <select
+              id="talmud-export-org"
               value={orgId}
               onChange={(e) => {
                 setOrgId(e.target.value);
@@ -301,8 +305,8 @@ export function TalmudExportScreen() {
             </select>
           </div>
           <div>
-            <label className="field-label">סניף (לא חובה)</label>
-            <select value={branchId} onChange={(e) => { setBranchId(e.target.value); setGroupId(""); }} disabled={!orgId} className="input-field">
+            <label htmlFor="talmud-export-branch" className="field-label">סניף (לא חובה)</label>
+            <select id="talmud-export-branch" value={branchId} onChange={(e) => { setBranchId(e.target.value); setGroupId(""); }} disabled={!orgId} className="input-field">
               <option value="">— הכול —</option>
               {(branchesQuery.data ?? []).map((b) => (
                 <option key={b.id} value={b.id}>
@@ -312,8 +316,8 @@ export function TalmudExportScreen() {
             </select>
           </div>
           <div>
-            <label className="field-label">קבוצה (לא חובה)</label>
-            <select value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={!branchId} className="input-field">
+            <label htmlFor="talmud-export-group" className="field-label">קבוצה (לא חובה)</label>
+            <select id="talmud-export-group" value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={!branchId} className="input-field">
               <option value="">— הכול —</option>
               {(groupsQuery.data ?? []).map((g) => (
                 <option key={g.id} value={g.id}>
@@ -326,12 +330,12 @@ export function TalmudExportScreen() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="field-label">תחילת תקופה</label>
-            <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="input-field" />
+            <label htmlFor="talmud-export-start" className="field-label">תחילת תקופה</label>
+            <input id="talmud-export-start" type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="input-field" />
           </div>
           <div>
-            <label className="field-label">סוף תקופה</label>
-            <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="input-field" />
+            <label htmlFor="talmud-export-end" className="field-label">סוף תקופה</label>
+            <input id="talmud-export-end" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="input-field" />
           </div>
         </div>
 
@@ -344,15 +348,35 @@ export function TalmudExportScreen() {
             value={overrideReason}
             onChange={(e) => setOverrideReason(e.target.value)}
             placeholder="סיבת היצוא החוזר (חובה)"
+            aria-label="סיבת היצוא החוזר"
             className="input-field"
           />
         )}
 
         {orgId && (
           <div>
-            <button onClick={toggleAll} className="link-action mb-2 text-xs">
-              {selected.size === selectable.length && selectable.length > 0 ? "בטל בחירת הכול" : "בחר הכול"}
-            </button>
+            {!isV3 && (
+              <button onClick={toggleAll} className="link-action mb-2 text-xs">
+                {selected.size === selectable.length && selectable.length > 0 ? "בטל בחירת הכול" : "בחר הכול"}
+              </button>
+            )}
+            {isV3 && (
+            <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <button onClick={toggleAll} className="link-action text-xs">
+                {selected.size === selectable.length && selectable.length > 0 ? "בטל בחירת הכול" : "בחר הכול"}
+              </button>
+              {/* v3: כמה מוכנים ליצוא וכמה נבחרו - מתוך הרשימה שכבר נטענה */}
+              {!candidatesQuery.isLoading && (
+                <span className="text-sm text-ink-muted">
+                  נבחרו <span className="tabular font-semibold text-ink">{formatNumber(selected.size)}</span> מתוך{" "}
+                  <span className="tabular font-semibold text-ink">{formatNumber(selectable.length)}</span> שאפשר לייצא
+                  {(candidatesQuery.data?.length ?? 0) > selectable.length && (
+                    <> · {formatNumber((candidatesQuery.data?.length ?? 0) - selectable.length)} כבר יוצאו או אינם מוכנים</>
+                  )}
+                </span>
+              )}
+            </div>
+            )}
             <SearchAndFilters searchValue={candidateSearch} onSearchChange={setCandidateSearch} searchPlaceholder="חיפוש לפי שם או מזהה…" />
             <DataTable columns={columns} rows={filteredCandidates} rowKey={(s) => s.id} loading={candidatesQuery.isLoading} emptyTitle="אין תלמידים מתאימים" />
           </div>
@@ -373,14 +397,26 @@ export function TalmudExportScreen() {
 
       {orgId && (
         <>
-          <h2 className="mb-2 text-sm font-semibold text-ink-muted">היסטוריית יצוא</h2>
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted v3:text-base v3:text-primary">היסטוריית יצוא</h2>
           <DataTable
             columns={[
-              { key: "file", header: "קובץ", render: (b: any) => b.file_name },
-              { key: "period", header: "תקופה", className: "tabular", render: (b: any) => `${b.period_start} — ${b.period_end}` },
-              { key: "count", header: "מס' תלמידים", className: "tabular", render: (b: any) => b.student_count },
+              { key: "file", header: "קובץ", truncate: isV3, render: (b: any) => b.file_name },
+              {
+                key: "period",
+                header: "תקופה",
+                className: "tabular",
+                sortValue: isV3 ? (b: any) => b.period_start : undefined,
+                render: (b: any) => (isV3 ? `${formatDate(b.period_start)} — ${formatDate(b.period_end)}` : `${b.period_start} — ${b.period_end}`),
+              },
+              { key: "count", header: "מס' תלמידים", className: isV3 ? undefined : "tabular", kind: isV3 ? "number" : undefined, render: (b: any) => b.student_count },
               { key: "override", header: "חוזר", render: (b: any) => (b.is_override ? "כן" : "—") },
-              { key: "date", header: "תאריך", className: "tabular", render: (b: any) => new Date(b.created_at).toLocaleDateString("he-IL") },
+              {
+                key: "date",
+                header: "תאריך",
+                className: "tabular",
+                sortValue: isV3 ? (b: any) => b.created_at : undefined,
+                render: (b: any) => (isV3 ? formatDate(b.created_at) : new Date(b.created_at).toLocaleDateString("he-IL")),
+              },
             ]}
             rows={historyQuery.data ?? []}
             rowKey={(b: any) => b.id}

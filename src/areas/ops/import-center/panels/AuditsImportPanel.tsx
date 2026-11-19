@@ -14,6 +14,7 @@ import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { RawRowPreview } from "@/components/RawRowPreview";
+import { DuplicateFileNotice, ImportSteps, PreviewSummary, SavedForReviewNote, batchImportStep } from "@/components/ImportV3Parts";
 
 interface OrgOption {
   id: string;
@@ -233,6 +234,7 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
   const storedValid = storedRows.filter((r) => r.status === "valid" || r.status === "committed");
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
+  const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: false, previewing: !!parsedRows && !duplicateId });
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -268,8 +270,8 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
       <p className="text-sm text-ink-muted">יבוא רשימת חסרים לאירוע ביקורת (התאמה לתלמיד לפי מזהה). לניהול מלא של אירועי ביקורת ותוצאות - מסך "ביקורות משרד החינוך".</p>
 
       <div className="max-w-sm">
-        <label className="field-label">עמותה</label>
-        <select
+        <label htmlFor="aip-1" className="field-label">עמותה</label>
+        <select id="aip-1"
           value={orgId}
           onChange={(e) => {
             setOrgId(e.target.value);
@@ -289,8 +291,8 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
       {orgId && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-2xl">
           <div>
-            <label className="field-label">ביקורת (טיוטה קיימת)</label>
-            <select value={selectedAuditId ?? ""} onChange={(e) => setSelectedAuditId(e.target.value || null)} className="input-field">
+            <label htmlFor="aip-2" className="field-label">ביקורת (טיוטה קיימת)</label>
+            <select id="aip-2" value={selectedAuditId ?? ""} onChange={(e) => setSelectedAuditId(e.target.value || null)} className="input-field">
               <option value="">— בחרי —</option>
               {draftAudits.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -313,8 +315,8 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
         <div className="card max-w-2xl space-y-3 p-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="field-label">סניף (לא חובה)</label>
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="input-field">
+              <label htmlFor="aip-3" className="field-label">סניף (לא חובה)</label>
+              <select id="aip-3" value={branchId} onChange={(e) => setBranchId(e.target.value)} className="input-field">
                 <option value="">— כל הסניפים —</option>
                 {(branchesQuery.data ?? []).map((b) => (
                   <option key={b.id} value={b.id}>
@@ -324,8 +326,8 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
               </select>
             </div>
             <div>
-              <label className="field-label">תאריך ביקורת</label>
-              <input type="date" value={auditDate} onChange={(e) => setAuditDate(e.target.value)} className="input-field" />
+              <label htmlFor="aip-4" className="field-label">תאריך ביקורת</label>
+              <input id="aip-4" type="date" value={auditDate} onChange={(e) => setAuditDate(e.target.value)} className="input-field" />
             </div>
           </div>
           {createError && <ErrorState message={createError} />}
@@ -343,6 +345,7 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
 
       {selectedAudit && selectedAudit.status === "draft" && !reviewBatchId && (
         <div className="card max-w-2xl space-y-4 p-5">
+          <ImportSteps current={importStep} />
           {headerConfirm ? (
             <HeaderRowConfirm
               previewRows={headerConfirm.previewRows}
@@ -353,11 +356,11 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
           ) : (
             <>
               <p className="text-xs text-ink-subtle">עמודה נדרשת: מזהה תלמיד. כל עמודה נוספת נשמרת כפרטי גולמי בלבד.</p>
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+              <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ ביקורת" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
               {analyzing && <LoadingState rows={2} />}
               {duplicateId && (
                 <div className="space-y-2">
-                  <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                  <DuplicateFileNotice />
                   <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
                     פתיחת האצווה הקיימת
                   </button>
@@ -367,6 +370,7 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
               {error && <ErrorState message={error} />}
               {parsedRows && !duplicateId && (
                 <>
+                  <PreviewSummary valid={localValid.length} needs={localNeeds.length} invalid={localInvalid.length} />
                   <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                     {(tab) => {
                       const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
@@ -390,6 +394,8 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
             <LoadingState rows={3} />
           ) : (
             <>
+              <ImportSteps current={importStep} />
+              <SavedForReviewNote what="רשימת החסרים" />
               <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הרשימה.</p>
               <ImportPreviewTabs validCount={storedValid.length} needsDecisionCount={storedNeeds.length} invalidCount={storedInvalid.length}>
                 {(tab) => {

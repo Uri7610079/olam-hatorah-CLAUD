@@ -21,6 +21,9 @@ import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { RawRowPreview } from "@/components/RawRowPreview";
+import { DuplicateFileNotice, ImportSteps, PreviewSummary, SavedForReviewNote, batchCountsText, batchImportStep } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate } from "@/lib/format";
 
 type BatchStatus = "uploaded" | "analyzed" | "previewed" | "committed" | "rejected";
 const OPEN_STATUSES: BatchStatus[] = ["uploaded", "analyzed", "previewed"];
@@ -72,6 +75,7 @@ async function fetchBatchById(id: string): Promise<AuditsContainerBatchSummary> 
 // ייעודי-דומיין), פרופיל 'audits_container' נפרד לגמרי מ-'audit_attendance'.
 export function AuditsContainerImportPanel() {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canManage, isLoading: permissionLoading } = useHasPermission("audits", "manage");
 
   const [orgId] = useLastSelected<string>("last-org", "");
@@ -211,6 +215,7 @@ export function AuditsContainerImportPanel() {
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
   const reviewIsOpen = reviewBatchQuery.data ? OPEN_STATUSES.includes(reviewBatchQuery.data.status) : false;
+  const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: reviewBatchQuery.data?.status === "committed", previewing: !!parsedRows && !duplicateId });
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -251,6 +256,7 @@ export function AuditsContainerImportPanel() {
 
       {!reviewBatchId && (
         <div className="card max-w-2xl space-y-4 p-5">
+          <ImportSteps current={importStep} />
           {headerConfirm ? (
             <HeaderRowConfirm
               previewRows={headerConfirm.previewRows}
@@ -261,12 +267,12 @@ export function AuditsContainerImportPanel() {
           ) : (
             <>
               <p className="text-xs text-ink-subtle">עמודות צפויות בקובץ: סניף (לא חובה - קוד סניף בתלמוד או שם פנימי), תאריך ביקורת (חובה).</p>
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+              <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ ביקורות" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
 
               {analyzing && <LoadingState rows={2} />}
               {duplicateId && (
                 <div className="space-y-2">
-                  <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+                  <DuplicateFileNotice />
                   <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
                     פתיחת האצווה הקיימת
                   </button>
@@ -282,6 +288,7 @@ export function AuditsContainerImportPanel() {
 
               {parsedRows && !duplicateId && (
                 <>
+                  <PreviewSummary valid={localValid.length} needs={localNeeds.length} invalid={localInvalid.length} />
                   <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                     {(tab) => {
                       const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
@@ -305,6 +312,7 @@ export function AuditsContainerImportPanel() {
             <LoadingState rows={4} />
           ) : reviewBatchQuery.data ? (
             <>
+              <ImportSteps current={importStep} />
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
                 <StatusBadge
@@ -312,6 +320,8 @@ export function AuditsContainerImportPanel() {
                   label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
                 />
               </div>
+
+              {reviewIsOpen && <SavedForReviewNote what="הקובץ" />}
 
               {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הקובץ (שורות "שגוי" יישארו מחוץ ליבוא).</p>}
 
@@ -349,12 +359,12 @@ export function AuditsContainerImportPanel() {
       <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא אירועי ביקורת</h2>
       <DataTable
         columns={[
-          { key: "file", header: "קובץ", render: (b: AuditsContainerBatchSummary) => b.file_name },
+          { key: "file", header: "קובץ", truncate: isV3, render: (b: AuditsContainerBatchSummary) => b.file_name },
           {
             key: "counts",
-            header: "תקין / דורש החלטה / שגוי",
+            header: isV3 ? "שורות" : "תקין / דורש החלטה / שגוי",
             className: "tabular",
-            render: (b: AuditsContainerBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+            render: (b: AuditsContainerBatchSummary) => (isV3 ? batchCountsText(b) : `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`),
           },
           {
             key: "status",
@@ -363,7 +373,7 @@ export function AuditsContainerImportPanel() {
               <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
             ),
           },
-          { key: "date", header: "תאריך", className: "tabular", render: (b: AuditsContainerBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+          { key: "date", header: "תאריך", className: "tabular", sortValue: isV3 ? (b: AuditsContainerBatchSummary) => b.created_at : undefined, render: (b: AuditsContainerBatchSummary) => (isV3 ? formatDate(b.created_at) : new Date(b.created_at).toLocaleDateString("he-IL")) },
         ]}
         rows={batchesQuery.data ?? []}
         rowKey={(b: AuditsContainerBatchSummary) => b.id}

@@ -26,6 +26,9 @@ import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 import { RawRowPreview } from "@/components/RawRowPreview";
+import { DuplicateFileNotice, ImportSteps, PreviewSummary, SavedForReviewNote, batchCountsText, batchImportStep } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatMonth } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -96,6 +99,7 @@ interface EligibilityImportPanelProps {
 // (זכאות לחודש / חסרים) שאינן יבוא. המסך המקורי נשאר כפי שהוא, זו נקודת גישה נוספת.
 export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth }: EligibilityImportPanelProps) {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canImport, isLoading: permissionLoading } = useHasPermission("talmud", "import");
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
@@ -283,6 +287,7 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
   const storedNeeds = storedRows.filter((r) => r.status === "needs_decision");
   const storedInvalid = storedRows.filter((r) => r.status === "invalid");
   const reviewIsOpen = reviewBatchQuery.data ? OPEN_STATUSES.includes(reviewBatchQuery.data.status) : false;
+  const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: reviewBatchQuery.data?.status === "committed", previewing: !!parsedRows && !duplicateId });
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -320,8 +325,8 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-lg">
         <div>
-          <label className="field-label">עמותה</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+          <label htmlFor="eip-1" className="field-label">עמותה</label>
+          <select id="eip-1" value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
             <option value="">— בחרי —</option>
             {(orgsQuery.data ?? []).map((o) => (
               <option key={o.id} value={o.id}>
@@ -331,8 +336,8 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
           </select>
         </div>
         <div>
-          <label className="field-label">חודש (לקובץ חדש)</label>
-          <input type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
+          <label htmlFor="eip-2" className="field-label">חודש (לקובץ חדש)</label>
+          <input id="eip-2" type="month" value={toMonthInput(month)} onChange={(e) => setMonth(fromMonthInput(e.target.value))} className="input-field" />
         </div>
       </div>
 
@@ -345,13 +350,14 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
 
       {orgId && !reviewBatchId && (
         <div className="card max-w-2xl space-y-4 p-5">
+          <ImportSteps current={importStep} />
           <p className="text-xs text-ink-subtle">עמודות צפויות בקובץ: מזהה תלמיד, סכום ברוטו, ניקוד/סוג תשלום (לא חובה).</p>
-          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
+          <input type="file" accept=".csv,.xlsx,.xls" aria-label="קובץ דוח זכאות" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="input-field" />
 
           {analyzing && <LoadingState rows={2} />}
           {duplicateId && (
             <div className="space-y-2">
-              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              <DuplicateFileNotice />
               <button onClick={() => setReviewBatchId(duplicateId)} className="link-action text-xs">
                 פתיחת האצווה הקיימת
               </button>
@@ -377,6 +383,7 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
             !duplicateId && (
               <>
                 {talmudInfo && <TalmudReportSummaryCard info={talmudInfo} orgNotFound={orgNotFound} />}
+                <PreviewSummary valid={localValid.length} needs={localNeeds.length} invalid={localInvalid.length} />
                 <ImportPreviewTabs validCount={localValid.length} needsDecisionCount={localNeeds.length} invalidCount={localInvalid.length}>
                   {(tab) => {
                     const data = tab === "valid" ? localValid : tab === "needsDecision" ? localNeeds : localInvalid;
@@ -400,16 +407,19 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
             <LoadingState rows={4} />
           ) : reviewBatchQuery.data ? (
             <>
+              <ImportSteps current={importStep} />
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink">{reviewBatchQuery.data.file_name}</p>
-                  <p className="text-xs text-ink-subtle">חודש: {reviewBatchQuery.data.period_month ?? "—"}</p>
+                  <p className="text-xs text-ink-subtle">חודש: {isV3 ? formatMonth(reviewBatchQuery.data.period_month) : reviewBatchQuery.data.period_month ?? "—"}</p>
                 </div>
                 <StatusBadge
                   severity={reviewBatchQuery.data.status === "committed" ? "ok" : reviewBatchQuery.data.status === "rejected" ? "neutral" : "medium"}
                   label={BATCH_STATUS_LABEL[reviewBatchQuery.data.status]}
                 />
               </div>
+
+              {reviewIsOpen && <SavedForReviewNote what="דוח הזכאות" />}
 
               {reviewIsOpen && <p className="text-sm text-ink-muted">פתרו שורות "דורש החלטה" ואז קלטו את הדוח (שורות "שגוי" יישארו מחוץ לזכאות).</p>}
 
@@ -448,13 +458,13 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
           <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא זכאות</h2>
           <DataTable
             columns={[
-              { key: "file", header: "קובץ", render: (b: EligibilityBatchSummary) => b.file_name },
-              { key: "month", header: "חודש", className: "tabular", render: (b: EligibilityBatchSummary) => b.period_month ?? "—" },
+              { key: "file", header: "קובץ", truncate: isV3, render: (b: EligibilityBatchSummary) => b.file_name },
+              { key: "month", header: "חודש", className: "tabular", sortValue: isV3 ? (b: EligibilityBatchSummary) => b.period_month : undefined, render: (b: EligibilityBatchSummary) => (isV3 ? formatMonth(b.period_month) : b.period_month ?? "—") },
               {
                 key: "counts",
-                header: "תקין / דורש החלטה / שגוי",
+                header: isV3 ? "שורות" : "תקין / דורש החלטה / שגוי",
                 className: "tabular",
-                render: (b: EligibilityBatchSummary) => `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`,
+                render: (b: EligibilityBatchSummary) => (isV3 ? batchCountsText(b) : `${b.valid_count} / ${b.needs_decision_count} / ${b.invalid_count}`),
               },
               {
                 key: "status",
@@ -463,7 +473,7 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
                   <StatusBadge severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"} label={BATCH_STATUS_LABEL[b.status]} />
                 ),
               },
-              { key: "date", header: "תאריך", className: "tabular", render: (b: EligibilityBatchSummary) => new Date(b.created_at).toLocaleDateString("he-IL") },
+              { key: "date", header: "תאריך", className: "tabular", sortValue: isV3 ? (b: EligibilityBatchSummary) => b.created_at : undefined, render: (b: EligibilityBatchSummary) => (isV3 ? formatDate(b.created_at) : new Date(b.created_at).toLocaleDateString("he-IL")) },
             ]}
             rows={batchesQuery.data ?? []}
             rowKey={(b: EligibilityBatchSummary) => b.id}

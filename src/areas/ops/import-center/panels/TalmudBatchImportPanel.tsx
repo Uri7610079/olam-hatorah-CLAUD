@@ -8,6 +8,8 @@ import type { ClassifiedRow } from "@/lib/importParsing";
 import { validateTalmudImport, type TalmudValidationReport } from "@/lib/talmudImportValidation";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatMoney } from "@/lib/format";
 
 // קליטת כמה דוחות מתלמוד בבת אחת.
 //
@@ -36,6 +38,7 @@ const money = (n: number) => n.toLocaleString("he-IL", { minimumFractionDigits: 
 const monthLabel = (iso: string | null) => (iso ? `${iso.split("-")[1]}/${iso.split("-")[0]}` : "—");
 
 export function TalmudBatchImportPanel() {
+  const isV3 = useIsV3();
   const queryClient = useQueryClient();
   const { hasPermission: canImport, isLoading: permissionLoading } = useHasPermission("talmud", "import");
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -217,11 +220,11 @@ export function TalmudBatchImportPanel() {
             <div className="rounded-control border border-line bg-surface-muted p-4">
               <div className="mb-2 text-sm text-ink">
                 {ready.length} קבצים מוכנים לקליטה ·{" "}
-                <span className="ltr-num font-medium">{money(totalToCommit)} ₪</span>
+                {isV3 ? <span className="tabular font-medium">{formatMoney(totalToCommit)}</span> : <span className="ltr-num font-medium">{money(totalToCommit)} ₪</span>}
                 {Math.abs(totalToCommit - totalInFiles) > 0.5 && (
                   <span className="text-warn">
                     {" "}
-                    (מתוך {money(totalInFiles)} ₪ בקבצים — ההפרש הוא תלמידים שלא נמצאו)
+                    (מתוך {isV3 ? formatMoney(totalInFiles) : `${money(totalInFiles)} ₪`} בקבצים — ההפרש הוא תלמידים שלא נמצאו)
                   </span>
                 )}
               </div>
@@ -263,11 +266,14 @@ function StateIcon({ state }: { state: FileState }) {
 }
 
 function IssueSummary({ entry }: { entry: FileEntry }) {
+  const isV3 = useIsV3();
   if (entry.error) return <span className="text-xs text-danger">{entry.error}</span>;
   if (entry.committed) {
     return (
       <span className="text-xs text-ok">
-        נקלט: {entry.committed.matched} · לא נקלט: {entry.committed.unmatched}
+        {isV3
+          ? `${entry.committed.matched} שורות נקלטו${entry.committed.unmatched ? ` · ${entry.committed.unmatched} לא הותאמו ולא נקלטו` : ""}`
+          : `נקלט: ${entry.committed.matched} · לא נקלט: ${entry.committed.unmatched}`}
       </span>
     );
   }

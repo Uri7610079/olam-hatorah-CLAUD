@@ -12,6 +12,10 @@ import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { Stepper } from "@/components/Stepper";
+import { DuplicateFileNotice } from "@/components/ImportV3Parts";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -81,6 +85,7 @@ async function fetchUnmatchedEligible(listId: string): Promise<ListRow[]> {
 // החיוג ב"רשימות טלפוניות".
 export function EligibilityListImportPanel({ initialFile }: { initialFile?: File | null }) {
   const queryClient = useQueryClient();
+  const isV3 = useIsV3();
   const { hasPermission: canImport, isLoading: permLoading } = useHasPermission("talmud", "import");
   const orgsQuery = useQuery({ queryKey: ["organizations-active-numbers"], queryFn: fetchOrgs });
 
@@ -229,9 +234,19 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
       </p>
 
       <div className="card max-w-3xl space-y-4 p-5">
-        <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} className="input-field" />
+        {isV3 && (
+          <Stepper
+            steps={[
+              { key: "file", label: "בחירת קובץ" },
+              { key: "check", label: "בדיקה ותצוגה מקדימה" },
+              { key: "done", label: "נקלט" },
+            ]}
+            currentStep={result && !parsed ? "done" : parsed ? "check" : "file"}
+          />
+        )}
+        <input type="file" aria-label="קובץ דוח זכאים" accept=".xlsx,.xls,.csv" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} className="input-field" />
         {analyzing && <LoadingState rows={2} />}
-        {duplicate && <ErrorState message="הקובץ הזה כבר נקלט בעבר." />}
+        {duplicate && <DuplicateFileNotice message="הקובץ הזה כבר נקלט בעבר." />}
         {error && <ErrorState message={error} />}
 
         {parsed && (
@@ -268,6 +283,7 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
               </div>
             </div>
 
+            {isV3 && <p className="text-sm font-semibold text-primary">תצוגה מקדימה - עוד לא נקלט דבר. הקליטה מתבצעת רק בלחיצה על "קליטת דוח הזכאים".</p>}
             <div className="flex flex-wrap gap-4 text-sm">
               <span>
                 סה"כ <span className="tabular font-semibold">{parsed.rows.length}</span> שורות
@@ -361,7 +377,7 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
           <DataTable
             columns={[
               { key: "month", header: "חודש", className: "tabular", render: (l: ListSummary) => monthLabel(l.month) },
-              { key: "file", header: "קובץ", render: (l: ListSummary) => l.file_name },
+              { key: "file", header: "קובץ", truncate: isV3, render: (l: ListSummary) => l.file_name },
               { key: "el", header: "זכאים", className: "tabular", render: (l: ListSummary) => l.eligible_count },
               { key: "nel", header: "לא זכאים", className: "tabular", render: (l: ListSummary) => l.not_eligible_count },
               { key: "un", header: "זכאים שלא נמצאו", className: "tabular", render: (l: ListSummary) => l.unmatched_eligible_count },
@@ -370,13 +386,14 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
                 header: "סטטוס",
                 render: (l: ListSummary) => <StatusBadge severity={l.status === "active" ? "ok" : "neutral"} label={l.status === "active" ? "פעיל" : "הוחלף"} />,
               },
-              { key: "date", header: "נקלט", className: "tabular", render: (l: ListSummary) => new Date(l.created_at).toLocaleDateString("he-IL") },
+              { key: "date", header: "נקלט", className: "tabular", sortValue: isV3 ? (l: ListSummary) => l.created_at : undefined, render: (l: ListSummary) => (isV3 ? formatDate(l.created_at) : new Date(l.created_at).toLocaleDateString("he-IL")) },
             ]}
             rows={listsQuery.data ?? []}
             rowKey={(l: ListSummary) => l.id}
             loading={listsQuery.isLoading}
             emptyTitle="עוד לא נקלטו דוחות זכאים לעמותה זו"
             onRowClick={(l: ListSummary) => setSelectedListId(l.id === selectedListId ? null : l.id)}
+            selectedKey={isV3 ? selectedListId : undefined}
           />
         </div>
       )}
