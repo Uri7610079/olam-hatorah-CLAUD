@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
@@ -273,7 +274,7 @@ export function PhoneListCompareTab() {
         "תלמיד תואם": r.matched_student ? `${r.matched_student.full_name} (${r.matched_student.external_id})` : "",
       })),
       "רשימת טלפונים",
-      `phone-list-${selectedImport.file_name.replace(/\.[^.]+$/, "")}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      `phone-list-${selectedImport.file_name.replace(/\.[^.]+$/, "")}-${todayLocalIso()}.xlsx`,
     );
   };
 

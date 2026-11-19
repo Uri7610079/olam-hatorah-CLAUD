@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Network } from "lucide-react";
@@ -75,7 +76,7 @@ export function StudentAssignmentTab({ studentId }: StudentAssignmentTabProps) {
   const [orgId, setOrgId] = useState("");
   const [branchId, setBranchId] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => todayLocalIso());
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -96,7 +97,7 @@ export function AuditsScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [showContainerImport, setShowContainerImport] = useState(false);
   const [branchId, setBranchId] = useState("");
-  const [auditDate, setAuditDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [auditDate, setAuditDate] = useState(() => todayLocalIso());
   const [creating, setCreating] = useState(false);
 
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
@@ -227,7 +228,8 @@ export function AuditsScreen() {
   const resolveRow = async (rowNumber: number, status: "valid" | "invalid") => {
     if (!reviewBatchId) return;
     setResolvingRow(rowNumber);
-    await resolveImportRow(reviewBatchId, rowNumber, status);
+    const rowError = await resolveImportRow(reviewBatchId, rowNumber, status);
+    if (rowError) setError(`עדכון השורה נכשל: ${rowError}`);
     setResolvingRow(null);
     queryClient.invalidateQueries({ queryKey: ["audit-batch-rows", reviewBatchId] });
   };

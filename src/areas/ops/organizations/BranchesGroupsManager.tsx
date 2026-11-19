@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchAll } from "@/lib/fetchAll";
@@ -292,7 +293,7 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
       const { error: leaderError } = await supabase.rpc("reassign_group_leader", {
         p_group_id: data.id,
         p_group_leader_id: groupForm.group_leader_id,
-        p_start_date: groupForm.opened_at || new Date().toISOString().slice(0, 10),
+        p_start_date: groupForm.opened_at || todayLocalIso(),
       });
       if (leaderError) {
         setGroupSubmitting(false);
@@ -352,7 +353,7 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
     const { error } = await supabase.rpc("reassign_group_leader", {
       p_group_id: changingLeaderGroupId,
       p_group_leader_id: leaderChoice,
-      p_start_date: new Date().toISOString().slice(0, 10),
+      p_start_date: todayLocalIso(),
     });
     setLeaderChangeSubmitting(false);
     if (!error) {
@@ -390,7 +391,7 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
         "סטטוס": r.status === "active" ? "פעיל" : "סגור",
       })),
       "סניפים",
-      `branches-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      `branches-${todayLocalIso()}.xlsx`,
     );
   };
 
@@ -403,7 +404,7 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
         "סטטוס": r.status === "active" ? "פעילה" : "סגורה",
       })),
       "קבוצות",
-      `groups-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      `groups-${todayLocalIso()}.xlsx`,
     );
   };
 

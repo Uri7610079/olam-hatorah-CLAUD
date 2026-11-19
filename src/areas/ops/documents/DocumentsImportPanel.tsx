@@ -176,7 +176,8 @@ export function DocumentsImportPanel({ orgId }: DocumentsImportPanelProps) {
   const resolveRow = async (rowNumber: number, status: "valid" | "invalid") => {
     if (!reviewBatchId) return;
     setResolvingRow(rowNumber);
-    await resolveImportRow(reviewBatchId, rowNumber, status);
+    const rowError = await resolveImportRow(reviewBatchId, rowNumber, status);
+    if (rowError) setError(`עדכון השורה נכשל: ${rowError}`);
     setResolvingRow(null);
     queryClient.invalidateQueries({ queryKey: ["documents-import-batch-rows", reviewBatchId] });
   };

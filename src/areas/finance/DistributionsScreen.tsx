@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useState, type FormEvent } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
@@ -130,7 +131,7 @@ async function fetchGroupStudents(groupId: string): Promise<GroupStudent[]> {
   return students.map((s) => ({ id: s.id, external_id: s.external_id, full_name: s.full_name, status: s.status, verified: verifiedIds.has(s.id) }));
 }
 
-const EMPTY_NEW_BATCH = { periodMonth: new Date().toISOString().slice(0, 7) + "-01", sourceType: "net_scholarships" as SourceType, method: "equal" as Method, notes: "" };
+const EMPTY_NEW_BATCH = { periodMonth: todayLocalIso().slice(0, 7) + "-01", sourceType: "net_scholarships" as SourceType, method: "equal" as Method, notes: "" };
 
 export function DistributionsScreen() {
   const queryClient = useQueryClient();

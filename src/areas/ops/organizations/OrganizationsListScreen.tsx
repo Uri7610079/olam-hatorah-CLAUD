@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -85,7 +86,7 @@ export function OrganizationsListScreen() {
         "כתובת": o.contact_address ?? "",
       })),
       "עמותות",
-      `organizations-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      `organizations-${todayLocalIso()}.xlsx`,
     );
   };
 

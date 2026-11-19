@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
@@ -73,7 +74,7 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [showCreate, setShowCreate] = useState(false);
   const [branchId, setBranchId] = useState("");
-  const [auditDate, setAuditDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [auditDate, setAuditDate] = useState(() => todayLocalIso());
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -197,7 +198,8 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
   const resolveRow = async (rowNumber: number, status: "valid" | "invalid") => {
     if (!reviewBatchId) return;
     setResolvingRow(rowNumber);
-    await resolveImportRow(reviewBatchId, rowNumber, status);
+    const rowError = await resolveImportRow(reviewBatchId, rowNumber, status);
+    if (rowError) setError(`עדכון השורה נכשל: ${rowError}`);
     setResolvingRow(null);
     queryClient.invalidateQueries({ queryKey: ["audit-batch-rows", reviewBatchId] });
   };

@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Paperclip, Upload, CheckCircle2, XCircle } from "lucide-react";
@@ -62,7 +63,7 @@ function Choice<K extends string>({ value, options, onChange, codes, name }: {
 export function NewStudentDialog({ groups, onClose }: { groups: PortalGroup[]; onClose: () => void }) {
   const qc = useQueryClient();
   const ref = useReference();
-  const blank = { ...EMPTY_NEW_STUDENT, groupId: groups.length === 1 ? groups[0].id : "", startDate: new Date().toISOString().slice(0, 10) };
+  const blank = { ...EMPTY_NEW_STUDENT, groupId: groups.length === 1 ? groups[0].id : "", startDate: todayLocalIso() };
   const [v, setV] = useState<NewStudentInput>(blank);
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);

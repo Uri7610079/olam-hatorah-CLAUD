@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -109,13 +110,17 @@ async function fetchReturns(orgId: string): Promise<ReturnRow[]> {
   // retry line) - PostgREST can't infer which one for a plain "masav_lines(...)" embed,
   // so the FK constraint name must be given explicitly (caught live: this returned a
   // PGRST201 "more than one relationship found" error until fixed).
-  const { data, error } = await supabase
-    .from("payment_returns")
-    .select(
-      "id, return_date, amount, reason, status, notes, masav_line_id, new_bank_account_id, retry_masav_line_id, masav_line:masav_lines!payment_returns_masav_line_id_fkey(student:students(id, external_id, full_name), batch:masav_batches(organization_id)), retry_line:masav_lines!payment_returns_retry_masav_line_id_fkey(batch:masav_batches(status))",
-    )
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  // fetchAll: בלעדיו Supabase מחזיר רק 1,000 שורות, ומעבר לזה החזרות נעלמו בשקט
+  // (הסינון לפי עמותה נעשה אחרי הטעינה). מיון משני לפי id - כדי שהחלוקה לחלקים יציבה.
+  const data = await fetchAll(() =>
+    supabase
+      .from("payment_returns")
+      .select(
+        "id, return_date, amount, reason, status, notes, masav_line_id, new_bank_account_id, retry_masav_line_id, masav_line:masav_lines!payment_returns_masav_line_id_fkey(student:students(id, external_id, full_name), batch:masav_batches(organization_id)), retry_line:masav_lines!payment_returns_retry_masav_line_id_fkey(batch:masav_batches(status))",
+      )
+      .order("created_at", { ascending: false })
+      .order("id"),
+  );
   return (data ?? [])
     .map((r: any) => ({
       ...r,
@@ -141,7 +146,7 @@ export function ReturnsScreen() {
   const [showForm, setShowForm] = useState(false);
   const [batchId, setBatchId] = useState("");
   const [lineId, setLineId] = useState("");
-  const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
+  const [returnDate, setReturnDate] = useState(todayLocalIso());
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);

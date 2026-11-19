@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
@@ -103,7 +104,7 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
       p_account_holder_name: form.account_holder_name || null,
       p_student_relationship: form.student_relationship,
       p_supporting_document_path: documentPath,
-      p_opened_at: new Date().toISOString().slice(0, 10),
+      p_opened_at: todayLocalIso(),
     });
     setSubmitting(false);
     if (error) {

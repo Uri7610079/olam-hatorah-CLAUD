@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { MonthField } from "@/components/MonthField";
 import { useQuery } from "@tanstack/react-query";
@@ -104,7 +105,7 @@ function MonthCloseBlockers({ orgId, month, periodStatus }: { orgId: string; mon
 export function FinanceDashboard() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
 
   const countsQuery = useQuery({ queryKey: ["finance-dashboard-counts", orgId, month], queryFn: () => fetchFinanceCounts(orgId, month), enabled: !!orgId });
 

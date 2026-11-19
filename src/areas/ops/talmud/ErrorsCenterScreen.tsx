@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
@@ -123,7 +124,7 @@ export function ErrorsCenterScreen() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const [statusFilter, setStatusFilter] = useState("");
   const [showImport, setShowImport] = useState(false);
 
@@ -222,7 +223,8 @@ export function ErrorsCenterScreen() {
   const resolveRow = async (rowNumber: number, status: "valid" | "invalid") => {
     if (!reviewBatchId) return;
     setResolvingRow(rowNumber);
-    await resolveImportRow(reviewBatchId, rowNumber, status);
+    const rowError = await resolveImportRow(reviewBatchId, rowNumber, status);
+    if (rowError) setError(`עדכון השורה נכשל: ${rowError}`);
     setResolvingRow(null);
     queryClient.invalidateQueries({ queryKey: ["errors-batch-rows", reviewBatchId] });
   };

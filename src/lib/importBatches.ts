@@ -198,16 +198,20 @@ export async function fetchImportBatchRows(batchId: string): Promise<StoredImpor
 // שורה שהמערכת דחתה משום שהיה חסר לה משהו שהוזן מאז.
 export const MANUAL_REJECT_MARK = "נדחתה ידנית בבדיקה";
 
-export async function resolveImportRow(batchId: string, rowNumber: number, status: "valid" | "invalid") {
+// מחזירה הודעת שגיאה, או null כשהעדכון הצליח. עד היום שגיאה מהשרת נבלעה בשקט,
+// והשורה נראתה כאילו עודכנה.
+export async function resolveImportRow(batchId: string, rowNumber: number, status: "valid" | "invalid"): Promise<string | null> {
   if (status === "invalid") {
-    await supabase.from("import_rows")
+    const { error } = await supabase.from("import_rows")
       .update({ status, error_message: MANUAL_REJECT_MARK })
       .eq("batch_id", batchId).eq("row_number", rowNumber);
-    return;
+    return error?.message ?? null;
   }
   // אישור אחרי דחייה: הסימון יורד, והודעה אחרת (סיבת "דורש החלטה") נשארת.
-  await supabase.from("import_rows").update({ status }).eq("batch_id", batchId).eq("row_number", rowNumber);
-  await supabase.from("import_rows")
+  const { error } = await supabase.from("import_rows").update({ status }).eq("batch_id", batchId).eq("row_number", rowNumber);
+  if (error) return error.message;
+  const { error: markError } = await supabase.from("import_rows")
     .update({ error_message: null })
     .eq("batch_id", batchId).eq("row_number", rowNumber).eq("error_message", MANUAL_REJECT_MARK);
+  return markError?.message ?? null;
 }

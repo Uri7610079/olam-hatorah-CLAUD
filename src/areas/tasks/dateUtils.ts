@@ -25,8 +25,10 @@ const WEEKDAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמ
 // DD/MM או DD/MM/YYYY, "היום"/"מחר". טקסט שלא תואם אף תבנית - פשוט אין תאריך מוצע,
 // לא מומצא ניחוש שגוי.
 export function guessDueDateFromText(text: string): string | null {
-  if (/\bהיום\b/.test(text)) return todayIso();
-  if (/\bמחר\b/.test(text)) return addDaysIso(1);
+  // \b של JavaScript מכיר רק אותיות לטיניות, ולכן /\bהיום\b/ לא התאים אף פעם.
+  // גבול מילה עברי: לפני ואחרי - תחילת/סוף טקסט או תו שאינו אות עברית.
+  if (/(^|[^א-ת])היום($|[^א-ת])/.test(text)) return todayIso();
+  if (/(^|[^א-ת])מחר($|[^א-ת])/.test(text)) return addDaysIso(1);
 
   const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
   if (isoMatch) return isoMatch[0];

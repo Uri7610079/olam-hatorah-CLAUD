@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Download, ScanSearch, Tags, Upload } from "lucide-react";
@@ -373,7 +374,7 @@ function TransactionTypesPanel() {
       "תווית": r.label_he,
       "סטטוס": r.is_active ? "פעיל" : "לא פעיל",
     }));
-    exportRowsToExcel(rows, "סוגי תנועה", `סוגי-תנועת-בנק-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportRowsToExcel(rows, "סוגי תנועה", `סוגי-תנועת-בנק-${todayLocalIso()}.xlsx`);
   };
 
   const columns: DataTableColumn<TransactionTypeRow>[] = [
@@ -627,7 +628,7 @@ function RecognitionRulesPanel() {
       "רמת ביטחון": CONFIDENCE_LABEL[r.confidence_level],
       "עדיפות": r.priority,
     }));
-    exportRowsToExcel(rows, "כללי זיהוי בנק", `כללי-זיהוי-בנק-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportRowsToExcel(rows, "כללי זיהוי בנק", `כללי-זיהוי-בנק-${todayLocalIso()}.xlsx`);
   };
 
   const columns: DataTableColumn<RuleRow>[] = [

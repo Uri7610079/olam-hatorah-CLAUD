@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useEffect, useState, type FormEvent } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
@@ -58,16 +59,19 @@ async function fetchStudents(orgId: string): Promise<StudentOption[]> {
 }
 
 async function fetchRetro(orgId: string): Promise<RetroRow[]> {
-  const { data, error } = await supabase
-    .from("payment_calculation_versions")
-    .select(
-      "id, student_id, source_month, received_month, calculation_type, calculation_date, prior_eligible_count, current_eligible_count, prior_amount, current_amount, difference, current_period_offset, cumulative_offset, transferred_to_advances, notes, created_at, student:students(external_id, full_name)",
-    )
-    .eq("organization_id", orgId)
-    .order("student_id", { ascending: true, nullsFirst: false })
-    .order("source_month", { ascending: false })
-    .order("created_at", { ascending: true });
-  if (error) throw error;
+  // fetchAll: מעבר ל-1,000 שורות הרשימה נחתכה בשקט. id בסוף - לחלוקה יציבה לחלקים.
+  const data = await fetchAll(() =>
+    supabase
+      .from("payment_calculation_versions")
+      .select(
+        "id, student_id, source_month, received_month, calculation_type, calculation_date, prior_eligible_count, current_eligible_count, prior_amount, current_amount, difference, current_period_offset, cumulative_offset, transferred_to_advances, notes, created_at, student:students(external_id, full_name)",
+      )
+      .eq("organization_id", orgId)
+      .order("student_id", { ascending: true, nullsFirst: false })
+      .order("source_month", { ascending: false })
+      .order("created_at", { ascending: true })
+      .order("id"),
+  );
   return (data ?? []).map((r: any) => ({ ...r, student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student }));
 }
 
@@ -90,7 +94,7 @@ function findPriorRetroRecord(rows: RetroRow[], studentId: string | null, before
 const EMPTY_FORM = {
   studentId: "",
   sourceMonth: "",
-  receivedMonth: new Date().toISOString().slice(0, 7) + "-01",
+  receivedMonth: todayLocalIso().slice(0, 7) + "-01",
   calculationType: "",
   priorEligibleCount: "",
   currentEligibleCount: "",

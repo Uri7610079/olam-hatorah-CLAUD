@@ -34,6 +34,8 @@ const AREA_LABEL: Record<string, string> = {
   ops: "תפעול שוטף",
   finance: "כספים ובקרה",
   admin: "ניהול",
+  // אפשרי רק אחרי מיגרציה 134 (default_area מקבל גם tasks)
+  tasks: "משימות ותזכורות",
 };
 
 async function fetchInvitations(): Promise<Invitation[]> {

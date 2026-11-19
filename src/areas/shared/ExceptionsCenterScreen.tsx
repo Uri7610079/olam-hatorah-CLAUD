@@ -226,8 +226,10 @@ export function ExceptionsCenterScreen() {
         </div>
       </div>
 
+      {/* בלי רשימת העמותות שאילתת החריגות לא רצה בכלל, והמסך הציג "אין חריגות" - מטעה */}
+      {orgsQuery.isError && <div className="mb-4"><ErrorState message="שגיאה בטעינת רשימת העמותות, ולכן החריגות לא נטענו." /></div>}
       {exceptionsQuery.isError && <div className="mb-4"><ErrorState message="שגיאה בטעינת מרכז החריגות." /></div>}
-      {exceptionsQuery.isLoading ? (
+      {orgsQuery.isError ? null : exceptionsQuery.isLoading ? (
         <LoadingState rows={5} />
       ) : (
         <DataTable

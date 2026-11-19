@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState, type FormEvent } from "react";
 import { PhoneField } from "@/components/PhoneField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,7 +82,7 @@ export function OrganizationOfficeholdersTab({ organizationId }: OrganizationOff
   const endTenure = async (id: string) => {
     const { error } = await supabase
       .from("organization_officeholders")
-      .update({ tenure_end: new Date().toISOString().slice(0, 10) })
+      .update({ tenure_end: todayLocalIso() })
       .eq("id", id);
     if (!error) refresh();
   };

@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -150,7 +151,7 @@ export function StudentDetailScreen() {
     setExiting(true);
     const { error } = await supabase.rpc("exit_student", {
       p_student_id: id,
-      p_exit_date: new Date().toISOString().slice(0, 10),
+      p_exit_date: todayLocalIso(),
       p_exit_reason: exitReason || "לא צוינה סיבה",
     });
     setExiting(false);

@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Calculator, Coins } from "lucide-react";
@@ -115,7 +116,7 @@ export function StudyCodesScreen() {
       קטגוריה: r.category ?? "",
       סטטוס: r.is_active ? "פעיל" : "לא פעיל",
     }));
-    exportRowsToExcel(rows, "קודי לימוד", `study-codes-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportRowsToExcel(rows, "קודי לימוד", `study-codes-${todayLocalIso()}.xlsx`);
   };
 
   const columns: DataTableColumn<StudyCode>[] = [

@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
@@ -81,11 +82,13 @@ async function fetchQuotaData(orgId: string, month: string, branches: BranchRow[
   // בביקורת ביצועים שלב 16) - סופרים בצד לקוח לפי branch_id במקום count() נפרד לכל סניף.
   // ספירה בצד לקוח - ולכן חייבים את כל השורות. בעמותה של 1,187 תלמידים
   // ספירה מ-1,000 שורות הייתה מציגה מכסה מנוצלת נמוכה מהאמת.
-  const [{ data: approved }, registered, eligible] = await Promise.all([
+  const [{ data: approved, error: approvedError }, registered, eligible] = await Promise.all([
     supabase.from("monthly_quotas").select("branch_id, approved_quota").eq("organization_id", orgId).eq("month", month),
     fetchAllIn(branchIds, (chunk) => supabase.from("student_assignments").select("branch_id").in("branch_id", chunk).eq("is_active", true).order("id")),
     fetchAllIn(branchIds, (chunk) => supabase.from("monthly_eligibility").select("branch_id").in("branch_id", chunk).eq("month", month).eq("status", "active").order("id")),
   ]);
+  // בלי הבדיקה הזו, כשל בטעינת המכסות הציג את כל הסניפים כ"לא הוגדרה" בלי שום אזהרה
+  if (approvedError) throw approvedError;
   const approvedMap = new Map((approved ?? []).map((a) => [a.branch_id, a.approved_quota]));
   const registeredMap = countByBranch(registered);
   const eligibleMap = countByBranch(eligible);
@@ -106,7 +109,7 @@ export function QuotasScreen() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   // מפתח = branchId, ערך = תוכן שדה הקלט הנוכחי. נוכחות מפתח ב-map = הסניף במצב עריכה.
   // מאפשר גם עריכה בודדת של סניף אחד וגם מילוי מרוכז ("העתקה מהחודש הקודם") של כמה
   // סניפים בבת אחת, כשכל שורה עדיין נשמרת בנפרד דרך פעולת השמירה הקיימת - אין שמירה

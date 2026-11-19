@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Paperclip } from "lucide-react";
@@ -89,7 +90,7 @@ export function StudentDialog({ student, month, onClose, onAsk }: {
   });
 
   // עזיבה - באישור המשרד
-  const [left, setLeft] = useState({ date: new Date().toISOString().slice(0, 10), reason: "" });
+  const [left, setLeft] = useState({ date: todayLocalIso(), reason: "" });
   const [confirmLeft, setConfirmLeft] = useState(false);
   const sendLeft = useMutation({
     mutationFn: () => portalRpc("portal_request_student_left", {

@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useState, type FormEvent } from "react";
 import { MultiSelect } from "@/components/MultiSelect";
@@ -136,12 +137,12 @@ const EMPTY_FORM = {
   roundingStep: "1",
   roundingTarget: "commission" as RoundingTarget,
   priority: "0",
-  effectiveFrom: new Date().toISOString().slice(0, 10),
+  effectiveFrom: todayLocalIso(),
   effectiveUntil: "",
   notes: "",
 };
 
-const EMPTY_SIM = { groupId: "", studyCode: "", studentId: "", date: new Date().toISOString().slice(0, 10), grossAmount: "" };
+const EMPTY_SIM = { groupId: "", studyCode: "", studentId: "", date: todayLocalIso(), grossAmount: "" };
 
 export function CommissionRulesScreen() {
   const queryClient = useQueryClient();
@@ -262,7 +263,7 @@ export function CommissionRulesScreen() {
       סטטוס: r.is_active ? "פעיל" : "כבוי",
       הערות: r.notes ?? "",
     }));
-    exportRowsToExcel(rows, "כללי עמלה", `commission-rules-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportRowsToExcel(rows, "כללי עמלה", `commission-rules-${todayLocalIso()}.xlsx`);
   };
 
   const runSimulation = async () => {

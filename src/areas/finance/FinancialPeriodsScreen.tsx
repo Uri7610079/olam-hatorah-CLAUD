@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,7 +82,7 @@ export function FinancialPeriodsScreen() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);

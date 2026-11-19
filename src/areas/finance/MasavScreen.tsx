@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
@@ -170,7 +171,7 @@ export function MasavScreen() {
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [bankAccountId, setBankAccountId] = useLastSelected<string>("last-bank-account", "");
-  const [periodMonth, setPeriodMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [periodMonth, setPeriodMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

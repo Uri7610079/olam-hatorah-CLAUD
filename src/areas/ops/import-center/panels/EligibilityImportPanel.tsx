@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useEffect, useState } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -98,7 +99,7 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs, enabled: canImport });
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   // קובץ שהגיע ממשיכה מתלמוד: העמותה והחודש כבר ידועים - ממלאים אותם במקום לבקש
   useEffect(() => {
     if (initialOrgId) setOrgId(initialOrgId);
@@ -242,7 +243,8 @@ export function EligibilityImportPanel({ initialFile, initialOrgId, initialMonth
   const resolveRow = async (rowNumber: number, status: "valid" | "invalid") => {
     if (!reviewBatchId) return;
     setResolvingRow(rowNumber);
-    await resolveImportRow(reviewBatchId, rowNumber, status);
+    const rowError = await resolveImportRow(reviewBatchId, rowNumber, status);
+    if (rowError) setError(`עדכון השורה נכשל: ${rowError}`);
     setResolvingRow(null);
     queryClient.invalidateQueries({ queryKey: ["eligibility-batch-rows", reviewBatchId] });
   };

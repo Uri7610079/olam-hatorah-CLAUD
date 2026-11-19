@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
@@ -88,7 +89,7 @@ export function OrganizationBankAccountsTab({ organizationId }: OrganizationBank
   const closeAccount = async (id: string) => {
     const { error } = await supabase
       .from("organization_bank_accounts")
-      .update({ is_active: false, closed_at: new Date().toISOString().slice(0, 10) })
+      .update({ is_active: false, closed_at: todayLocalIso() })
       .eq("id", id);
     if (!error) refresh();
   };

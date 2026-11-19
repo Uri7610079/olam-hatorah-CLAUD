@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useMemo, useState, type FormEvent } from "react";
 import { MultiSelect } from "@/components/MultiSelect";
 import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
@@ -205,7 +206,7 @@ export function StudentsListScreen() {
       "מספר בית": s.address_house_number ?? "",
       עיר: s.address_city ?? "",
     }));
-    exportRowsToExcel(out, "תלמידים", `students-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportRowsToExcel(out, "תלמידים", `students-${todayLocalIso()}.xlsx`);
   };
 
   const columns: DataTableColumn<Student>[] = [

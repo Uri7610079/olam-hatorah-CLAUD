@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -76,7 +77,7 @@ async function fetchDonations(orgId: string, unassignedOnly: boolean): Promise<D
 
 const EMPTY_FORM = {
   groupId: "",
-  donationDate: new Date().toISOString().slice(0, 10),
+  donationDate: todayLocalIso(),
   amount: "",
   donorReference: "",
   reference: "",
@@ -226,7 +227,7 @@ export function DonationsScreen() {
       "סיבת דחייה": r.rejection_reason ?? "",
       הערות: r.notes ?? "",
     }));
-    exportRowsToExcel(rows, "תרומות", `donations-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    exportRowsToExcel(rows, "תרומות", `donations-${todayLocalIso()}.xlsx`);
   };
 
   const columns: DataTableColumn<DonationRow>[] = [

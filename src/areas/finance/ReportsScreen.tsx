@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -346,7 +347,8 @@ const REPORTS: ReportDef[] = [
     label: "יומן החלטות",
     fetch: async ({ month }) => {
       const { start, end } = monthRange(month);
-      const { data } = await supabase.from("audit_events").select("action, resource, resource_id, created_at").gte("created_at", start).lt("created_at", end).order("created_at", { ascending: false }).limit(500);
+      // כל האירועים של החודש (fetchAll) - עד היום limit(500) חתך את הדוח ואת הייצוא בשקט.
+      const data = await fetchAll(() => supabase.from("audit_events").select("action, resource, resource_id, created_at").gte("created_at", start).lt("created_at", end).order("created_at", { ascending: false }).order("id"));
       return (data ?? []).map((r) => ({ "תאריך": r.created_at?.slice(0, 16).replace("T", " "), "פעולה": r.action, "משאב": r.resource, "מזהה רשומה": r.resource_id ?? "—" }));
     },
   },
@@ -368,7 +370,7 @@ export function ReportsScreen() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [searchParams] = useSearchParams();
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const [groupId, setGroupId] = useState("");
   const [reportKey, setReportKey] = useState(REPORTS[0].key);
   const [rows, setRows] = useState<ReportRow[] | null>(null);

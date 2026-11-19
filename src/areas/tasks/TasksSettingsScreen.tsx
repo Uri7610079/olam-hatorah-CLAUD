@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft, Repeat, FileStack } from "lucide-react";
@@ -104,19 +105,29 @@ function TeamMembersPanel({ teamId, canManage }: { teamId: string; canManage: bo
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["team-members", teamId] });
 
+  // עד היום כישלון בהוספה/הסרה נבלע בשקט, והצוות נראה כאילו עודכן
+  const [memberError, setMemberError] = useState<string | null>(null);
+
   const addMember = async (userId: string) => {
     if (!userId) return;
-    await supabase.from("team_members").insert({ team_id: teamId, user_id: userId });
+    const { error } = await supabase.from("team_members").insert({ team_id: teamId, user_id: userId });
+    setMemberError(error ? `הוספת חבר הצוות נכשלה: ${error.message}` : null);
     refresh();
   };
 
   const removeMember = async (userId: string) => {
-    await supabase.from("team_members").delete().eq("team_id", teamId).eq("user_id", userId);
+    const { error } = await supabase.from("team_members").delete().eq("team_id", teamId).eq("user_id", userId);
+    setMemberError(error ? `הסרת חבר הצוות נכשלה: ${error.message}` : null);
     refresh();
   };
 
   return (
     <div className="mt-2 rounded-control bg-surface-muted p-3">
+      {memberError && (
+        <div className="mb-2">
+          <ErrorState message={memberError} />
+        </div>
+      )}
       <div className="mb-2 flex flex-wrap gap-1.5">
         {[...memberIds].length === 0 && <span className="text-xs text-ink-subtle">אין חברים בצוות עדיין.</span>}
         {[...memberIds].map((id) => (
@@ -155,7 +166,7 @@ const EMPTY_RECURRENCE_FORM = {
   dayOfWeek: 0,
   dayOfMonth: 1,
   intervalDays: 7,
-  startDate: new Date().toISOString().slice(0, 10),
+  startDate: todayLocalIso(),
   endDate: "",
   createNextEvenIfPreviousIncomplete: false,
   reminderDaysBeforeDue: "",

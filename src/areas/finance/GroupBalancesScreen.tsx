@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useState, type FormEvent } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
@@ -66,7 +67,7 @@ async function fetchLedgerEntries(groupId: string): Promise<LedgerEntry[]> {
   return data ?? [];
 }
 
-const EMPTY_CORRECTION = { amount: "", periodMonth: new Date().toISOString().slice(0, 7) + "-01", reason: "", reference: "" };
+const EMPTY_CORRECTION = { amount: "", periodMonth: todayLocalIso().slice(0, 7) + "-01", reason: "", reference: "" };
 
 export function GroupBalancesScreen() {
   const queryClient = useQueryClient();
