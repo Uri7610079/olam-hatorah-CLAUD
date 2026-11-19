@@ -71,6 +71,15 @@ interface TransactionRow {
 }
 
 const DIRECTION_LABEL: Record<Direction, string> = { debit: "חובה", credit: "זכות" };
+
+// הטקסט המוצע לכלל מסיווג ידני: הקטע הארוך ביותר בתיאור שאין בו ספרות (מספרי שיק,
+// אסמכתאות ותאריכים משתנים בין תנועות - השם הקבוע הוא מה שמזהה את סוג התנועה).
+export function rulePatternFromDescription(description: string | null): string {
+  const d = (description ?? "").replace(/\s+/g, " ").trim();
+  const parts = d.split(/[0-9]+/).map((p) => p.replace(/^[\s:.,\-–/()]+|[\s:.,\-–/(]+$/g, "").trim());
+  const best = parts.reduce((a, b) => (b.length > a.length ? b : a), "");
+  return best.length >= 3 ? best : d;
+}
 const CONFIDENCE_LABEL: Record<string, string> = { high: "גבוהה", medium: "בינונית", low: "נמוכה" };
 const BATCH_STATUS_LABEL: Record<BatchStatus, string> = { uploaded: "הועלה", analyzed: "נותח", previewed: "נסקר", committed: "נקלט", rejected: "בוטל" };
 
@@ -581,9 +590,43 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
     queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
   };
 
+  // אחרי סיווג ידני: הצעה להפוך אותו לכלל קבוע (132)
+  const [rulePrompt, setRulePrompt] = useState<{ txId: string; typeLabel: string; direction: Direction; pattern: string; thisAccountOnly: boolean } | null>(null);
+  const [ruleResult, setRuleResult] = useState<string | null>(null);
+  const [creatingRule, setCreatingRule] = useState(false);
+
   const confirmType = async (transactionId: string, typeId: string) => {
     if (!typeId) return;
-    await supabase.rpc("confirm_transaction_type", { p_transaction_id: transactionId, p_type_id: typeId });
+    const { error: err } = await supabase.rpc("confirm_transaction_type", { p_transaction_id: transactionId, p_type_id: typeId });
+    queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    const row = (transactionsQuery.data ?? []).find((r) => r.id === transactionId);
+    const typeLabel = (typesQuery.data ?? []).find((t) => t.id === typeId)?.label_he ?? "";
+    if (row?.description) {
+      setRuleResult(null);
+      setRulePrompt({ txId: transactionId, typeLabel, direction: row.direction, pattern: rulePatternFromDescription(row.description), thisAccountOnly: true });
+    }
+  };
+
+  const createRule = async () => {
+    if (!rulePrompt) return;
+    setCreatingRule(true);
+    const { data, error: err } = await supabase.rpc("create_rule_from_transaction", {
+      p_transaction_id: rulePrompt.txId,
+      p_pattern: rulePrompt.pattern,
+      p_this_account_only: rulePrompt.thisAccountOnly,
+    });
+    setCreatingRule(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    const applied = (data as { applied: number } | null)?.applied ?? 0;
+    setRuleResult(`נוצר כלל: "${rulePrompt.pattern}" ← ${rulePrompt.typeLabel}. ${applied > 0 ? `${applied} תנועות דומות סווגו עכשיו.` : "אין כרגע תנועות דומות נוספות."} תנועות כאלה שיגיעו מהבנק יסווגו לבד.`);
+    setRulePrompt(null);
     queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
   };
 
@@ -864,6 +907,44 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
               </div>
             )}
           </div>
+
+          {rulePrompt && (
+            <div className="mb-3 space-y-2 rounded-control border border-line bg-surface-muted p-3 text-sm">
+              <p className="font-semibold text-ink">
+                לסווג מעכשיו כ"{rulePrompt.typeLabel}" את כל התנועות ב{rulePrompt.direction === "credit" ? "זכות" : "חובה"} שהתיאור שלהן כולל:
+              </p>
+              <input
+                value={rulePrompt.pattern}
+                onChange={(e) => setRulePrompt({ ...rulePrompt, pattern: e.target.value })}
+                className="input-field w-full max-w-md text-sm"
+                aria-label="הטקסט לזיהוי"
+              />
+              <label className="flex items-center gap-2 text-xs text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={rulePrompt.thisAccountOnly}
+                  onChange={(e) => setRulePrompt({ ...rulePrompt, thisAccountOnly: e.target.checked })}
+                />
+                רק בחשבון הזה (אותו תיאור יכול להיות דבר אחר בעמותה אחרת)
+              </label>
+              <div className="flex gap-2">
+                <button onClick={createRule} disabled={creatingRule || rulePrompt.pattern.trim().length < 3} className="btn-primary text-xs">
+                  {creatingRule ? "יוצרת…" : "כן, ליצור כלל"}
+                </button>
+                <button onClick={() => setRulePrompt(null)} className="btn-secondary text-xs">
+                  לא, רק התנועה הזו
+                </button>
+              </div>
+            </div>
+          )}
+          {ruleResult && (
+            <div className="mb-3 flex items-start gap-2 rounded-control border border-line bg-surface-muted p-2.5 text-xs text-ink-muted">
+              <span>{ruleResult}</span>
+              <button onClick={() => setRuleResult(null)} className="ms-auto underline">
+                סגירה
+              </button>
+            </div>
+          )}
 
           <DataTable
             columns={transactionColumns}
