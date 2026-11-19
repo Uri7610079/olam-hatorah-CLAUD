@@ -1,21 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type UiTheme = "classic" | "v2";
+// סדר המפתחות כאן הוא סדר ההצגה במסך "עיצוב ותצוגה". ערכה חדשה חייבת
+// להתווסף גם לסקריפט ב-index.html, אחרת היא מתאפסת בכל רענון.
+export type UiTheme = "classic" | "v2" | "v3";
 
 export const UI_THEME_STORAGE_KEY = "olam-ui-theme";
 
 export const UI_THEME_LABEL: Record<UiTheme, string> = {
   classic: "העיצוב הקיים",
   v2: "העיצוב החדש",
+  v3: "בהירות מודרנית (v3)",
 };
 
 export const UI_THEME_DESCRIPTION: Record<UiTheme, string> = {
   classic: "המראה שהמערכת עבדה איתו עד היום - סגול-כחול, כרטיסים מעוגלים עם צל.",
   v2: "מראה מעודכן ורגוע יותר: כחול עמוק, רקע אפור-כחלחל, גבול דק במקום צל, וסימון ברור של האזור שבו נמצאים.",
+  v3: "כחול עמוק לכותרות, טורקיז לפעולות וזהב להדגשה. טקסט גדול וקריא יותר, סכומים ותאריכים אחידים, וצבע מובחן לכל אזור.",
 };
 
+export const UI_THEMES = Object.keys(UI_THEME_LABEL) as UiTheme[];
+
 function isUiTheme(value: string | null): value is UiTheme {
-  return value === "classic" || value === "v2";
+  return value !== null && (UI_THEMES as string[]).includes(value);
 }
 
 export function readStoredUiTheme(): UiTheme {

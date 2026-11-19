@@ -8,9 +8,11 @@
    עד היום הצבעים היו כתובים ישירות בכל מסך (slate-200, red-50 וכו'), ולכן כל
    שינוי עיצובי חייב מעבר ידני בעשרות קבצים. השכבה הזו הופכת את זה למקום אחד.
 
-   שתי ערכות מוגדרות במקביל, ומתחלפות לפי data-ui על <html>:
+   שלוש ערכות מוגדרות במקביל, ומתחלפות לפי data-ui על <html>:
      (ברירת מחדל / data-ui="classic") - העיצוב הקיים, בדיוק כפי שהיה.
      data-ui="v2"                     - CRM-01 Operational Clarity מקטלוג העיצוב.
+     data-ui="v3"                     - Modern Clarity (שדרוג 2026-11). רכיבים
+                                        משתמשים גם בקידומת v3: של Tailwind.
    המתג עצמו במסך "עיצוב ותצוגה" (הגדרות). ר' src/lib/uiTheme.ts.
 
    למה סקאלת brand-* ממופה לאסימונים ולא רק הצבעים החדשים: כך .btn-primary,
@@ -67,6 +69,19 @@
   --ui-radius-card: 0.75rem;
   --ui-radius-control: 0.5rem;
   --ui-shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 6px -1px rgb(15 23 42 / 0.06);
+
+  /* אסימונים שנוספו עם ערכה v3. כאן (וכך גם ב-v2, שיורשת מכאן) הם מוגדרים
+     כערכים שכבר קיימים בערכה, כדי ששום דבר לא ישתנה במראה הקיים:
+     ראשי = צבע הטקסט, "גבוה" = אזהרה, הדגשה = אזהרה, טקסט על צבע אזור = לבן. */
+  --ui-primary: 15 23 42;
+  --ui-primary-soft: 241 245 249;
+  --ui-accent: 202 138 4;
+  --ui-accent-soft: 254 252 232;
+  --ui-accent-ink: 161 98 7;
+  --ui-high: 202 138 4;
+  --ui-high-soft: 254 252 232;
+  --ui-high-ink: 161 98 7;
+  --ui-area-on: 255 255 255;
 }
 
 /* CRM-01 Operational Clarity - כחול עמוק מאופק, רקע אפור-כחלחל, גבול דק במקום
@@ -124,6 +139,108 @@
   --ui-radius-card: 0.625rem;
   --ui-radius-control: 0.5rem;
   --ui-shadow-card: none;
+
+  /* אסימוני v3 - שווים לערכים הקיימים של v2, כדי שהמראה שלה לא ישתנה */
+  --ui-primary: 26 39 51;
+  --ui-primary-soft: 237 241 245;
+  --ui-accent: 168 104 26;
+  --ui-accent-soft: 248 233 210;
+  --ui-accent-ink: 143 87 20;
+  --ui-high: 168 104 26;
+  --ui-high-soft: 248 233 210;
+  --ui-high-ink: 143 87 20;
+}
+
+/* ---------------------------------------------------------------------------
+   v3 - Modern Clarity
+   ---------------------------------------------------------------------------
+   כחול עמוק (#173D59) לכותרות ולזהות, טורקיז (#237E81) לפעולות, זהב (#D9A64E)
+   להדגשה בלבד. כל צבע טקסט נבדק מול WCAG AA (4.5:1 לפחות על לבן ועל הרקע):
+     - הזהב נכשל כטקסט (2.2) - משמש רק כפס/מילוי, והטקסט שעליו כהה (accent-ink).
+     - כתום האזהרה המקורי (#AC6A19, 4.35) הוכהה לטקסט: warn-ink = #8C5412 (6.2).
+     - ענבר המשימות הוכהה ל-#965C0E, כדי שטקסט לבן עליו יעבור (5.5).
+   סקאלת brand (כפתורים, קישורים, פוקוס) בנויה סביב הטורקיז: brand-600 = #237E81.
+--------------------------------------------------------------------------- */
+:root[data-ui="v3"] {
+  --ui-app-bg: 244 248 250;
+  --ui-surface: 255 255 255;
+  --ui-surface-muted: 238 243 246;
+  --ui-border: 221 229 236;
+  --ui-border-strong: 196 209 219;
+  --ui-ink: 25 43 59;
+  --ui-ink-muted: 82 98 120;
+  --ui-ink-subtle: 92 107 128;
+
+  --ui-brand-50: 239 247 247;
+  --ui-brand-100: 220 239 239;
+  --ui-brand-200: 184 222 223;
+  --ui-brand-300: 135 197 199;
+  --ui-brand-400: 82 164 167;
+  --ui-brand-500: 46 140 143;
+  --ui-brand-600: 35 126 129;
+  --ui-brand-700: 28 104 107;
+  --ui-brand-800: 23 84 87;
+  --ui-brand-900: 19 67 69;
+
+  --ui-primary: 23 61 89;
+  --ui-primary-soft: 232 239 245;
+  --ui-accent: 217 166 78;
+  --ui-accent-soft: 251 243 228;
+  --ui-accent-ink: 122 86 22;
+
+  --ui-ok: 37 118 83;
+  --ui-ok-soft: 226 242 234;
+  --ui-ok-ink: 30 98 69;
+  --ui-warn: 172 106 25;
+  --ui-warn-soft: 250 238 220;
+  --ui-warn-ink: 140 84 18;
+  --ui-high: 196 92 40;
+  --ui-high-soft: 252 233 222;
+  --ui-high-ink: 158 68 26;
+  --ui-danger: 181 71 72;
+  --ui-danger-soft: 249 228 228;
+  --ui-danger-ink: 150 53 54;
+  --ui-info: 43 108 160;
+  --ui-info-soft: 226 238 248;
+  --ui-info-ink: 30 84 128;
+  --ui-neutral: 100 116 139;
+  --ui-neutral-soft: 238 242 246;
+  --ui-neutral-ink: 71 85 105;
+
+  /* זהות אזורית: כחול לתפעול, טורקיז לכספים, סגול-אפור לניהול, ענבר למשימות.
+     צבעי הסטטוס לא תלויים באזור - "תקין" ירוק בכל מקום. */
+  --ui-area-ops: 37 99 160;
+  --ui-area-ops-soft: 230 239 249;
+  --ui-area-finance: 35 126 129;
+  --ui-area-finance-soft: 225 241 241;
+  --ui-area-admin: 98 92 130;
+  --ui-area-admin-soft: 238 236 245;
+  --ui-area-tasks: 150 92 14;
+  --ui-area-tasks-soft: 251 241 222;
+  --ui-area-on: 255 255 255;
+
+  --ui-radius-card: 0.75rem;
+  --ui-radius-control: 0.5rem;
+  --ui-shadow-card: 0 1px 2px 0 rgb(23 61 89 / 0.05), 0 2px 8px -2px rgb(23 61 89 / 0.07);
+}
+
+/* v3: טקסט "קטן" עולה מ-12 ל-13 פיקסלים. 551 מקומות במערכת משתמשים בגודל
+   הזה, כולל כפתורים ופעולות שורה - זה השינוי הבודד שמשפר הכי הרבה את הקריאות.
+   חל רק ב-v3, ולכן הערכות הקיימות לא משתנות. */
+:root[data-ui="v3"] .text-xs {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+/* v3: מעברים רגועים וקצרים (150ms); מי שביקש פחות תנועה - בלי מעברים. */
+:root[data-ui="v3"] .transition {
+  transition-duration: 150ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui="v3"] * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
 }
 
 /* האזור הנוכחי נקבע ע"י data-area ב-Layout, וכל רכיב שמשתמש ב-area/area-soft
@@ -202,4 +319,31 @@ body {
   .card {
     @apply rounded-card border border-line bg-surface shadow-card;
   }
+}
+
+/* v3: כפתורים ושדות. משקל מודגש יותר לפעולה הראשית, בלי צל, ומצב פוקוס בטורקיז.
+   מחוץ ל-@layer בכוונה - כדי לגבור על אותן מחלקות רק כשהערכה פעילה. */
+:root[data-ui="v3"] .btn-primary,
+:root[data-ui="v3"] .btn-secondary,
+:root[data-ui="v3"] .btn-danger {
+  box-shadow: none;
+  font-weight: 600;
+}
+:root[data-ui="v3"] .btn-secondary {
+  color: rgb(var(--ui-ink));
+  border-color: rgb(var(--ui-border-strong));
+}
+:root[data-ui="v3"] .btn-secondary:hover:not(:disabled) {
+  background-color: rgb(var(--ui-brand-50));
+  border-color: rgb(var(--ui-brand-300));
+}
+:root[data-ui="v3"] .input-field {
+  box-shadow: none;
+  border-color: rgb(var(--ui-border-strong));
+}
+:root[data-ui="v3"] .field-label {
+  color: rgb(var(--ui-ink));
+}
+:root[data-ui="v3"] .link-action {
+  color: rgb(var(--ui-brand-700));
 }

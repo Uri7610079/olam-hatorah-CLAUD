@@ -39,10 +39,10 @@ export function Layout() {
         </button>
 
         <button onClick={() => navigate(dashboardHref)} className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-600 text-xs font-bold text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-600 text-xs font-bold text-white v3:bg-primary">
             עת
           </span>
-          <span className="hidden font-bold text-ink sm:inline">עולם התורה</span>
+          <span className="hidden font-bold text-ink sm:inline v3:text-primary">עולם התורה</span>
         </button>
 
         <GlobalSearch />
@@ -63,7 +63,7 @@ export function Layout() {
                   aria-selected={isActive}
                   onClick={() => navigate(`/${area}`)}
                   className={`flex items-center gap-1.5 rounded-[calc(var(--ui-radius-control)-2px)] px-3 py-1 text-sm font-medium transition ${
-                    isActive ? "bg-area text-white" : "text-ink-muted hover:text-ink"
+                    isActive ? "bg-area text-area-on" : "text-ink-muted hover:text-ink"
                   }`}
                 >
                   <AreaIcon className="h-4 w-4" aria-hidden="true" />
@@ -110,7 +110,7 @@ export function Layout() {
               end
               className={({ isActive }) =>
                 `flex items-center gap-2.5 rounded-control px-3 py-2 text-sm transition ${
-                  isActive ? "bg-area-soft font-semibold text-area" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
+                  isActive ? "bg-area-soft font-semibold text-area v3:shadow-[inset_-3px_0_0_rgb(var(--ui-area))]" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
                 }`
               }
             >
@@ -120,14 +120,14 @@ export function Layout() {
             {screens.map((s) => (
               <div key={s.path}>
               {s.sectionTitle && (
-                <p className="px-3 pb-1 pt-4 text-[11px] font-semibold tracking-wide text-ink-subtle">{s.sectionTitle}</p>
+                <p className="px-3 pb-1 pt-4 text-[11px] font-semibold tracking-wide text-ink-subtle v3:text-[0.8125rem] v3:text-ink-muted">{s.sectionTitle}</p>
               )}
               <NavLink
                 to={s.path}
                 title={s.description}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 rounded-control px-3 py-2 text-sm transition ${
-                    isActive ? "bg-area-soft font-semibold text-area" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
+                    isActive ? "bg-area-soft font-semibold text-area v3:shadow-[inset_-3px_0_0_rgb(var(--ui-area))]" : "text-ink-muted hover:bg-surface-muted hover:text-ink"
                   }`
                 }
               >

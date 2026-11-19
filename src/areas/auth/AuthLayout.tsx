@@ -11,7 +11,7 @@ export function AuthLayout({ title, description, children }: AuthLayoutProps) {
     <div className="flex min-h-screen items-center justify-center bg-app p-4">
       <div className="card w-full max-w-sm p-7">
         <div className="mb-1 flex items-center justify-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-600 text-sm font-bold text-white">
+          <span className="flex h-9 w-9 items-center justify-center rounded-control bg-brand-600 text-sm font-bold text-white v3:bg-primary">
             עת
           </span>
           <h1 className="text-lg font-bold text-ink">עולם התורה</h1>

@@ -13,7 +13,9 @@ const SEVERITY_LABEL: Record<Severity, string> = {
 
 const SEVERITY_CLASSES: Record<Severity, string> = {
   critical: "bg-danger-soft text-danger-ink ring-1 ring-danger/25",
-  high: "bg-warn-soft text-warn-ink ring-1 ring-warn/25",
+  // אסימון high: בערכות הקיימות שווה לאזהרה (בלי שינוי). ב-v3 כתום-אדום, כדי
+  // ש"גבוה" ו"בינוני" לא ייראו זהים.
+  high: "bg-high-soft text-high-ink ring-1 ring-high/25",
   medium: "bg-warn-soft text-warn-ink ring-1 ring-warn/20",
   low: "bg-neutral-soft text-neutral-ink ring-1 ring-neutral/20",
   ok: "bg-ok-soft text-ok-ink ring-1 ring-ok/25",

@@ -54,7 +54,7 @@ export function PageHeader({ title, description, primaryAction, breadcrumbs }: P
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} />}
-          <h1 className="flex items-center gap-1.5 text-2xl font-bold tracking-tight text-ink">
+          <h1 className="flex items-center gap-1.5 text-2xl font-bold tracking-tight text-ink v3:text-primary">
             {title}
             {guide && <HelpHint guide={guide} />}
           </h1>

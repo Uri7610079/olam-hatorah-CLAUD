@@ -17,7 +17,9 @@
       (function () {
         try {
           var t = localStorage.getItem("olam-ui-theme");
-          document.documentElement.setAttribute("data-ui", t === "v2" ? "v2" : "classic");
+          // חייב להכיר כל ערכה שמוגדרת ב-uiTheme.ts - ערכה שלא מופיעה כאן חוזרת
+          // ל"קיים" בכל רענון.
+          document.documentElement.setAttribute("data-ui", t === "v2" || t === "v3" ? t : "classic");
         } catch (e) {
           document.documentElement.setAttribute("data-ui", "classic");
         }

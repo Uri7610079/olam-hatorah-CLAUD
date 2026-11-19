@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight, ChevronLeft, Columns3 } from "lucide-react";
 import { EmptyState } from "./EmptyState";
@@ -25,7 +25,37 @@ export interface DataTableColumn<T> {
   filterValue?: (row: T) => string | number | null | undefined;
   sortValue?: (row: T) => CellValue;
   filterable?: boolean;
+  // סוג הנתון בעמודה (v3). קובע יישור ותצוגה אחידים במקום className ידני בכל מסך:
+  //   number/money - ספרות ברוחב קבוע, מיושרות לשמאל כדי שעשרות ומאות יעמדו זו מתחת לזו
+  //   ltr          - ת"ז, טלפון, מספר חשבון, אימייל: בידוד כיווני, כדי שלא יתהפכו
+  kind?: "text" | "number" | "money" | "ltr";
+  // טקסט ארוך מקוצר עם "…", והטקסט המלא מופיע בריחוף.
+  truncate?: boolean;
 }
+
+const KIND_CELL: Record<NonNullable<DataTableColumn<unknown>["kind"]>, string> = {
+  text: "",
+  number: "tabular text-left",
+  money: "tabular text-left font-medium text-ink",
+  ltr: "ltr-num",
+};
+const KIND_HEAD: Record<NonNullable<DataTableColumn<unknown>["kind"]>, string> = {
+  text: "",
+  number: "text-left",
+  money: "text-left",
+  ltr: "",
+};
+
+const readStoredColumns = (tableId: string | undefined): string[] | null => {
+  if (!tableId) return null;
+  try {
+    const raw = localStorage.getItem(`olam-table-cols:${tableId}`);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === "string") : null;
+  } catch {
+    return null;
+  }
+};
 
 export interface DataTablePagination {
   page: number;
@@ -56,6 +86,10 @@ interface DataTableProps<T> {
   filterState?: [ColumnFilterState, (s: ColumnFilterState) => void];
   // חלוקה לעמודים בדפדפן, אחרי הסינון. לטבלה עם הרבה שורות.
   clientPageSize?: number;
+  // השורה הנבחרת (למשל הסניף שהקבוצות שלו מוצגות) - מודגשת בצבע ובפס בצד.
+  selectedKey?: string | null;
+  // מזהה קבוע לטבלה: בחירת העמודות נשמרת בדפדפן ונטענת בפעם הבאה.
+  tableId?: string;
 }
 
 const NO_FILTER_KEYS = new Set(["actions", "select"]);
@@ -98,6 +132,8 @@ export function DataTable<T>({
   headerFilters,
   filterState,
   clientPageSize,
+  selectedKey,
+  tableId,
 }: DataTableProps<T>) {
   const filtersOn = headerFilters ?? !pagination;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,8 +150,23 @@ export function DataTable<T>({
       ? { page: clientPage, pageSize: clientPageSize, totalCount: shownRows.length, onPageChange: (p) => setClientPage(Math.min(Math.max(p, 0), clientPages - 1)) }
       : undefined);
 
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set(columnPicker ? columns.filter((c) => c.hiddenByDefault).map((c) => c.key) : []));
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => {
+    if (!columnPicker) return new Set();
+    const stored = readStoredColumns(tableId);
+    return new Set(stored ?? columns.filter((c) => c.hiddenByDefault).map((c) => c.key));
+  });
   const [showPicker, setShowPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // חלונית בחירת העמודות נסגרת בלחיצה מחוץ לה (עד היום נשארה פתוחה עד לחיצה נוספת על הכפתור).
+  useEffect(() => {
+    if (!showPicker) return;
+    const onDown = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowPicker(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showPicker]);
 
   const visibleColumns = columnPicker ? columns.filter((c) => !hiddenKeys.has(c.key)) : columns;
   const growKey = visibleColumns.find((c) => c.grow)?.key;
@@ -143,7 +194,7 @@ export function DataTable<T>({
   // לוקח את הרקע מהשורה, כך שריחוף והדגשת שורה ממשיכים לעבוד - רקע
   // קבוע היה מבטל אותם דווקא בעמודה הבולטת ביותר.
   const stickyCell = (key: string, head: boolean) => {
-    const bg = head ? "z-20 bg-surface-muted" : "z-10 bg-inherit";
+    const bg = head ? "z-20 bg-surface-muted v3:bg-primary-soft" : "z-10 bg-inherit";
     // left/right פיזיים ולא לוגיים: הגלילה עצמה פיזית, ובממשק ימין-לשמאל
     // הקצה ההתחלתי הוא הימני.
     if (key === stickyEndKey) return `sticky left-0 ${bg} border-s border-line`;
@@ -152,7 +203,7 @@ export function DataTable<T>({
   };
 
   const cellClass = (col: DataTableColumn<T>) => {
-    const own = col.className ?? "";
+    const own = `${col.kind ? KIND_CELL[col.kind] : ""} ${col.truncate ? "max-w-[18rem] truncate" : ""} ${col.className ?? ""}`.trim();
     if (col.key === growKey) return `min-w-[22rem] ${own}`;
     return own.includes("whitespace") ? own : `whitespace-nowrap ${own}`;
   };
@@ -162,6 +213,13 @@ export function DataTable<T>({
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      if (tableId) {
+        try {
+          localStorage.setItem(`olam-table-cols:${tableId}`, JSON.stringify([...next]));
+        } catch {
+          // אחסון חסום - הבחירה פשוט לא תישמר לפעם הבאה
+        }
+      }
       return next;
     });
   };
@@ -172,8 +230,12 @@ export function DataTable<T>({
     <div>
       {columnPicker && (
         <div className="mb-2 flex justify-end">
-          <div className="relative">
-            <button onClick={() => setShowPicker((v) => !v)} className="flex items-center gap-1 text-xs text-ink-subtle hover:text-ink-muted">
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setShowPicker((v) => !v)}
+              aria-expanded={showPicker}
+              className="flex items-center gap-1 text-xs text-ink-subtle hover:text-ink-muted v3:rounded-control v3:px-2 v3:py-1 v3:text-ink-muted v3:hover:bg-surface-muted"
+            >
               <Columns3 className="h-3.5 w-3.5" aria-hidden="true" />
               בחירת עמודות
             </button>
@@ -204,7 +266,7 @@ export function DataTable<T>({
         // main ב-Layout היה flex item בלי min-w-0 ולכן לא הצטמצם מתחת לרוחב התוכן הטבעי.
         <div className="card max-h-[70vh] overflow-auto">
           <table className="w-full text-right text-sm">
-            <thead className="sticky top-0 z-10 border-b border-line bg-surface-muted text-ink-muted">
+            <thead className="sticky top-0 z-10 border-b border-line bg-surface-muted text-ink-muted v3:border-line-strong v3:bg-primary-soft v3:text-primary">
               <tr>
                 {visibleColumns.map((col) => (
                   <th
@@ -214,7 +276,7 @@ export function DataTable<T>({
                     // משמעות, והעמודה הייתה מתמוטטת לרוחב המילה הארוכה
                     // ביותר. עדיף שהטבלה תיגלל לרוחב (המכל כבר תומך בזה)
                     // מאשר עמודת טקסט צרה וגבוהה.
-                    className={`whitespace-nowrap px-4 py-3 font-medium ${col.key === growKey ? "w-full min-w-[22rem]" : ""} ${stickyCell(col.key, true)}`}
+                    className={`whitespace-nowrap px-4 py-3 font-medium v3:py-2.5 v3:font-semibold ${col.kind ? KIND_HEAD[col.kind] : ""} ${col.key === growKey ? "w-full min-w-[22rem]" : ""} ${stickyCell(col.key, true)}`}
                   >
                     {filtersOn ? <ColumnHeader ctrl={ctrl} colKey={col.key}>{col.header}</ColumnHeader> : col.header}
                   </th>
@@ -234,9 +296,13 @@ export function DataTable<T>({
                   <td colSpan={visibleColumns.length + 1} className="px-4 py-6 text-center text-ink-muted">אין שורות שמתאימות לסינון</td>
                 </tr>
               )}
-              {pageRows.map((row) => (
+              {pageRows.map((row) => {
+                const key = rowKey(row);
+                const selected = selectedKey != null && key === selectedKey;
+                return (
                 <tr
-                  key={rowKey(row)}
+                  key={key}
+                  aria-selected={selectedKey !== undefined ? selected : undefined}
                   onClick={() => onRowClick?.(row)}
                   // שורה עם onRowClick חייבת להיות נגישה גם למקלדת - tr לא focusable
                   // כברירת מחדל, ו-onClick לבדו לא מספיק (נתפס בביקורת נגישות שלב 16,
@@ -255,19 +321,34 @@ export function DataTable<T>({
                   // bg-surface על השורה ולא רק על הכרטיס: התא המוצמד יורש
                   // ממנה את הרקע, ובלי רקע אמיתי הוא היה שקוף והתוכן
                   // שנגלל מתחתיו היה נראה דרכו.
-                  className={`bg-surface ${onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""} ${rowClassName?.(row) ?? ""}`.trim()}
+                  // שורה נבחרת: רקע בצבע הפעולה ופס בצד ההתחלה (צל פנימי ולא border,
+                  // כדי לא להזיז את העמודות). בלי bg-surface - שני רקעים מתנגשים.
+                  className={`${selected ? "bg-brand-50 shadow-[inset_-3px_0_0_rgb(var(--ui-brand-600))]" : "bg-surface"} v3:hover:bg-brand-50/60 ${onRowClick ? "cursor-pointer transition hover:bg-surface-muted focus:outline-none focus-visible:bg-surface-muted focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset" : ""} ${rowClassName?.(row) ?? ""}`.trim()}
                 >
                   {visibleColumns.map((col) => (
-                    <td key={col.key} className={`px-4 py-3 ${cellClass(col)} ${stickyCell(col.key, false)}`}>
+                    <td
+                      key={col.key}
+                      className={`px-4 py-3 v3:py-2.5 ${cellClass(col)} ${stickyCell(col.key, false)}`}
+                      title={col.truncate ? textOf(col.render(row)) || undefined : undefined}
+                    >
                       {col.render(row)}
                     </td>
                   ))}
                   {!growKey && <td aria-hidden="true" />}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* v3: מספר השורות מוצג תמיד, גם בלי עמודים וגם בלי סינון - כדי שיהיה ברור
+          כמה רשומות יש בלי לגלול עד הסוף. (עם סינון פעיל - ר' השורה שמעל הטבלה.) */}
+      {!paging && !loading && rows.length > 0 && (
+        <p className="mt-2 hidden text-xs text-ink-subtle v3:block">
+          {shownRows.length.toLocaleString("he-IL")} {shownRows.length === 1 ? "שורה" : "שורות"}
+        </p>
       )}
 
       {paging && !loading && rows.length > 0 && (

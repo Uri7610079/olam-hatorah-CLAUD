@@ -1,24 +1,43 @@
 import { Check, Palette } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useUiTheme, UI_THEME_DESCRIPTION, UI_THEME_LABEL, type UiTheme } from "@/lib/uiTheme";
-
-const OPTIONS: UiTheme[] = ["classic", "v2"];
+import { MetricCard } from "@/components/MetricCard";
+import { formatDate, formatMoney } from "@/lib/format";
+import { useUiTheme, UI_THEMES, UI_THEME_DESCRIPTION, UI_THEME_LABEL } from "@/lib/uiTheme";
 
 // תצוגה מקדימה קטנה של הרכיבים המרכזיים - כרטיס, כפתורים, שדה וסטטוסים. היא
 // מושפעת מהערכה הפעילה בפועל, ולכן משתנה מיד עם ההחלפה ומראה את ההבדל האמיתי
-// במקום לתאר אותו במילים.
+// במקום לתאר אותו במילים. הנתונים כאן הם דוגמה קבועה ולא נתוני המערכת.
 function ThemePreview() {
   return (
     <div className="card space-y-3 p-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-ink">כך ייראו המסכים</span>
+        <span className="text-sm font-semibold text-ink v3:text-primary">כך ייראו המסכים</span>
         <StatusBadge severity="ok" label="תקין" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <MetricCard label="נטו לחלוקה" value={formatMoney(48250)} tone="primary" hint="דוגמה" />
+        <MetricCard label="לא מסווגות" value="27" tone="danger" hint="דוגמה" />
       </div>
       <div className="flex flex-wrap gap-2">
         <StatusBadge severity="critical" label="חריגה" />
+        <StatusBadge severity="high" label="גבוה" />
         <StatusBadge severity="medium" label="ממתין" />
         <StatusBadge severity="neutral" label="טיוטה" />
+      </div>
+      <div className="overflow-hidden rounded-control border border-line text-sm">
+        <div className="flex justify-between bg-surface-muted px-3 py-2 font-medium text-ink-muted v3:bg-primary-soft v3:font-semibold v3:text-primary">
+          <span>תאריך</span>
+          <span>סכום</span>
+        </div>
+        <div className="flex justify-between px-3 py-2">
+          <span className="tabular">{formatDate("2026-11-18")}</span>
+          <span className="tabular font-medium">{formatMoney(11137)}</span>
+        </div>
+        <div className="flex justify-between border-t border-line px-3 py-2">
+          <span className="tabular">{formatDate("2026-11-17")}</span>
+          <span className="tabular font-medium text-danger-ink">{formatMoney(-5.25)}</span>
+        </div>
       </div>
       <div>
         <label className="field-label">שדה לדוגמה</label>
@@ -43,12 +62,12 @@ export function AppearanceScreen() {
     <div>
       <PageHeader
         title="עיצוב ותצוגה"
-        description="בחירה בין המראה הקיים של המערכת לבין המראה המעודכן. ההחלפה מיידית, לא משנה שום נתון, וניתן לחזור אחורה בכל רגע."
+        description="בחירה בין המראות של המערכת. ההחלפה מיידית, לא משנה שום נתון, וניתן לחזור אחורה בכל רגע."
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-3">
-          {OPTIONS.map((option) => {
+          {UI_THEMES.map((option) => {
             const isActive = theme === option;
             return (
               <button

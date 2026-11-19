@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 // כל הצבעים מצביעים לאסימוני CSS (ר' src/index.css) ולא לערכים קשיחים - כך
 // שהחלפת ערכת העיצוב (data-ui) משנה את כל המערכת בלי לגעת באף קומפוננטה.
@@ -47,6 +48,14 @@ export default {
         "area-admin": { DEFAULT: "rgb(var(--ui-area-admin) / <alpha-value>)", soft: "rgb(var(--ui-area-admin-soft) / <alpha-value>)" },
         "area-tasks": { DEFAULT: "rgb(var(--ui-area-tasks) / <alpha-value>)", soft: "rgb(var(--ui-area-tasks-soft) / <alpha-value>)" },
 
+        // ערכה v3: צבע ראשי (כותרות, כחול עמוק) נפרד מצבע הפעולה (סקאלת brand),
+        // צבע הדגשה חם, ודרגת "גבוה" נפרדת מ"בינוני". בערכות הקודמות הם מוגדרים
+        // כך שהמראה שלהן לא משתנה (ר' index.css).
+        primary: { DEFAULT: "rgb(var(--ui-primary) / <alpha-value>)", soft: "rgb(var(--ui-primary-soft) / <alpha-value>)" },
+        accent: { DEFAULT: "rgb(var(--ui-accent) / <alpha-value>)", soft: "rgb(var(--ui-accent-soft) / <alpha-value>)", ink: "rgb(var(--ui-accent-ink) / <alpha-value>)" },
+        high: { DEFAULT: "rgb(var(--ui-high) / <alpha-value>)", soft: "rgb(var(--ui-high-soft) / <alpha-value>)", ink: "rgb(var(--ui-high-ink) / <alpha-value>)" },
+        "area-on": "rgb(var(--ui-area-on) / <alpha-value>)",
+
         ok: { DEFAULT: "rgb(var(--ui-ok) / <alpha-value>)", soft: "rgb(var(--ui-ok-soft) / <alpha-value>)", ink: "rgb(var(--ui-ok-ink) / <alpha-value>)" },
         warn: { DEFAULT: "rgb(var(--ui-warn) / <alpha-value>)", soft: "rgb(var(--ui-warn-soft) / <alpha-value>)", ink: "rgb(var(--ui-warn-ink) / <alpha-value>)" },
         danger: { DEFAULT: "rgb(var(--ui-danger) / <alpha-value>)", soft: "rgb(var(--ui-danger-soft) / <alpha-value>)", ink: "rgb(var(--ui-danger-ink) / <alpha-value>)" },
@@ -80,5 +89,7 @@ export default {
       },
     },
   },
-  plugins: [],
+  // v3:… - עיצוב שחל רק בערכה v3. כך רכיב משותף מקבל מראה חדש בלי לשנות דבר
+  // בשתי הערכות הקיימות, והחזרה לעיצוב הקודם היא לחיצה אחת במסך "עיצוב ותצוגה".
+  plugins: [plugin(({ addVariant }) => addVariant("v3", ':root[data-ui="v3"] &'))],
 } satisfies Config;
