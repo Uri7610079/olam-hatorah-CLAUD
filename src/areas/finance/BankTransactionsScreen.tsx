@@ -76,7 +76,7 @@ const DIRECTION_LABEL: Record<Direction, string> = { debit: "חובה", credit: 
 // אסמכתאות ותאריכים משתנים בין תנועות - השם הקבוע הוא מה שמזהה את סוג התנועה).
 export function rulePatternFromDescription(description: string | null): string {
   const d = (description ?? "").replace(/\s+/g, " ").trim();
-  const parts = d.split(/[0-9]+/).map((p) => p.replace(/^[\s:.,\-–/()]+|[\s:.,\-–/(]+$/g, "").trim());
+  const parts = d.split(/[0-9]+/).map((p) => p.replace(/^[\s:.,\-–/()"']+|[\s:.,\-–/("']+$/g, "").trim());
   const best = parts.reduce((a, b) => (b.length > a.length ? b : a), "");
   return best.length >= 3 ? best : d;
 }
