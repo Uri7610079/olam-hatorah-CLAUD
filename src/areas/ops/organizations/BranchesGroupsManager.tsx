@@ -426,7 +426,14 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
           {studentsLink("branch", r.id)}
           {canManageBranches && r.status === "active" && (
             <button
-              onClick={() => setPendingClose({ kind: "branch", id: r.id, label: `${r.talmud_branch_code} - ${r.internal_name}` })}
+              onClick={() =>
+                setPendingClose({
+                  kind: "branch",
+                  id: r.id,
+                  // סניף שהשם הפנימי שלו הוא הקוד עצמו - בלי "00 - 00"
+                  label: r.internal_name && r.internal_name !== r.talmud_branch_code ? `${r.talmud_branch_code} - ${r.internal_name}` : r.talmud_branch_code,
+                })
+              }
               className="text-xs text-danger underline hover:text-danger-ink"
             >
               סגירה
