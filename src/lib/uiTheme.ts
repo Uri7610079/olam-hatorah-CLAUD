@@ -38,6 +38,19 @@ export function applyUiTheme(theme: UiTheme) {
   document.documentElement.setAttribute("data-ui", theme);
 }
 
+/** האם ערכה v3 פעילה עכשיו. למסכים שיש להם מבנה חדש ב-v3 ומבנה קודם בשאר
+ *  הערכות - כדי שהחזרה לעיצוב הקודם תחזיר גם את המבנה, לא רק את הצבעים. */
+export function useIsV3(): boolean {
+  const read = () => typeof document !== "undefined" && document.documentElement.getAttribute("data-ui") === "v3";
+  const [isV3, setIsV3] = useState(read);
+  useEffect(() => {
+    const obs = new MutationObserver(() => setIsV3(read()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-ui"] });
+    return () => obs.disconnect();
+  }, []);
+  return isV3;
+}
+
 // ההעדפה נשמרת מקומית בדפדפן (לא ב-DB) בכוונה: היא נקראת ומוחלת עוד לפני
 // שהאפליקציה נטענת (ר' הסקריפט ב-index.html), כדי שלא תהיה הבזקה של הערכה
 // הלא-נכונה בכל טעינה. המחיר: ההעדפה לא עוברת בין מחשבים - סביר לחלוטין

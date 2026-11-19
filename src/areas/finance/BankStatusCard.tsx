@@ -82,7 +82,7 @@ export function BankStatusCard({ orgId, month }: { orgId: string; month: string 
     <div className="card mb-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-ink">בנק</p>
-        <Link to="/finance/bank-transactions" className="link-action text-xs">לתנועות הבנק</Link>
+        <Link to={`/finance/bank-transactions?org=${orgId}`} className="link-action text-xs">לתנועות הבנק</Link>
       </div>
       {q.data.length === 0 ? (
         <p className="mt-1 text-sm text-ink-muted">אין לעמותה חשבון בנק רשום. בלי חשבון רשום, תנועות שנמשכות מהבנק לא נקלטות - מוסיפים בכרטיס העמותה.</p>

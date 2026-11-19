@@ -23,7 +23,10 @@ export function formatMoney(v: number | string | null | undefined, opts: { whole
   const abs = (opts.whole ? WHOLE : MONEY).format(Math.abs(n));
   // סימן מינוס מפורש לפני הסכום (ולא רק צבע) - דרישת נגישות: חובה/זכות לא מועברים בצבע בלבד.
   const sign = n < 0 ? "−" : opts.sign && n > 0 ? "+" : "";
-  return `${sign}${abs} ₪`;
+  // בעמוד מימין לשמאל סימן מינוס לפני מספר "קופץ" לצד השני שלו (נראה כ-11,137.00−).
+  // בידוד שמאל-לימין (LRI…PDI) סביב הסימן והמספר בלבד שומר אותם יחד, ו-₪ נשאר
+  // באותו מקום כמו בסכום חיובי.
+  return sign ? `⁦${sign}${abs}⁩ ₪` : `${abs} ₪`;
 }
 
 /** מספר רגיל עם מפריד אלפים: 1,583 */

@@ -12,6 +12,9 @@ import { Tabs } from "@/components/Tabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatDate, formatNumber } from "@/lib/format";
+import { AmountCell, BatchMix, CalmNotice, DirectionTag, ShownTotals, SuggestionTag, batchResultText } from "./BankV3Parts";
 
 interface TransactionType {
   id: string;
@@ -54,7 +57,7 @@ interface BatchSummary {
   created_at: string;
 }
 
-type ClassificationFilter = "all" | "unclassified" | "suggested";
+type ClassificationFilter = "all" | "unclassified" | "suggested" | "confirmed";
 
 interface TransactionRow {
   id: string;
@@ -300,6 +303,7 @@ async function fetchTransactions(accountId: string, filter: ClassificationFilter
       .order("id");
     if (filter === "unclassified") query = query.eq("classification_status", "unclassified");
     if (filter === "suggested") query = query.eq("classification_status", "suggested");
+    if (filter === "confirmed") query = query.eq("classification_status", "confirmed");
     return query;
   });
   return data.map((r: any) => ({
@@ -376,6 +380,23 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
   });
   const [filter, setFilter] = useState<ClassificationFilter>("all");
   const [previewTab, setPreviewTab] = useState<RowStatus>("valid");
+  const isV3 = useIsV3();
+  // v3: מספר התנועות בכל מצב סיווג, ללשוניות. רק עמודת הסטטוס, בלי סכומים ותיאורים.
+  const statusCountsQuery = useQuery({
+    queryKey: ["bank-transactions", accountId, "status-counts"],
+    enabled: !!accountId && isV3,
+    queryFn: async () => {
+      const rows = await fetchAll(() =>
+        supabase.from("bank_transactions").select("id, classification_status").eq("organization_bank_account_id", accountId).order("id"),
+      );
+      const c = { all: 0, unclassified: 0, suggested: 0, confirmed: 0 };
+      for (const r of rows as { classification_status: keyof typeof c }[]) {
+        c.all += 1;
+        if (r.classification_status in c) c[r.classification_status] += 1;
+      }
+      return c;
+    },
+  });
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ClassifiedBankRow[] | null>(null);
@@ -674,6 +695,11 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
   const localValid = (parsedRows ?? []).filter((r) => r.status === "valid");
   const localDuplicate = (parsedRows ?? []).filter((r) => r.status === "duplicate");
   const localInvalid = (parsedRows ?? []).filter((r) => r.status === "invalid");
+  // v3: בתצוגה המקדימה נפתחת הלשונית הראשונה שיש בה שורות - לא "תקין" ריקה עם "אין שורות".
+  useEffect(() => {
+    if (!isV3 || !parsedRows) return;
+    if (!parsedRows.some((r) => r.status === "valid")) setPreviewTab(parsedRows.some((r) => r.status === "duplicate") ? "duplicate" : "invalid");
+  }, [isV3, parsedRows]);
 
   const localColumns: DataTableColumn<ClassifiedBankRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
@@ -685,16 +711,34 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
   ];
 
   const transactionColumns: DataTableColumn<TransactionRow>[] = [
-    { key: "date", header: "תאריך", className: "tabular", render: (r) => r.execution_date },
-    { key: "direction", header: "צד", render: (r) => DIRECTION_LABEL[r.direction] },
-    { key: "amount", header: "סכום", className: "tabular", render: (r) => r.amount.toLocaleString("he-IL") },
-    { key: "desc", header: "תיאור", render: (r) => r.description ?? "—" },
+    // v3: תאריך בפורמט האחיד, סכום עם ₪ וכיוון (חץ + סימן), והצעת סיווג שנראית אחרת מסיווג מאושר.
+    // הסינון והמיון נשארים לפי הערכים המקוריים (filterValue/sortValue).
+    { key: "date", header: "תאריך", className: "tabular", filterValue: (r) => r.execution_date, render: (r) => (isV3 ? formatDate(r.execution_date) : r.execution_date) },
+    { key: "direction", header: "צד", filterValue: (r) => DIRECTION_LABEL[r.direction], render: (r) => (isV3 ? <DirectionTag direction={r.direction} /> : DIRECTION_LABEL[r.direction]) },
+    {
+      key: "amount",
+      header: "סכום",
+      className: "tabular",
+      kind: isV3 ? "money" : undefined,
+      filterValue: (r) => r.amount,
+      sortValue: (r) => r.amount,
+      render: (r) => (isV3 ? <AmountCell amount={r.amount} direction={r.direction} /> : r.amount.toLocaleString("he-IL")),
+    },
+    { key: "desc", header: "תיאור", truncate: isV3, render: (r) => r.description ?? "—" },
     { key: "ref", header: "אסמכתה", className: "ltr-num", render: (r) => r.reference ?? "—" },
     {
       key: "suggested",
       header: "הצעת סיווג",
+      filterValue: (r) => r.suggested_type?.label_he ?? "",
       render: (r) =>
-        r.suggested_type ? (
+        isV3 ? (
+          // אחרי אישור ההצעה כבר לא רלוונטית - הסיווג המאושר בעמודה הבאה
+          r.suggested_type && r.classification_status === "suggested" ? (
+            <SuggestionTag label={r.suggested_type.label_he} confidence={CONFIDENCE_LABEL[r.suggested_confidence ?? ""] ?? r.suggested_confidence ?? ""} />
+          ) : (
+            <span className="text-ink-subtle">—</span>
+          )
+        ) : r.suggested_type ? (
           <span>
             {r.suggested_type.label_he} · {CONFIDENCE_LABEL[r.suggested_confidence ?? ""] ?? r.suggested_confidence}
           </span>
@@ -721,7 +765,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
             onChange={(e) => (r.confirmed_type ? changeType(r.id, e.target.value) : confirmType(r.id, e.target.value))}
             onBlur={() => r.confirmed_type && setEditingTypeId(null)}
             autoFocus={!!r.confirmed_type}
-            className="input-field text-xs"
+            className="input-field text-xs v3:min-w-[11rem]"
           >
             <option value="">— בחרי סוג —</option>
             {(typesQuery.data ?? []).map((t) => (
@@ -743,7 +787,8 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
           סיווג תנועה הוא הצעה/קטגוריה בלבד - אינו משנה יתרת קבוצה ללא התאמה עסקית מאושרת (שלב 12).
         </p>
         {accountId && canImport && (
-          <button onClick={() => setShowImport((v) => !v)} className="btn-secondary shrink-0">
+          <button onClick={() => setShowImport((v) => !v)} className={`${isV3 && !showImport ? "btn-primary" : "btn-secondary"} shrink-0`}>
+            {isV3 && !showImport && <Upload className="h-4 w-4" aria-hidden="true" />}
             {showImport ? "סגירה" : "יבוא תנועות"}
           </button>
         )}
@@ -765,7 +810,12 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
           {analyzing && <LoadingState rows={2} />}
           {duplicateFileId && (
             <div className="space-y-2">
-              <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              {/* v3: קובץ שכבר יובא הוא לא שגיאה - המערכת זיהתה אותו כמו שצריך */}
+              {isV3 ? (
+                <CalmNotice>הקובץ הזה כבר יובא בעבר, ולכן אין צורך לייבא אותו שוב. התנועות שבו כבר במערכת.</CalmNotice>
+              ) : (
+                <ErrorState message="הקובץ הזה כבר יובא בעבר." />
+              )}
               <button onClick={() => setReviewBatchId(duplicateFileId)} className="link-action text-xs">
                 פתיחת האצווה הקיימת
               </button>
@@ -805,6 +855,20 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
           )}
           {parsedRows && !duplicateFileId && !headerConfirm && (
             <>
+              {/* v3: סיכום במילים לפני הטבלה. קובץ שכל השורות בו כבר קיימות - מצב תקין, ומוסבר למה אין מה לאשר */}
+              {isV3 && (
+                localValid.length === 0 && localInvalid.length === 0 && localDuplicate.length > 0 ? (
+                  <CalmNotice>
+                    לא נוספו תנועות חדשות. כל {formatNumber(localDuplicate.length)} השורות בקובץ כבר קיימות במערכת, ולכן אין מה לקלוט.
+                  </CalmNotice>
+                ) : (
+                  <p className="text-sm text-ink">
+                    בקובץ: <span className="font-semibold text-ok-ink">{formatNumber(localValid.length)} חדשות</span>
+                    {localDuplicate.length > 0 && <> · {formatNumber(localDuplicate.length)} כבר קיימות (לא ייקלטו שוב)</>}
+                    {localInvalid.length > 0 && <> · <span className="font-semibold text-danger-ink">{formatNumber(localInvalid.length)} שגויות</span></>}
+                  </p>
+                )
+              )}
               <Tabs
                 tabs={[
                   { key: "valid", label: "תקין", badge: localValid.length },
@@ -888,6 +952,84 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
             </div>
           )}
 
+          {/* v3: היסטוריית היבוא היא מידע משני - מקופלת, ובמילים במקום "0 / 152 / 0" */}
+          {isV3 ? (
+            <details className="card mb-2 group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm">
+                <span className="font-semibold text-primary">היסטוריית יבוא</span>
+                <span className="text-ink-subtle">
+                  {batchesQuery.data?.length
+                    ? `${batchesQuery.data.length} קבצים אחרונים · האחרון ${formatDate(batchesQuery.data[0].created_at)}`
+                    : "אין עדיין יבואים"}
+                  <span className="ms-2 text-brand-700 group-open:hidden">הצגה</span>
+                  <span className="ms-2 hidden text-brand-700 group-open:inline">הסתרה</span>
+                </span>
+              </summary>
+              <div className="border-t border-line p-3">
+                <DataTable
+                  columns={[
+                    { key: "file", header: "קובץ", truncate: true, render: (b: BatchSummary) => b.file_name },
+                    { key: "date", header: "תאריך", className: "tabular", filterValue: (b: BatchSummary) => b.created_at, render: (b: BatchSummary) => formatDate(b.created_at) },
+                    {
+                      key: "result",
+                      header: "תוצאה",
+                      grow: true,
+                      render: (b: BatchSummary) => (
+                        <span className="flex items-center gap-2">
+                          <BatchMix valid={b.valid_count} duplicate={b.duplicate_count} invalid={b.invalid_count} />
+                          <span className="text-ink">{batchResultText(b)}</span>
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "status",
+                      header: "סטטוס",
+                      render: (b: BatchSummary) => (
+                        <StatusBadge
+                          severity={b.status === "committed" ? "ok" : b.status === "rejected" ? "neutral" : "medium"}
+                          label={BATCH_STATUS_LABEL[b.status]}
+                        />
+                      ),
+                    },
+                    {
+                      key: "actions",
+                      header: "",
+                      render: (b: BatchSummary) =>
+                        b.status === "committed" && canImport ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRollbackBatch({ id: b.id, fileName: b.file_name });
+                            }}
+                            className="text-xs text-danger-ink underline"
+                          >
+                            ביטול יבוא
+                          </button>
+                        ) : b.status !== "rejected" && canImport ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void cancelUnfinishedBatch(b);
+                            }}
+                            className="text-xs text-danger-ink underline"
+                          >
+                            ביטול הקובץ
+                          </button>
+                        ) : (
+                          <span className="text-ink-subtle">—</span>
+                        ),
+                    },
+                  ]}
+                  rows={batchesQuery.data ?? []}
+                  rowKey={(b: BatchSummary) => b.id}
+                  loading={batchesQuery.isLoading}
+                  emptyTitle="אין עדיין יבואים"
+                  onRowClick={(b: BatchSummary) => (b.status !== "committed" ? setReviewBatchId(b.id) : undefined)}
+                />
+              </div>
+            </details>
+          ) : (
+          <>
           <h2 className="mb-2 mt-2 text-sm font-semibold text-ink-muted">היסטוריית יבוא</h2>
           <DataTable
             columns={[
@@ -931,14 +1073,26 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
             emptyTitle="אין עדיין יבואים"
             onRowClick={(b: BatchSummary) => (b.status !== "committed" ? setReviewBatchId(b.id) : undefined)}
           />
+          </>
+          )}
 
-          <div className="mt-6 flex items-center justify-between">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
             <Tabs
-              tabs={[
-                { key: "all", label: "כל התנועות" },
-                { key: "unclassified", label: "לא מזוהות" },
-                { key: "suggested", label: "ממתינות לאישור" },
-              ]}
+              tabs={
+                isV3
+                  ? // v3: לפי סדר הטיפול, עם מספר בכל לשונית, ולשונית "מאושרות"
+                    [
+                      { key: "unclassified", label: "לא מזוהות", badge: statusCountsQuery.data?.unclassified },
+                      { key: "suggested", label: "ממתינות לאישור", badge: statusCountsQuery.data?.suggested },
+                      { key: "confirmed", label: "מאושרות", badge: statusCountsQuery.data?.confirmed },
+                      { key: "all", label: "כל התנועות", badge: statusCountsQuery.data?.all },
+                    ]
+                  : [
+                      { key: "all", label: "כל התנועות" },
+                      { key: "unclassified", label: "לא מזוהות" },
+                      { key: "suggested", label: "ממתינות לאישור" },
+                    ]
+              }
               activeTab={filter}
               onChange={(k) => setFilter(k)}
               ariaLabel="סינון תנועות"
@@ -1004,6 +1158,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
             </div>
           )}
 
+          {isV3 && <ShownTotals rows={transactionsQuery.data ?? []} />}
           <DataTable
             columns={transactionColumns}
             rows={transactionsQuery.data ?? []}

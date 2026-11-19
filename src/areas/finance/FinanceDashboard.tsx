@@ -10,13 +10,15 @@ import { ExceptionGrid, type ExceptionCounter } from "@/components/ExceptionGrid
 import { LoadingState } from "@/components/LoadingState";
 import { BankStatusCard } from "./BankStatusCard";
 import { ErrorState } from "@/components/ErrorState";
+import { useIsV3 } from "@/lib/uiTheme";
+import { FinanceDashboardV3 } from "./FinanceDashboardV3";
 
-interface OrgOption {
+export interface OrgOption {
   id: string;
   legal_name: string;
 }
 
-interface FinanceCounts {
+export interface FinanceCounts {
   period_status: string | null;
   gross_amount: number;
   commission_amount: number;
@@ -32,17 +34,17 @@ interface FinanceCounts {
   unassigned_donations: number;
 }
 
-const PERIOD_STATUS_LABEL: Record<string, string> = { open: "פתוח", in_review: "בבדיקה", closed: "סגור" };
+export const PERIOD_STATUS_LABEL: Record<string, string> = { open: "פתוח", in_review: "בבדיקה", closed: "סגור" };
 
 const money = (n: number) => n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-async function fetchOrgs(): Promise<OrgOption[]> {
+export async function fetchOrgs(): Promise<OrgOption[]> {
   const { data, error } = await supabase.from("organizations").select("id, legal_name").eq("status", "active").order("legal_name");
   if (error) throw error;
   return data ?? [];
 }
 
-async function fetchFinanceCounts(orgId: string, month: string): Promise<FinanceCounts> {
+export async function fetchFinanceCounts(orgId: string, month: string): Promise<FinanceCounts> {
   const { data, error } = await supabase.rpc("get_finance_dashboard_counts", { p_organization_id: orgId, p_month: month }).single();
   if (error) throw error;
   return data as unknown as FinanceCounts;
@@ -60,7 +62,7 @@ function buildItems(c: FinanceCounts, orgId: string): ExceptionCounter[] {
   ];
 }
 
-interface ChecklistItem {
+export interface ChecklistItem {
   item_key: string;
   label_he: string;
   open_count: number;
@@ -102,7 +104,12 @@ function MonthCloseBlockers({ orgId, month, periodStatus }: { orgId: string; mon
   );
 }
 
+// ערכה v3 מקבלת מבנה חדש (FinanceDashboardV3); שאר הערכות - המסך כפי שהיה, בלי שינוי.
 export function FinanceDashboard() {
+  return useIsV3() ? <FinanceDashboardV3 /> : <FinanceDashboardClassic />;
+}
+
+function FinanceDashboardClassic() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");

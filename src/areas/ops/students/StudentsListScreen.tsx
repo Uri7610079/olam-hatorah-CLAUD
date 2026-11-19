@@ -5,7 +5,7 @@ import { normalizeIsraeliPhone } from "@/lib/israeliPhone";
 import { PhoneField } from "@/components/PhoneField";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users, X } from "lucide-react";
+import { CheckCheck, FileDown, FileUp, UserPlus, Users, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { useSavedFilters } from "@/lib/savedFilters";
@@ -19,6 +19,10 @@ import { EMPTY_FILTER_STATE, applyColumnFilters, type ColumnFilterState } from "
 import { StatusBadge, type Severity } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ActionsMenu } from "@/components/ActionsMenu";
+import { CountChips, type ChipTone } from "@/components/CountChips";
+import { useIsV3 } from "@/lib/uiTheme";
+import { formatPhone } from "@/lib/format";
 import { formatStudentAddress, ID_TYPE_LABEL, STATUS_LABEL, type Student, type StudentIdType } from "./types";
 import { StudentsImportPanel } from "./StudentsImportPanel";
 
@@ -67,6 +71,18 @@ const STATUS_SEVERITY: Record<Student["status"], Severity> = {
   inactive: "neutral",
 };
 
+const CHIP_TONE: Record<Student["status"], ChipTone> = {
+  draft: "neutral",
+  ready_for_talmud: "info",
+  sent_to_talmud: "warn",
+  active: "ok",
+  active_with_error: "high",
+  inactive: "neutral",
+};
+
+// תא ריק (v3): מקף מאופק, כדי ששורה עם חוסרים לא תיראה כמו שורה מלאה.
+const Empty = ({ text = "—" }: { text?: string }) => <span className="text-ink-subtle">{text}</span>;
+
 interface BulkAdvanceResult {
   advanced: number;
   missing_phone: number;
@@ -93,10 +109,27 @@ export function StudentsListScreen() {
     enabled: !!place,
     queryFn: async () => {
       if (!place) return "";
-      const table = place.kind === "org" ? "organizations" : place.kind === "branch" ? "branches" : "groups";
-      const col = place.kind === "org" ? "legal_name" : place.kind === "branch" ? "internal_name" : "name";
-      const { data } = await supabase.from(table).select(col).eq("id", place.id).maybeSingle();
-      return (data as Record<string, string> | null)?.[col] ?? "";
+      if (place.kind === "org") {
+        const { data } = await supabase.from("organizations").select("legal_name").eq("id", place.id).maybeSingle();
+        return data?.legal_name ?? "";
+      }
+      // סניף וקבוצה - עם ההקשר שלהם. שם קבוצה חוזר בכמה סניפים, ו"קבוצת אלישיב"
+      // לבד לא אומר באיזו מהן מדובר.
+      if (place.kind === "branch") {
+        const { data } = await supabase.from("branches").select("internal_name, talmud_branch_code, organization:organizations(legal_name)").eq("id", place.id).maybeSingle();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const d = data as any;
+        if (!d) return "";
+        const org = Array.isArray(d.organization) ? d.organization[0] : d.organization;
+        return `${d.internal_name}${d.internal_name !== d.talmud_branch_code ? ` (${d.talmud_branch_code})` : ""}${org?.legal_name ? ` · ${org.legal_name}` : ""}`;
+      }
+      const { data } = await supabase.from("groups").select("name, branch:branches(internal_name, talmud_branch_code, organization:organizations(legal_name))").eq("id", place.id).maybeSingle();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = data as any;
+      if (!d) return "";
+      const br = Array.isArray(d.branch) ? d.branch[0] : d.branch;
+      const org = br ? (Array.isArray(br.organization) ? br.organization[0] : br.organization) : null;
+      return [d.name, br ? `סניף ${br.talmud_branch_code}` : null, org?.legal_name].filter(Boolean).join(" · ");
     },
   });
   const [search, setSearch] = useState("");
@@ -117,13 +150,33 @@ export function StudentsListScreen() {
   const [savingFilterName, setSavingFilterName] = useState("");
 
   const query = useQuery({ queryKey: ["students", "all", place?.kind, place?.id], queryFn: () => fetchStudents(place) });
-  // חיפוש וסטטוס - על כל הרשימה. eq לסטטוס אחד, כמה - כל אחד מהם. ריק = הכל.
-  const rows = useMemo(() => {
+  // חיפוש - לפי שם, מזהה או טלפון (הטלפון בספרות בלבד, כך ש-052-123 ו-052123 שניהם נמצאים).
+  const searched = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const digits = term.replace(/\D/g, "");
     return (query.data ?? []).filter((s) =>
-      (!statusFilter.length || statusFilter.includes(s.status)) &&
-      (!term || s.full_name.toLowerCase().includes(term) || s.external_id.toLowerCase().includes(term)));
-  }, [query.data, search, statusFilter]);
+      !term ||
+      s.full_name.toLowerCase().includes(term) ||
+      s.external_id.toLowerCase().includes(term) ||
+      (digits.length >= 3 && (s.phone_raw ?? "").replace(/\D/g, "").includes(digits)));
+  }, [query.data, search]);
+  // סטטוס - על תוצאות החיפוש. eq לסטטוס אחד, כמה - כל אחד מהם. ריק = הכל.
+  const rows = useMemo(
+    () => searched.filter((s) => !statusFilter.length || statusFilter.includes(s.status)),
+    [searched, statusFilter],
+  );
+  const isV3 = useIsV3();
+  // ספירה לפי סטטוס (v3) - מתוך מה שכבר נטען ואחרי החיפוש, כך שהמספרים תואמים את מה שיוצג בלחיצה.
+  const statusChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of searched) counts.set(s.status, (counts.get(s.status) ?? 0) + 1);
+    return (Object.keys(STATUS_LABEL) as Student["status"][]).map((st) => ({
+      value: st,
+      label: STATUS_LABEL[st],
+      count: counts.get(st) ?? 0,
+      tone: CHIP_TONE[st],
+    }));
+  }, [searched]);
   const savedFilters = useSavedFilters(SCREEN_KEY);
 
   const applySavedFilter = (id: string) => {
@@ -210,7 +263,22 @@ export function StudentsListScreen() {
   };
 
   const columns: DataTableColumn<Student>[] = [
-    { key: "id", header: "מזהה", className: "tabular", render: (s) => `${ID_TYPE_LABEL[s.id_type]} ${s.external_id}` },
+    {
+      key: "id",
+      header: "מזהה",
+      className: "tabular",
+      filterValue: (s) => `${ID_TYPE_LABEL[s.id_type]} ${s.external_id}`,
+      // v3: סוג המזהה מאופק והמספר עצמו מבודד כיוונית (שלא יתהפך ליד טקסט עברי)
+      render: (s) =>
+        isV3 ? (
+          <span className="inline-flex items-baseline gap-1.5">
+            <span className="text-xs text-ink-subtle">{ID_TYPE_LABEL[s.id_type]}</span>
+            <span className="ltr-num">{s.external_id}</span>
+          </span>
+        ) : (
+          `${ID_TYPE_LABEL[s.id_type]} ${s.external_id}`
+        ),
+    },
     {
       key: "name",
       header: "שם",
@@ -227,7 +295,7 @@ export function StudentsListScreen() {
       header: "עמותה",
       render: (s) => s.assignment?.organization
         ? <Link to={`/ops/organizations/${s.assignment.organization.id}`} className="link-action">{s.assignment.organization.legal_name}</Link>
-        : "—",
+        : isV3 ? <Empty text="לא משויך" /> : "—",
     },
     {
       key: "branch",
@@ -236,7 +304,7 @@ export function StudentsListScreen() {
         ? <Link to={`/ops/organizations?org=${s.assignment.organization.id}&branch=${s.assignment.branch.id}`} className="link-action">
             {s.assignment.branch.internal_name}
           </Link>
-        : "—",
+        : isV3 ? <Empty /> : "—",
     },
     {
       key: "group",
@@ -245,9 +313,16 @@ export function StudentsListScreen() {
         ? <Link to={`/ops/organizations?org=${s.assignment.organization.id}&branch=${s.assignment.branch.id}&group=${s.assignment.group.id}`} className="link-action">
             {s.assignment.group.name}
           </Link>
-        : "—",
+        : isV3 ? <Empty /> : "—",
     },
-    { key: "phone", header: "טלפון", className: "ltr-num", render: (s) => s.phone_raw ?? "—" },
+    {
+      key: "phone",
+      header: "טלפון",
+      className: "ltr-num",
+      filterValue: (s) => s.phone_raw ?? "",
+      // v3: תצוגה אחידה 052-1234567 (הערך השמור לא משתנה)
+      render: (s) => (isV3 ? (s.phone_raw ? formatPhone(s.phone_raw) || s.phone_raw : <Empty />) : s.phone_raw ?? "—"),
+    },
     { key: "status", header: "סטטוס", render: (s) => <StatusBadge severity={STATUS_SEVERITY[s.status]} label={STATUS_LABEL[s.status]} /> },
     { key: "student_type", header: "סוג תלמיד", hiddenByDefault: true, render: (s) => s.student_type ?? "—" },
     { key: "study_code", header: "קוד לימוד", hiddenByDefault: true, render: (s) => s.study_code ?? "—" },
@@ -271,6 +346,38 @@ export function StudentsListScreen() {
         title="תלמידים"
         description="ניהול תלמידים, שיוכים וחשבונות בנק."
         primaryAction={
+          isV3 ? (
+            // v3: פעולה ראשית אחת. יבוא ואישור קבוצתי הם פעולות לא יומיומיות - בתפריט.
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionsMenu
+                actions={[
+                  ...(canManage
+                    ? [
+                        { key: "import", label: showImport ? "סגירת היבוא" : "יבוא מאקסל", icon: FileUp, onSelect: () => setShowImport((v) => !v) },
+                        {
+                          key: "bulk",
+                          label: bulkRunning ? "בודק…" : "אישור כל המוכנים לתלמוד",
+                          hint: "מעביר ל\"מוכן לתלמוד\" כל טיוטה שיש לה את כל הפרטים",
+                          icon: CheckCheck,
+                          disabled: bulkRunning,
+                          onSelect: () => setConfirmBulk(true),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+              <button onClick={exportStudents} className="btn-secondary">
+                <FileDown className="h-4 w-4" aria-hidden="true" />
+                ייצוא לאקסל
+              </button>
+              {canManage && (
+                <button onClick={() => setShowCreate(true)} className="btn-primary">
+                  <UserPlus className="h-4 w-4" aria-hidden="true" />
+                  תלמיד חדש
+                </button>
+              )}
+            </div>
+          ) : (
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={exportStudents} className="btn-secondary">
               ייצוא לאקסל
@@ -291,6 +398,7 @@ export function StudentsListScreen() {
               </button>
             )}
           </div>
+          )
         }
       />
 
@@ -322,7 +430,7 @@ export function StudentsListScreen() {
       <SearchAndFilters
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="חיפוש לפי שם או מספר מזהה…"
+        searchPlaceholder="חיפוש לפי שם, מזהה או טלפון…"
         advancedFilters={
           <div className="flex flex-wrap items-center gap-2">
             <MultiSelect
@@ -342,15 +450,21 @@ export function StudentsListScreen() {
                 ))}
               </select>
             )}
-            <input
-              value={savingFilterName}
-              onChange={(e) => setSavingFilterName(e.target.value)}
-              placeholder="שם למסנן חדש"
-              className="input-field w-32"
-            />
-            <button onClick={saveCurrentFilter} disabled={!savingFilterName.trim()} className="btn-secondary text-xs">
-              שמירת מסנן
-            </button>
+            {/* v3: שמירת מסנן מוצגת רק כשיש מה לשמור (חיפוש או סטטוס) - אחרת היא רעש קבוע */}
+            {(!isV3 || search.trim() || statusFilter.length > 0) && (
+              <>
+                <input
+                  value={savingFilterName}
+                  onChange={(e) => setSavingFilterName(e.target.value)}
+                  placeholder="שם למסנן חדש"
+                  aria-label="שם למסנן חדש"
+                  className="input-field w-32"
+                />
+                <button onClick={saveCurrentFilter} disabled={!savingFilterName.trim()} className="btn-secondary text-xs">
+                  שמירת מסנן
+                </button>
+              </>
+            )}
           </div>
         }
       />
@@ -371,7 +485,18 @@ export function StudentsListScreen() {
         </div>
       )}
       {query.isError && <ErrorState message="שגיאה בטעינת רשימת התלמידים." />}
+      {isV3 && query.data && query.data.length > 0 && (
+        <CountChips
+          ariaLabel="סינון לפי סטטוס"
+          chips={statusChips}
+          total={searched.length}
+          allLabel="כל התלמידים"
+          active={statusFilter.length === 1 ? statusFilter[0] : null}
+          onSelect={(v) => setStatusFilter(v ? [v] : [])}
+        />
+      )}
       <DataTable
+        tableId="students-list"
         columns={columns}
         rows={rows}
         rowKey={(s) => s.id}
