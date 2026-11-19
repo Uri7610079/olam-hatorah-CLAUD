@@ -258,7 +258,7 @@ async function analyzeBankFile(file: File, accountId: string, headerRowIndexOver
 // המספר המלא (mask_account_number משאירה בדיוק אותן), וזה מספיק כדי לתפוס קובץ
 // של בנק אחד שנקלט לחשבון של בנק אחר.
 function lastFour(value: string | null | undefined): string {
-  const digits = String(value ?? "").replace(/D/g, "");
+  const digits = String(value ?? "").replace(/\D/g, "");
   return digits.slice(-4);
 }
 

@@ -17,7 +17,8 @@ export function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordFormProps) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    // הקישור במייל חוזר לאותו אתר שממנו ביקשו (גם בסביבת פיתוח).
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
     setSubmitting(false);
     if (error) {
       setError(error.message);

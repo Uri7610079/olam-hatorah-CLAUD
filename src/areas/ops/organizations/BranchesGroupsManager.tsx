@@ -9,6 +9,7 @@ import { exportRowsToExcel } from "@/lib/reportExport";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface BranchRow {
   id: string;
@@ -247,9 +248,15 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
     queryClient.invalidateQueries({ queryKey: ["branches", orgId] });
   };
 
+  // סגירת סניף או קבוצה: רק אחרי אישור, ושגיאה מוצגת (לא נבלעת).
+  const [pendingClose, setPendingClose] = useState<{ kind: "branch" | "group"; id: string; label: string } | null>(null);
+  const [closeError, setCloseError] = useState<string | null>(null);
+
   const closeBranch = async (id: string) => {
     const { error } = await supabase.from("branches").update({ status: "closed" }).eq("id", id);
-    if (!error) queryClient.invalidateQueries({ queryKey: ["branches", orgId] });
+    if (error) return setCloseError(`סגירת הסניף נכשלה: ${error.message}`);
+    setCloseError(null);
+    queryClient.invalidateQueries({ queryKey: ["branches", orgId] });
   };
 
   const submitGroup = async (e: FormEvent) => {
@@ -317,7 +324,17 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
 
   const closeGroup = async (id: string) => {
     const { error } = await supabase.from("groups").update({ status: "closed" }).eq("id", id);
-    if (!error) refreshGroups();
+    if (error) return setCloseError(`סגירת הקבוצה נכשלה: ${error.message}`);
+    setCloseError(null);
+    refreshGroups();
+  };
+
+  const confirmClose = async () => {
+    const target = pendingClose;
+    setPendingClose(null);
+    if (!target) return;
+    if (target.kind === "branch") await closeBranch(target.id);
+    else await closeGroup(target.id);
   };
 
   const [changingLeaderGroupId, setChangingLeaderGroupId] = useState<string | null>(null);
@@ -408,7 +425,10 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
           </button>
           {studentsLink("branch", r.id)}
           {canManageBranches && r.status === "active" && (
-            <button onClick={() => closeBranch(r.id)} className="text-xs text-danger underline hover:text-danger-ink">
+            <button
+              onClick={() => setPendingClose({ kind: "branch", id: r.id, label: `${r.talmud_branch_code} - ${r.internal_name}` })}
+              className="text-xs text-danger underline hover:text-danger-ink"
+            >
               סגירה
             </button>
           )}
@@ -484,7 +504,7 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
       header: "",
       render: (r) =>
         canManageGroups && r.status === "active" ? (
-          <button onClick={() => closeGroup(r.id)} className="text-xs text-danger underline hover:text-danger-ink">
+          <button onClick={() => setPendingClose({ kind: "group", id: r.id, label: r.name })} className="text-xs text-danger underline hover:text-danger-ink">
             סגירה
           </button>
         ) : null,
@@ -497,6 +517,24 @@ export function BranchesGroupsManager({ orgId }: { orgId: string }) {
 
   return (
     <div>
+      <ConfirmDialog
+        open={pendingClose !== null}
+        danger
+        title={pendingClose?.kind === "branch" ? "סגירת סניף" : "סגירת קבוצה"}
+        description={
+          pendingClose?.kind === "branch"
+            ? `לסגור את הסניף "${pendingClose?.label}"? סניף סגור לא יופיע בבחירה לשיוך חדש.`
+            : `לסגור את הקבוצה "${pendingClose?.label}"? קבוצה סגורה לא תופיע בבחירה לשיוך חדש.`
+        }
+        confirmLabel="סגירה"
+        onConfirm={confirmClose}
+        onCancel={() => setPendingClose(null)}
+      />
+      {closeError && (
+        <div className="mb-4">
+          <ErrorState message={closeError} />
+        </div>
+      )}
       {!orgId ? (
         <ErrorState message="יש לבחור עמותה כדי לראות ולנהל את הסניפים שלה." />
       ) : (

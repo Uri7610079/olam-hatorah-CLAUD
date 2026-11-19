@@ -7,6 +7,7 @@ import { SignUpForm } from "./SignUpForm";
 import { ForgotPasswordForm } from "./ForgotPasswordForm";
 import { PendingApprovalScreen } from "./PendingApprovalScreen";
 import { DisabledScreen } from "./DisabledScreen";
+import { SetNewPasswordForm } from "./SetNewPasswordForm";
 
 type AuthMode = "login" | "signup" | "forgot";
 
@@ -14,7 +15,7 @@ type AuthMode = "login" | "signup" | "forgot";
 // עם session אבל pending/disabled - מסך המתנה/השבתה, בלי גישה לשום מסך עסקי.
 // רק approved מגיע ל-children (מעטפת האפליקציה האמיתית).
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { loading, session, profile } = useAuth();
+  const { loading, session, profile, recovery, finishRecovery } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const invalidatePermissions = useInvalidatePermissions();
   const hadSession = useRef(false);
@@ -39,6 +40,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (mode === "forgot") return <ForgotPasswordForm onBackToLogin={() => setMode("login")} />;
     return <LoginForm onSignUp={() => setMode("signup")} onForgot={() => setMode("forgot")} />;
   }
+
+  // הגיע מקישור "שכחתי סיסמה": קודם קובעים סיסמה חדשה, ורק אחר כך נכנסים.
+  if (recovery) return <SetNewPasswordForm onDone={finishRecovery} />;
 
   if (!profile || profile.status === "pending") {
     return <PendingApprovalScreen />;

@@ -306,6 +306,8 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
         const remainder = r.amount - approved - suggested;
         if (approved >= r.amount - 0.01) return <StatusBadge severity="ok" label="הותאם במלואו" />;
         if (suggested > 0) return <StatusBadge severity="medium" label={`הצעה ממתינה · יתרה ${remainder.toLocaleString("he-IL")}`} />;
+        // חלק מהסכום כבר אושר ואין הצעה ממתינה ליתרה - זה לא "לא הותאם".
+        if (approved > 0.01) return <StatusBadge severity="medium" label={`הותאם חלקית · יתרה ${remainder.toLocaleString("he-IL")}`} />;
         return <StatusBadge severity="neutral" label={`לא הותאם · יתרה ${remainder.toLocaleString("he-IL")}`} />;
       },
     },

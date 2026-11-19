@@ -17,6 +17,7 @@ import { fetchAll } from "@/lib/fetchAll";
 import { EMPTY_FILTER_STATE, applyColumnFilters, type ColumnFilterState } from "@/lib/columnFilters";
 import { StatusBadge, type Severity } from "@/components/StatusBadge";
 import { ErrorState } from "@/components/ErrorState";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { formatStudentAddress, ID_TYPE_LABEL, STATUS_LABEL, type Student, type StudentIdType } from "./types";
 import { StudentsImportPanel } from "./StudentsImportPanel";
 
@@ -108,6 +109,8 @@ export function StudentsListScreen() {
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkAdvanceResult | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  // "אישור כל המוכנים" משנה סטטוס לתלמידים רבים בבת אחת - רק אחרי אישור.
+  const [confirmBulk, setConfirmBulk] = useState(false);
 
   useEscapeToClose(showCreate, () => setShowCreate(false));
   const [savingFilterName, setSavingFilterName] = useState("");
@@ -252,6 +255,17 @@ export function StudentsListScreen() {
 
   return (
     <div>
+      <ConfirmDialog
+        open={confirmBulk}
+        title="אישור כל המוכנים לתלמוד"
+        description="המערכת תעבור על כל התלמידים בטיוטה, ותעביר ל&quot;מוכן לתלמוד&quot; את מי שיש לו טלפון, שיוך וחשבון בנק תקין. מי שחסר לו פרט יישאר בטיוטה, ויוצג כמה כאלה יש."
+        confirmLabel="להעביר את המוכנים"
+        onConfirm={() => {
+          setConfirmBulk(false);
+          runBulkAdvance();
+        }}
+        onCancel={() => setConfirmBulk(false)}
+      />
       <PageHeader
         title="תלמידים"
         description="ניהול תלמידים, שיוכים וחשבונות בנק."
@@ -261,7 +275,7 @@ export function StudentsListScreen() {
               ייצוא לאקסל
             </button>
             {canManage && (
-              <button onClick={runBulkAdvance} disabled={bulkRunning} className="btn-secondary">
+              <button onClick={() => setConfirmBulk(true)} disabled={bulkRunning} className="btn-secondary">
                 {bulkRunning ? "בודקת…" : "אישור כל המוכנים לתלמוד"}
               </button>
             )}

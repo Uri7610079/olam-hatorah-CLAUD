@@ -5,6 +5,7 @@ import { AlertTriangle, Send } from "lucide-react";
 import { buildTalmudRow, buildTalmudWorkbook, type TalmudRow } from "@/lib/talmudFile";
 import { downloadXls, loadTalmudSources } from "@/lib/talmudFileData";
 import { TalmudRowStatus } from "./TalmudRowStatus";
+import { STATUS_LABEL, type StudentStatus } from "../students/types";
 import { supabase } from "@/lib/supabase";
 import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
@@ -260,7 +261,7 @@ export function TalmudExportScreen() {
     },
     { key: "id", header: "מזהה", className: "tabular ltr-num", render: (s) => s.external_id },
     { key: "name", header: "שם", render: (s) => s.full_name },
-    { key: "status", header: "סטטוס נוכחי", render: (s) => s.status },
+    { key: "status", header: "סטטוס נוכחי", render: (s) => STATUS_LABEL[s.status as StudentStatus] ?? s.status },
     { key: "file", header: "מצב בקובץ לתלמוד", render: (s) => <TalmudRowStatus row={s.row} /> },
   ];
 

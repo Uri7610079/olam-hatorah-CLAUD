@@ -42,10 +42,20 @@ async function loadProfile(userId: string): Promise<Profile | null> {
 
 // hook יחיד לכל האפליקציה: session + profile (סטטוס/תפקיד/אזור ברירת מחדל).
 // מתעדכן אוטומטית ב-onAuthStateChange (login/logout/refresh) ולא רק בטעינה ראשונית.
-export function useAuth(): AuthState & { refreshProfile: () => Promise<void> } {
+// קישור "שכחתי סיסמה" מהמייל חוזר לאתר עם ‎#...type=recovery‎ ופותח session.
+// נקרא פעם אחת בטעינת המודול, לפני שהלקוח של Supabase מנקה את הכתובת - כדי
+// שהמשתמש יקבל את מסך "סיסמה חדשה" ולא ייכנס ישר למערכת עם הסיסמה הישנה.
+const RECOVERY_IN_URL = typeof window !== "undefined" && /type=recovery/.test(window.location.hash);
+
+export function useAuth(): AuthState & {
+  refreshProfile: () => Promise<void>;
+  recovery: boolean;
+  finishRecovery: () => void;
+} {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [recovery, setRecovery] = useState(RECOVERY_IN_URL);
 
   const refreshProfile = async () => {
     const { data } = await supabase.auth.getSession();
@@ -64,8 +74,9 @@ export function useAuth(): AuthState & { refreshProfile: () => Promise<void> } {
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (!active) return;
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
       setSession(nextSession);
       setProfile(nextSession ? await loadProfile(nextSession.user.id) : null);
       setLoading(false);
@@ -77,5 +88,5 @@ export function useAuth(): AuthState & { refreshProfile: () => Promise<void> } {
     };
   }, []);
 
-  return { loading, session, profile, refreshProfile };
+  return { loading, session, profile, refreshProfile, recovery, finishRecovery: () => setRecovery(false) };
 }
