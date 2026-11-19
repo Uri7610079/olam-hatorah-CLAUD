@@ -341,7 +341,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
     const r = data as { deleted_count: number; kept_count: number };
     setRollbackResult({ deleted: r.deleted_count, kept: r.kept_count });
     setRollbackBatch(null);
-    queryClient.invalidateQueries({ queryKey: ["bank-batches", accountId] });
+    queryClient.invalidateQueries({ queryKey: ["bank-import-batches", accountId] });
     queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
   };
   // קובץ שהועלה ולא נקלט (למשל הועלה לחשבון הלא נכון): אין בו תנועות, ולכן ביטול
@@ -358,7 +358,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
       return;
     }
     if (reviewBatchId === b.id) setReviewBatchId(null);
-    queryClient.invalidateQueries({ queryKey: ["bank-batches", accountId] });
+    queryClient.invalidateQueries({ queryKey: ["bank-import-batches", accountId] });
   };
   const selectedAccountQuery = useQuery({
     queryKey: ["bank-selected-account", accountId],
