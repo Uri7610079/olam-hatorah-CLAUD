@@ -344,6 +344,22 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
     queryClient.invalidateQueries({ queryKey: ["bank-batches", accountId] });
     queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
   };
+  // קובץ שהועלה ולא נקלט (למשל הועלה לחשבון הלא נכון): אין בו תנועות, ולכן ביטול
+  // רק מסמן אותו "בוטל" - כדי שלא יעכב את סגירת החודש.
+  const cancelUnfinishedBatch = async (b: { id: string; file_name: string }) => {
+    if (!window.confirm(`לבטל את הקובץ "${b.file_name}"? התנועות שבו לא נקלטו, ולכן שום דבר לא יימחק.`)) return;
+    const { error: err } = await supabase
+      .from("bank_import_batches")
+      .update({ status: "rejected", rejected_reason: "בוטל ידנית - הקובץ לא הושלם" })
+      .eq("id", b.id)
+      .neq("status", "committed");
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    if (reviewBatchId === b.id) setReviewBatchId(null);
+    queryClient.invalidateQueries({ queryKey: ["bank-batches", accountId] });
+  };
   const selectedAccountQuery = useQuery({
     queryKey: ["bank-selected-account", accountId],
     queryFn: () => fetchSelectedAccount(accountId),
@@ -761,6 +777,16 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
                       className="text-xs text-danger underline"
                     >
                       ביטול יבוא
+                    </button>
+                  ) : b.status !== "rejected" && canImport ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void cancelUnfinishedBatch(b);
+                      }}
+                      className="text-xs text-danger underline"
+                    >
+                      ביטול הקובץ
                     </button>
                   ) : (
                     <span className="text-ink-subtle">—</span>
