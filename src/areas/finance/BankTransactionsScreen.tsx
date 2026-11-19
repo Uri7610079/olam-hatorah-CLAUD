@@ -542,6 +542,45 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
     queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
   };
 
+  // אישור כל ההצעות של החשבון בלחיצה אחת (131). ודאות גבוהה כבר מאושרת לבד בקליטה;
+  // כאן נשארות ההצעות בוודאות בינונית/נמוכה - מציגים לפי סוג לפני האישור.
+  const suggestedCountQuery = useQuery({
+    queryKey: ["bank-transactions", accountId, "suggested-count"],
+    queryFn: async () => {
+      const { count, error: err } = await supabase
+        .from("bank_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_bank_account_id", accountId)
+        .eq("classification_status", "suggested");
+      if (err) throw err;
+      return count ?? 0;
+    },
+    enabled: !!accountId,
+  });
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  const confirmAllSuggestions = async () => {
+    if (!accountId) return;
+    const { data: rows } = await supabase
+      .from("bank_transactions")
+      .select("suggested_type:bank_transaction_types!bank_transactions_suggested_type_id_fkey(label_he)")
+      .eq("organization_bank_account_id", accountId)
+      .eq("classification_status", "suggested");
+    const byType: Record<string, number> = {};
+    for (const r of (rows ?? []) as any[]) {
+      const t = Array.isArray(r.suggested_type) ? r.suggested_type[0] : r.suggested_type;
+      const label = t?.label_he ?? "אחר";
+      byType[label] = (byType[label] ?? 0) + 1;
+    }
+    const summary = Object.entries(byType).map(([k, v]) => `${k}: ${v}`).join("\n");
+    if (!window.confirm(`לאשר את כל ההצעות?\n\n${summary}\n\nתרומות שיאושרו ייכנסו כ"ממתינות לשיוך".`)) return;
+    setConfirmingAll(true);
+    setError(null);
+    const { error: err } = await supabase.rpc("confirm_suggested_transactions", { p_organization_bank_account_id: accountId });
+    setConfirmingAll(false);
+    if (err) setError(err.message);
+    queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
+  };
+
   const confirmType = async (transactionId: string, typeId: string) => {
     if (!typeId) return;
     await supabase.rpc("confirm_transaction_type", { p_transaction_id: transactionId, p_type_id: typeId });
@@ -812,10 +851,17 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
               ariaLabel="סינון תנועות"
             />
             {canClassify && (
-              <button onClick={runSuggestions} disabled={suggesting} className="btn-secondary flex items-center gap-2 text-xs">
-                <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
-                {suggesting ? "מריצה…" : "הרצת הצעות סיווג"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={runSuggestions} disabled={suggesting} className="btn-secondary flex items-center gap-2 text-xs">
+                  <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  {suggesting ? "מריצה…" : "הרצת הצעות סיווג"}
+                </button>
+                {(suggestedCountQuery.data ?? 0) > 0 && (
+                  <button onClick={confirmAllSuggestions} disabled={confirmingAll} className="btn-primary text-xs">
+                    {confirmingAll ? "מאשרת…" : `אישור כל ההצעות (${suggestedCountQuery.data})`}
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
