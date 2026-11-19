@@ -13,6 +13,7 @@ import { HeaderRowConfirm } from "@/components/HeaderRowConfirm";
 import { ImportPreviewTabs } from "@/components/ImportPreviewTabs";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
+import { RawRowPreview } from "@/components/RawRowPreview";
 
 interface OrgOption {
   id: string;
@@ -235,12 +236,12 @@ export function AuditsImportPanel({ initialFile }: AuditsImportPanelProps) {
 
   const localCols: DataTableColumn<ClassifiedRow>[] = [
     { key: "num", header: "#", className: "tabular", render: (r) => r.rowNumber },
-    { key: "content", header: "תוכן", render: (r) => <span className="text-xs">{JSON.stringify(r.raw)}</span> },
+    { key: "content", header: "תוכן", render: (r) => <RawRowPreview raw={r.raw} /> },
     { key: "note", header: "הערה", render: (r) => r.errorMessage ?? "—" },
   ];
   const storedCols = (allowResolve: boolean): DataTableColumn<StoredImportRow>[] => [
     { key: "num", header: "#", className: "tabular", render: (r) => r.row_number },
-    { key: "content", header: "תוכן", render: (r) => <span className="text-xs">{JSON.stringify(r.raw)}</span> },
+    { key: "content", header: "תוכן", render: (r) => <RawRowPreview raw={r.raw} /> },
     { key: "note", header: "הערה", render: (r) => r.error_message ?? "—" },
     ...(allowResolve
       ? [

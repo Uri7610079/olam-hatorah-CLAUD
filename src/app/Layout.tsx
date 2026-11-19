@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, ClipboardList, Wallet, Settings, CheckSquare, LogOut, Menu, type LucideIcon } from "lucide-react";
 import { useArea, type Area } from "./AreaContext";
 import { screensForArea } from "./screens";
@@ -25,6 +25,17 @@ export function Layout() {
     document.documentElement.setAttribute("data-area", currentArea);
   }, [currentArea]);
 
+  // בטלפון: התפריט נסגר אחרי מעבר מסך (עד היום נשאר פתוח ודחף את התוכן הצידה),
+  // וגם במקש Esc.
+  const { pathname } = useLocation();
+  useEffect(() => setSidebarOpen(false), [pathname]);
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSidebarOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [sidebarOpen]);
+
   return (
     <div className="flex min-h-screen flex-col">
       <DemoBanner />
@@ -32,7 +43,8 @@ export function Layout() {
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
         <button
           className="rounded-control p-2 text-ink-muted hover:bg-surface-muted lg:hidden"
-          aria-label="פתח תפריט"
+          aria-label={sidebarOpen ? "סגירת התפריט" : "פתיחת התפריט"}
+          aria-expanded={sidebarOpen}
           onClick={() => setSidebarOpen((v) => !v)}
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
@@ -92,9 +104,35 @@ export function Layout() {
       </header>
 
       <div className="flex flex-1">
+        {/* בטלפון התפריט נפתח מעל התוכן, עם רקע כהה שסוגר אותו בלחיצה - במקום
+            לדחוף את המסך הצידה. במחשב (lg) - בדיוק כמו קודם. */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 top-[3.25rem] z-30 bg-ink/30 lg:hidden" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
+        )}
         <aside
-          className={`${sidebarOpen ? "block" : "hidden"} w-64 shrink-0 self-start border-l border-line bg-surface lg:sticky lg:top-[3.25rem] lg:block lg:h-[calc(100vh-3.25rem)] lg:overflow-y-auto`}
+          className={`${sidebarOpen ? "block" : "hidden"} fixed inset-y-0 right-0 top-[3.25rem] z-40 w-72 max-w-[85vw] overflow-y-auto border-l border-line bg-surface shadow-lg lg:sticky lg:inset-auto lg:top-[3.25rem] lg:z-auto lg:block lg:h-[calc(100vh-3.25rem)] lg:w-64 lg:max-w-none lg:shrink-0 lg:self-start lg:shadow-none`}
         >
+          {/* מעבר בין אזורים בטלפון - המתג שבסרגל העליון מוסתר ברוחב צר, ועד
+              היום לא הייתה דרך להחליף אזור מהטלפון. */}
+          {availableAreas.length > 1 && (
+            <div className="grid grid-cols-2 gap-1 border-b border-line p-2 lg:hidden" aria-label="מעבר בין אזורים">
+              {availableAreas.map((area) => {
+                const AreaIcon = AREA_ICON[area];
+                const isActive = currentArea === area;
+                return (
+                  <button
+                    key={area}
+                    onClick={() => navigate(`/${area}`)}
+                    aria-current={isActive ? "true" : undefined}
+                    className={`flex items-center gap-1.5 rounded-control px-2 py-2 text-sm font-medium ${isActive ? "bg-area text-area-on" : "text-ink-muted hover:bg-surface-muted"}`}
+                  >
+                    <AreaIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    {AREA_LABEL[area]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* כותרת האזור - פס צבע בצד ואייקון, כדי שהאזור הנוכחי יזוהה מיד גם
               בלי לקרוא את הטקסט. */}
           <div className="border-b border-line bg-area-soft px-3 py-3">

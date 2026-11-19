@@ -6,6 +6,7 @@ import { AREA_ICON, AREA_LABEL } from "@/app/Layout";
 import { Breadcrumbs, type BreadcrumbItem } from "./Breadcrumbs";
 import { HelpHint } from "./HelpHint";
 import { guideForPath } from "@/lib/screenGuide";
+import { useIsV3 } from "@/lib/uiTheme";
 
 interface PageHeaderProps {
   title: string;
@@ -32,12 +33,16 @@ export function PageHeader({ title, description, primaryAction, breadcrumbs }: P
   const screen = findCurrentScreen(pathname);
   const guide = guideForPath(pathname);
   const AreaIcon = screen ? AREA_ICON[screen.area] : null;
+  // v3: מסך פירוט שמעביר פירורי לחם משלו (כרטיס תלמיד, כרטיס עמותה) לא מקבל גם
+  // את שורת המיקום האוטומטית - אחרת "תלמידים" והשם מופיעים פעמיים זה מעל זה.
+  const isV3 = useIsV3();
+  const showLocation = !(isV3 && breadcrumbs && breadcrumbs.length > 0);
 
   return (
     <div className="mb-6 border-b border-line pb-5">
       {/* שורת מיקום קבועה: אזור ← מסך. נגזרת אוטומטית מהנתיב, כך שכל מסך מקבל
           אותה בלי לשנות אף קובץ מסך בנפרד. */}
-      {screen && AreaIcon && (
+      {showLocation && screen && AreaIcon && (
         <nav aria-label="מיקום במערכת" className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
           <Link
             to={`/${screen.area}`}
