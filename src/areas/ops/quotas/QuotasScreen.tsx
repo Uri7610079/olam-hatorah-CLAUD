@@ -375,7 +375,7 @@ function UtilizationBar({ row }: { row: QuotaRow }) {
         className="h-2 flex-1 overflow-hidden rounded-full bg-surface-muted"
         role="progressbar"
         aria-valuemin={0}
-        aria-valuemax={row.approvedQuota ?? 0}
+        aria-valuemax={Math.max(row.approvedQuota ?? 0, row.eligibleCount, 1)}
         aria-valuenow={row.eligibleCount}
         aria-label={`ניצול מכסה: ${formatNumber(row.eligibleCount)} זכאים מתוך ${formatNumber(row.approvedQuota)}`}
       >

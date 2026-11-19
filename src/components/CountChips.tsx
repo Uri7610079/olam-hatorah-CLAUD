@@ -40,7 +40,9 @@ export function CountChips({ chips, active, onSelect, total, allLabel = "הכו�
         <span className="tabular font-semibold">{total.toLocaleString("he-IL")}</span>
       </button>
       {chips
-        .filter((c) => c.count > 0)
+        // צ'יפ עם 0 מוסתר - חוץ מהצ'יפ הפעיל: אם הוא נעלם (למשל אחרי החלפת עמותה),
+        // הטבלה ריקה בלי שום סימן שיש סינון פעיל.
+        .filter((c) => c.count > 0 || c.value === active)
         .map((c) => {
           const isOn = active === c.value;
           return (

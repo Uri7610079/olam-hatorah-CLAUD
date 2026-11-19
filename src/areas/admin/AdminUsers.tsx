@@ -144,7 +144,7 @@ export function AdminUsers() {
       render: (r) =>
         isV3 ? (
           // v3: כפתורים רגילים במקום קישורים זעירים - אותן פעולות ואותם תנאים בדיוק
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-nowrap gap-1.5">
             {r.status !== "approved" && (
               <button onClick={() => openAction(r, "approved")} className="btn-primary px-2.5 py-1 text-xs">
                 {r.status === "pending" ? "אישור" : "הפעלה מחדש"}

@@ -162,6 +162,9 @@ export function Layout() {
               )}
               <NavLink
                 to={s.path}
+                // מסך שהנתיב שלו הוא גם מסך הפתיחה של האזור (למשל /tasks) - רק בהתאמה מדויקת,
+                // אחרת הוא נדלק יחד עם "מסך פתיחה" ועם כל מסך שמתחתיו.
+                end={s.path === dashboardHref}
                 title={s.description}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 rounded-control px-3 py-2 text-sm transition ${

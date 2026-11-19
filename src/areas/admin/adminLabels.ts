@@ -148,6 +148,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   approve_bank_match: "אישור התאמת בנק",
   create_bank_match: "יצירת התאמת בנק",
   reject_bank_match: "דחיית התאמת בנק",
+  suggest_transaction_types: "הרצת הצעות סיווג",
   suggest_masav_matches: 'הצעת התאמות מס"ב',
   approve_distribution_batch: "אישור הוראת חלוקה",
   create_distribution_version: "גרסה חדשה להוראת חלוקה",
