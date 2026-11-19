@@ -424,6 +424,14 @@ export function BankScraperScreen() {
           </aside>
         </div>
       )}
+
+      {/* מצב הקליטה למערכת נקרא מהמסד, לא מהתיקייה - ולכן מוצג מכל מחשב. עד 2026-11-19
+          הוא הוצג רק במחשב שבו הוגדרה תיקיית הבנק, וכך קליטה שנכשלה לא נראתה מבחוץ. */}
+      {!loading && !folderReady && (
+        <div className="mt-6 max-w-4xl">
+          <BankScraperConnectionPanel />
+        </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useLastSelected } from "@/lib/useLastSelected";
 import { PageHeader } from "@/components/PageHeader";
 import { ExceptionGrid, type ExceptionCounter } from "@/components/ExceptionGrid";
 import { LoadingState } from "@/components/LoadingState";
+import { BankStatusCard } from "./BankStatusCard";
 import { ErrorState } from "@/components/ErrorState";
 
 interface OrgOption {
@@ -179,6 +180,7 @@ export function FinanceDashboard() {
             <p className="text-sm text-ink-muted">התחייבות כוללת לקבוצות (יתרת ספר תנועות)</p>
             <p className="tabular mt-1 text-xl font-semibold text-ink">{countsQuery.data.group_commitment_total.toLocaleString("he-IL")}</p>
           </div>
+          <BankStatusCard orgId={orgId} month={month} />
           <MonthCloseBlockers orgId={orgId} month={month} periodStatus={countsQuery.data.period_status} />
           <ExceptionGrid items={buildItems(countsQuery.data, orgId)} />
         </>
