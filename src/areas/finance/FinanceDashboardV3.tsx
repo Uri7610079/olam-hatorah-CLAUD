@@ -1,3 +1,4 @@
+import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -165,7 +166,7 @@ function MonthCloseProgress({ orgId, month, periodStatus }: { orgId: string; mon
 export function FinanceDashboardV3() {
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7) + "-01");
+  const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const countsQuery = useQuery({ queryKey: ["finance-dashboard-counts", orgId, month], queryFn: () => fetchFinanceCounts(orgId, month), enabled: !!orgId });
   const c = countsQuery.data;
   const status = c?.period_status ?? null;
