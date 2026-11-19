@@ -64,6 +64,7 @@ export function BankScraperConnectionPanel() {
         .from("bank_scraper_unmatched_accounts")
         .select("id, bank_code, account_number, reason, transactions_count, last_seen_at")
         .is("resolved_at", null)
+        .is("ignored_at", null)
         .order("last_seen_at", { ascending: false }),
     ]);
     const k = Array.isArray(ks.data) ? ks.data[0] : ks.data;
@@ -85,6 +86,13 @@ export function BankScraperConnectionPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const ignore = async (u: UnmatchedRow) => {
+    if (!window.confirm(`להתעלם מחשבון ${u.account_number}? התנועות שלו לא ייקלטו, והוא לא יופיע יותר כהתראה. אפשר לבטל ברישום החשבון תחת עמותה.`)) return;
+    const { error } = await supabase.rpc("set_unmatched_bank_account_ignored", { p_id: u.id, p_ignored: true });
+    if (error) setMessage({ kind: "error", text: error.message });
+    void load();
+  };
 
   const connect = async () => {
     if (keyStatus?.has_key && !window.confirm("כבר קיים חיבור. חיבור חדש מבטל את הקודם - הסקרייפר ישתמש רק בחדש. להמשיך?")) return;
@@ -166,6 +174,11 @@ export function BankScraperConnectionPanel() {
             <p key={u.id}>
               בנק {u.bank_code} · חשבון <span className="ltr-num">{u.account_number || "(ללא מספר)"}</span> · {u.transactions_count} תנועות ·{" "}
               {u.reason === "not_found" ? "לא רשום תחת אף עמותה - יש להוסיף אותו בכרטיס העמותה" : "תואם לכמה חשבונות במערכת"}
+              {canManage && (
+                <button type="button" onClick={() => void ignore(u)} className="ms-2 underline">
+                  להתעלם מהחשבון הזה
+                </button>
+              )}
             </p>
           ))}
         </div>
