@@ -73,7 +73,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 # ההרצה נראית בדיוק כמו קודם - אותו פלט, אותן שגיאות. סבב שלם התבזבז על
 # ניתוח הרצה של קוד ישן, בלי שלאיש הייתה דרך לדעת. עכשיו אפשר לראות במבט
 # אחד אם ההעתקה נקלטה.
-$ScraperVersion = '2026-11-18.2  (שליחה ישירה למערכת אחרי המשיכה)'
+$ScraperVersion = '2026-11-19.1  (כניסה עסקית: בדיקת הכתובת במקום המתנה לניווט)'
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runtime = Join-Path $Root 'runtime'
@@ -522,6 +522,30 @@ function applyBusinessPortal(scraper, args) {
       } catch (e) { /* הדף כבר עבר - סימן טוב */ }
 
       if (!clicked) console.log('  [עסקי] לא נמצא כפתור כניסה - לחצו "כניסה" ידנית בחלון.');
+    };
+
+    // נתפס בשטח (2026-11-19): הכניסה השנייה למרכנתיל נכשלה ב-"Waiting for selector
+    // #general-error failed" אף שהסיסמה נכונה ואין מסך ביניים. הסיבה: ההמתנה של
+    // הספרייה אחרי הכניסה מחכה ל*ניווט חדש*. אם הבנק ענה מהר והדף עבר כבר בתוך
+    // 4 השניות של הבדיקה למעלה, הניווט קרה לפני שהתחלנו לחכות לו, ולכן ההמתנה
+    // נגמרת בכישלון. זה תלוי בתזמון: לפעמים עבד ולפעמים לא. במקום לחכות לאירוע
+    // בודקים את הכתובת עצמה כל שנייה: נחתנו במערכת העסקית, או הופיעה הודעת שגיאה.
+    o.postAction = async () => {
+      const deadline = Date.now() + (args.show ? 600000 : 90000);
+      while (Date.now() < deadline) {
+        let url = '';
+        try { url = page.url(); } catch (e) { /* הדף באמצע מעבר */ }
+        if (BUSINESS_PORTAL_URL.test(url) || /\/apollo\/(retail|core)/i.test(url)) {
+          await new Promise((r) => setTimeout(r, 1500));
+          return;
+        }
+        try {
+          const err = await page.$('#general-error');
+          if (err && await err.evaluate((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; })) return;
+        } catch (e) { /* הדף באמצע מעבר */ }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      console.log('  [עסקי] אחרי ' + Math.round((args.show ? 600000 : 90000) / 1000) + ' שניות עדיין לא נחתנו בחשבון. הכתובת כעת: ' + (() => { try { return page.url(); } catch (e) { return '?'; } })());
     };
 
     return o;
