@@ -591,9 +591,36 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
   };
 
   // אחרי סיווג ידני: הצעה להפוך אותו לכלל קבוע (132)
-  const [rulePrompt, setRulePrompt] = useState<{ txId: string; typeLabel: string; direction: Direction; pattern: string; thisAccountOnly: boolean } | null>(null);
+  const [rulePrompt, setRulePrompt] = useState<{
+    txId: string;
+    typeLabel: string;
+    direction: Direction;
+    pattern: string;
+    thisAccountOnly: boolean;
+    includeConfirmed: boolean;
+    isChange: boolean;
+  } | null>(null);
   const [ruleResult, setRuleResult] = useState<string | null>(null);
   const [creatingRule, setCreatingRule] = useState(false);
+  // שינוי סיווג שכבר אושר (133)
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
+
+  const offerRule = (transactionId: string, typeId: string, isChange: boolean) => {
+    const row = (transactionsQuery.data ?? []).find((r) => r.id === transactionId);
+    const typeLabel = (typesQuery.data ?? []).find((t) => t.id === typeId)?.label_he ?? "";
+    if (row?.description) {
+      setRuleResult(null);
+      setRulePrompt({
+        txId: transactionId,
+        typeLabel,
+        direction: row.direction,
+        pattern: rulePatternFromDescription(row.description),
+        thisAccountOnly: true,
+        includeConfirmed: isChange,
+        isChange,
+      });
+    }
+  };
 
   const confirmType = async (transactionId: string, typeId: string) => {
     if (!typeId) return;
@@ -603,12 +630,20 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
       setError(err.message);
       return;
     }
-    const row = (transactionsQuery.data ?? []).find((r) => r.id === transactionId);
-    const typeLabel = (typesQuery.data ?? []).find((t) => t.id === typeId)?.label_he ?? "";
-    if (row?.description) {
-      setRuleResult(null);
-      setRulePrompt({ txId: transactionId, typeLabel, direction: row.direction, pattern: rulePatternFromDescription(row.description), thisAccountOnly: true });
+    offerRule(transactionId, typeId, false);
+  };
+
+  const changeType = async (transactionId: string, typeId: string) => {
+    if (!typeId) return;
+    setEditingTypeId(null);
+    setError(null);
+    const { error: err } = await supabase.rpc("change_transaction_type", { p_transaction_id: transactionId, p_type_id: typeId });
+    queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
+    if (err) {
+      setError(err.message);
+      return;
     }
+    offerRule(transactionId, typeId, true);
   };
 
   const createRule = async () => {
@@ -618,14 +653,20 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
       p_transaction_id: rulePrompt.txId,
       p_pattern: rulePrompt.pattern,
       p_this_account_only: rulePrompt.thisAccountOnly,
+      p_include_confirmed: rulePrompt.includeConfirmed,
     });
     setCreatingRule(false);
     if (err) {
       setError(err.message);
       return;
     }
-    const applied = (data as { applied: number } | null)?.applied ?? 0;
-    setRuleResult(`נוצר כלל: "${rulePrompt.pattern}" ← ${rulePrompt.typeLabel}. ${applied > 0 ? `${applied} תנועות דומות סווגו עכשיו.` : "אין כרגע תנועות דומות נוספות."} תנועות כאלה שיגיעו מהבנק יסווגו לבד.`);
+    const res = (data as { applied: number; changed: number; blocked: number } | null) ?? { applied: 0, changed: 0, blocked: 0 };
+    const parts = [
+      res.applied > 0 ? `${res.applied} תנועות דומות סווגו עכשיו` : "",
+      res.changed > 0 ? `${res.changed} תנועות שכבר אושרו שונו` : "",
+      res.blocked > 0 ? `${res.blocked} לא שונו כי כבר נרשמה מהן תרומה מאושרת או החזרה - יש לבטל אותן קודם` : "",
+    ].filter(Boolean);
+    setRuleResult(`נוצר כלל: "${rulePrompt.pattern}" ← ${rulePrompt.typeLabel}. ${parts.length ? parts.join(". ") + "." : "אין כרגע תנועות דומות נוספות."} תנועות כאלה שיגיעו מהבנק יסווגו לבד.`);
     setRulePrompt(null);
     queryClient.invalidateQueries({ queryKey: ["bank-transactions", accountId] });
   };
@@ -665,12 +706,21 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
       key: "confirmed",
       header: "סיווג מאושר",
       render: (r) =>
-        r.confirmed_type ? (
-          <StatusBadge severity="ok" label={r.confirmed_type.label_he} />
+        r.confirmed_type && editingTypeId !== r.id ? (
+          <span className="flex items-center gap-2">
+            <StatusBadge severity="ok" label={r.confirmed_type.label_he} />
+            {canClassify && (
+              <button onClick={() => setEditingTypeId(r.id)} className="link-action text-xs">
+                שינוי
+              </button>
+            )}
+          </span>
         ) : canClassify ? (
           <select
-            defaultValue={r.suggested_type ? "" : ""}
-            onChange={(e) => confirmType(r.id, e.target.value)}
+            defaultValue=""
+            onChange={(e) => (r.confirmed_type ? changeType(r.id, e.target.value) : confirmType(r.id, e.target.value))}
+            onBlur={() => r.confirmed_type && setEditingTypeId(null)}
+            autoFocus={!!r.confirmed_type}
             className="input-field text-xs"
           >
             <option value="">— בחרי סוג —</option>
@@ -927,12 +977,20 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
                 />
                 רק בחשבון הזה (אותו תיאור יכול להיות דבר אחר בעמותה אחרת)
               </label>
+              <label className="flex items-center gap-2 text-xs text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={rulePrompt.includeConfirmed}
+                  onChange={(e) => setRulePrompt({ ...rulePrompt, includeConfirmed: e.target.checked })}
+                />
+                לשנות גם תנועות דומות שכבר אושרו בסיווג אחר
+              </label>
               <div className="flex gap-2">
                 <button onClick={createRule} disabled={creatingRule || rulePrompt.pattern.trim().length < 3} className="btn-primary text-xs">
                   {creatingRule ? "יוצרת…" : "כן, ליצור כלל"}
                 </button>
                 <button onClick={() => setRulePrompt(null)} className="btn-secondary text-xs">
-                  לא, רק התנועה הזו
+                  {rulePrompt.isChange ? "לא, שינוי חד-פעמי" : "לא, רק התנועה הזו"}
                 </button>
               </div>
             </div>
