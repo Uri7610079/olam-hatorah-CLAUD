@@ -20,13 +20,20 @@ export function exportRowsToExcel(rows: Record<string, unknown>[], sheetName: st
 // כל יצוא נרשם ביומן: משתמש (נגזר מה-auth.uid() בפונקציה עצמה), זמן, סוג דוח, מסננים
 // והיקף - דרישה מפורשת באפיון (שלב 14). לא חוסם את היצוא אם הרישום נכשל מסיבה כלשהי -
 // עדיף שהמשתמש יקבל את הדוח ונאבד רישום יומן, מאשר לחסום דוח תקין בגלל תקלת רישום.
-export async function logReportExport(reportType: string, filters: Record<string, unknown>, rowCount: number) {
-  // rpc לא זורק שגיאה אלא מחזיר אותה, ולכן עד היום כשל ברישום עבר בשקט לגמרי.
-  // היצוא עדיין לא נחסם, אבל הכשל נרשם בקונסול.
+// מחזיר true אם הרישום הצליח. היצוא עצמו לא נחסם, אבל המסך שקרא חייב להציג למשתמש
+// שהרישום נכשל (EXPORT_LOG_FAILED_MESSAGE) - עד היום הכשל נרשם רק בקונסול, והמסך
+// המשיך להצהיר שכל יצוא נרשם ביומן.
+export const EXPORT_LOG_FAILED_MESSAGE = "הקובץ הורד, אבל הרישום ביומן הפעולות נכשל. אם הרישום חשוב, נסו לייצא שוב.";
+export async function logReportExport(reportType: string, filters: Record<string, unknown>, rowCount: number): Promise<boolean> {
   try {
     const { error } = await supabase.rpc("log_report_export", { p_report_type: reportType, p_filters: filters, p_row_count: rowCount });
-    if (error) console.error("רישום היצוא ביומן נכשל:", error.message);
+    if (error) {
+      console.error("רישום היצוא ביומן נכשל:", error.message);
+      return false;
+    }
+    return true;
   } catch (e) {
     console.error("רישום היצוא ביומן נכשל:", e);
+    return false;
   }
 }

@@ -134,6 +134,42 @@ async function fetchGroupStudents(groupId: string): Promise<GroupStudent[]> {
   return students.map((s) => ({ id: s.id, external_id: s.external_id, full_name: s.full_name, status: s.status, verified: verifiedIds.has(s.id) }));
 }
 
+type DistributionLineInput = { student_id: string; amount: number };
+type RestoredPercentages = { pctTotal: string; percentages: Record<string, string> };
+
+// חישוב שורות החלוקה לשמירה -לפי השיטה של האצווה הנערכת בלבד. עד היום נבדקה גם
+// השיטה שנבחרה בטופס "אצווה חדשה" (גם אחרי שנסגר בלי ליצור), ואז טיוטה רגילה חושבה
+// מאחוזים ריקים, כל הסכומים יצאו אפס, והשמירה מחקה את כל השורות שלה.
+export function computeDistributionLines(
+  method: Method,
+  studentIds: string[],
+  amounts: Record<string, string>,
+  percentages: Record<string, string>,
+  pctTotal: string,
+): DistributionLineInput[] {
+  return studentIds
+    .map((studentId) => {
+      const amount =
+        method === "percentages"
+          ? (Number(percentages[studentId] || 0) * Number(pctTotal || 0)) / 100
+          : Number(amounts[studentId] || 0);
+      return { student_id: studentId, amount: Math.round(amount * 100) / 100 };
+    })
+    .filter((r) => r.amount > 0);
+}
+
+// באחוזים נשמר במסד רק הסכום. בפתיחת טיוטה האחוז משוחזר מהסכום ומהסך הכול - בדיוק
+// מלא, בלי עיגול. עד היום עוגל ל-6 ספרות, ובסכום כולל גדול שורה קטנה קיבלה אחוז 0
+// ונמחקה בשמירה הבאה.
+export function percentagesFromSaved(saved: { student_id: string; amount: number | string }[]): RestoredPercentages {
+  const total = saved.reduce((sum, l) => sum + Number(l.amount), 0);
+  if (!(total > 0)) return { pctTotal: "", percentages: Object.fromEntries(saved.map((l) => [l.student_id, ""])) };
+  return {
+    pctTotal: total.toFixed(2),
+    percentages: Object.fromEntries(saved.map((l) => [l.student_id, String((Number(l.amount) / total) * 100)])),
+  };
+}
+
 const EMPTY_NEW_BATCH = { periodMonth: todayLocalIso().slice(0, 7) + "-01", sourceType: "net_scholarships" as SourceType, method: "equal" as Method, notes: "" };
 
 export function DistributionsScreen() {
@@ -242,14 +278,9 @@ export function DistributionsScreen() {
     setSelectedIds(new Set(saved.map((l) => l.student_id)));
     setAmounts(Object.fromEntries(saved.map((l) => [l.student_id, Number(l.amount).toFixed(2)])));
     if (selectedBatch.method === "percentages") {
-      // באחוזים נשמר רק הסכום. האחוז משוחזר מהסכום ומהסך הכול, בדיוק מספיק כדי ששמירה
-      // בלי שינוי תחזיר את אותם סכומים בדיוק.
-      const total = saved.reduce((sum, l) => sum + Number(l.amount), 0);
-      setPctTotal(total > 0 ? total.toFixed(2) : "");
-      setPercentages(Object.fromEntries(saved.map((l) => [
-        l.student_id,
-        total > 0 ? String(Number(((Number(l.amount) / total) * 100).toFixed(6))) : "",
-      ])));
+      const restored = percentagesFromSaved(saved);
+      setPctTotal(restored.pctTotal);
+      setPercentages(restored.percentages);
     }
     setHydratedBatchId(selectedBatchId);
   }, [selectedBatchId, hydratedBatchId, linesQuery.isSuccess, linesQuery.isFetching, linesQuery.data, selectedBatch]);
@@ -344,20 +375,17 @@ export function DistributionsScreen() {
     exportRowsToExcel(rows, "שורות חלוקה", `שורות-חלוקה-${selectedBatch.period_month}-גרסה-${selectedBatch.version}.xlsx`);
   };
 
-  const saveLines = async () => {
-    if (!selectedBatchId || !linesReady) return;
+  // שמירה שתמחק את כל השורות השמורות (אף שורה עם סכום) לא קורית בשקט - קודם שואלים.
+  const [confirmEmptySave, setConfirmEmptySave] = useState(false);
+  const saveLines = async (allowEmpty = false) => {
+    if (!selectedBatchId || !linesReady || !selectedBatch) return;
+    const rows = computeDistributionLines(selectedBatch.method, Array.from(selectedIds), amounts, percentages, pctTotal);
+    if (rows.length === 0 && (linesQuery.data?.length ?? 0) > 0 && !allowEmpty) {
+      setConfirmEmptySave(true);
+      return;
+    }
     setSavingLines(true);
     setError(null);
-    const rows = Array.from(selectedIds)
-      .map((studentId) => {
-        const pct = percentages[studentId];
-        const amount =
-          newBatch.method === "percentages" || selectedBatch?.method === "percentages"
-            ? (Number(pct || 0) * Number(pctTotal || 0)) / 100
-            : Number(amounts[studentId] || 0);
-        return { student_id: studentId, amount: Math.round(amount * 100) / 100 };
-      })
-      .filter((r) => r.amount > 0);
 
     // מחיקה והוספה בפעולה אחת (מיגרציה 135): אם ההוספה נכשלת, גם המחיקה מתבטלת
     // והשורות הקודמות נשארות. עד היום אלה היו שתי קריאות, וכשל בשנייה השאיר אצווה ריקה.
@@ -715,7 +743,7 @@ export function DistributionsScreen() {
                       <span className="tabular v3:font-semibold v3:text-ink">{isV3 ? formatMoney(draftTotal) : draftTotal.toLocaleString("he-IL")}</span>
                       {isV3 && ` · ${formatNumber((groupStudentsQuery.data ?? []).filter((s) => selectedIds.has(s.id)).length)} תלמידים מסומנים`}
                     </p>
-                    <button onClick={saveLines} disabled={savingLines || !linesReady} className={`btn-secondary flex items-center gap-2${xs}`}>
+                    <button onClick={() => saveLines()} disabled={savingLines || !linesReady} className={`btn-secondary flex items-center gap-2${xs}`}>
                       <Upload className={isV3 ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden="true" />
                       {savingLines ? "שומרת…" : "שמירת שורות"}
                     </button>
@@ -764,6 +792,20 @@ export function DistributionsScreen() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmEmptySave}
+        danger
+        title="למחוק את כל שורות הטיוטה?"
+        description="אין אף תלמיד עם סכום גדול מאפס. שמירה עכשיו תמחק את כל השורות שכבר שמורות בטיוטה."
+        confirmLabel="כן, למחוק את השורות"
+        cancelLabel="ביטול"
+        onConfirm={() => {
+          setConfirmEmptySave(false);
+          saveLines(true);
+        }}
+        onCancel={() => setConfirmEmptySave(false)}
+      />
 
       <ConfirmDialog
         open={confirmApprove}

@@ -63,6 +63,13 @@ async function fetchTask(id: string): Promise<Task> {
   return data;
 }
 
+interface CreateProgress {
+  taskId: string | null;
+  checklistCopied: boolean;
+  reminderAdded: boolean;
+}
+const EMPTY_CREATE_PROGRESS: CreateProgress = { taskId: null, checklistCopied: false, reminderAdded: false };
+
 export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: TaskDrawerProps) {
   useEscapeToClose(open, onClose);
   const queryClient = useQueryClient();
@@ -75,6 +82,9 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
   const [activeTab, setActiveTab] = useState<TabKey>("details");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // יצירה בשלבים: המשימה, ואז ה-Checklist מהתבנית, ואז התזכורת. מה שכבר הצליח נזכר כאן,
+  // כך שלחיצה חוזרת אחרי כשל משלימה רק את מה שנכשל. עד היום לחיצה חוזרת יצרה משימה שנייה.
+  const [createProgress, setCreateProgress] = useState<CreateProgress>(EMPTY_CREATE_PROGRESS);
 
   // טופס יצירה (taskId === null)
   const [title, setTitle] = useState("");
@@ -121,6 +131,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
     // אחראים/צוותים לא מתאפסים כאן בכוונה - הם נשמרים דרך useLastSelected (הבחירה
     // האחרונה), כדי שהיצירה הבאה תתחיל מאותה בחירה במקום מרשימה ריקה.
     setSelectedTemplateId("");
+    setCreateProgress(EMPTY_CREATE_PROGRESS);
   };
 
   const applyTemplate = (templateId: string) => {
@@ -148,34 +159,48 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
     }
     setSaving(true);
     setError(null);
+    let progress = createProgress;
     try {
-      const newTaskId = await createTask({
-        title: title.trim(),
-        description: description.trim() || null,
-        priority,
-        category_id: categoryId || null,
-        due_date: dueDate || null,
-        created_by: userId,
-        owner_ids: selectedOwners,
-        team_ids: selectedTeams,
-      });
-      if (selectedTemplateId) {
-        const items = await fetchTemplateChecklist(selectedTemplateId);
-        if (items.length > 0) {
-          const { error: checklistError } = await supabase
-            .from("task_checklist_items")
-            .insert(items.map((item, position) => ({ task_id: newTaskId, text: item.text, position })));
-          // המשימה עצמה כבר נוצרה בהצלחה - זו לא כשלון מלא, אבל חייבים להציג שה-Checklist
-          // לא הועתק (למשל חוסר tasks.edit) ולא לתת רושם שגוי שהכל הועתק בשקט.
-          if (checklistError) {
-            // לא סוגרים את החלון - כדי שההודעה תישאר גלויה ולא תיראה כהצלחה שקטה.
-            setError(`המשימה נוצרה, אך העתקת ה-Checklist מהתבנית נכשלה: ${checklistError.message}`);
-            onSaved();
-            return;
-          }
-        }
+      let newTaskId = progress.taskId;
+      if (!newTaskId) {
+        newTaskId = await createTask({
+          title: title.trim(),
+          description: description.trim() || null,
+          priority,
+          category_id: categoryId || null,
+          due_date: dueDate || null,
+          created_by: userId,
+          owner_ids: selectedOwners,
+          team_ids: selectedTeams,
+        });
+        progress = { ...progress, taskId: newTaskId };
+        setCreateProgress(progress);
       }
-      if (dueDate && reminderDaysBefore.trim() !== "") {
+      if (selectedTemplateId && !progress.checklistCopied) {
+        let checklistError: string | null = null;
+        try {
+          const items = await fetchTemplateChecklist(selectedTemplateId);
+          if (items.length > 0) {
+            const { error: insertError } = await supabase
+              .from("task_checklist_items")
+              .insert(items.map((item, position) => ({ task_id: newTaskId, text: item.text, position })));
+            if (insertError) checklistError = insertError.message;
+          }
+        } catch (e: any) {
+          checklistError = e.message ?? "שגיאה לא ידועה";
+        }
+        // המשימה עצמה כבר נוצרה בהצלחה - זו לא כשלון מלא, אבל חייבים להציג שה-Checklist
+        // לא הועתק (למשל חוסר tasks.edit) ולא לתת רושם שגוי שהכל הועתק בשקט.
+        if (checklistError) {
+          // לא סוגרים את החלון - כדי שההודעה תישאר גלויה ולא תיראה כהצלחה שקטה.
+          setError(`המשימה נוצרה, אך העתקת ה-Checklist מהתבנית נכשלה: ${checklistError}. לחיצה על "השלמה" תנסה שוב בלי ליצור משימה נוספת.`);
+          onSaved();
+          return;
+        }
+        progress = { ...progress, checklistCopied: true };
+        setCreateProgress(progress);
+      }
+      if (dueDate && reminderDaysBefore.trim() !== "" && !progress.reminderAdded) {
         try {
           await addReminder({
             taskId: newTaskId,
@@ -188,10 +213,12 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
           });
         } catch (e: any) {
           // המשימה עצמה כבר נוצרה בהצלחה - לא סוגרים את החלון כדי שהשגיאה תישאר גלויה.
-          setError(`המשימה נוצרה, אך הוספת התזכורת נכשלה: ${e.message ?? "שגיאה לא ידועה"}`);
+          setError(`המשימה נוצרה, אך הוספת התזכורת נכשלה: ${e.message ?? "שגיאה לא ידועה"}. לחיצה על "השלמה" תנסה שוב בלי ליצור משימה נוספת.`);
           onSaved();
           return;
         }
+        progress = { ...progress, reminderAdded: true };
+        setCreateProgress(progress);
       }
       onSaved();
       close();
@@ -399,7 +426,7 @@ export function TaskDrawer({ open, onClose, taskId, onSaved, initialDueDate }: T
                 ביטול
               </button>
               <button onClick={handleCreate} disabled={saving} className="btn-primary text-sm">
-                {saving ? "יוצרת…" : "יצירה"}
+                {saving ? (createProgress.taskId ? "משלימה…" : "יוצרת…") : createProgress.taskId ? "השלמה" : "יצירה"}
               </button>
             </div>
           </div>

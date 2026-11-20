@@ -8,7 +8,7 @@ import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
 import type { ClassifiedRow } from "@/lib/importParsing";
 import { analyzeFile, checkDuplicateFile, legacyXlsWarning, createImportBatch, fetchImportBatchRows, resolveImportRow, type StoredImportRow } from "@/lib/importBatches";
-import { exportRowsToExcel, logReportExport } from "@/lib/reportExport";
+import { EXPORT_LOG_FAILED_MESSAGE, exportRowsToExcel, logReportExport } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -159,7 +159,7 @@ export function AuditsScreen() {
       "ביקורות",
       "ביקורות.xlsx",
     );
-    await logReportExport("audits", { organization_id: orgId }, rows.length);
+    if (!(await logReportExport("audits", { organization_id: orgId }, rows.length))) setError(EXPORT_LOG_FAILED_MESSAGE);
   };
 
   const resetImportForm = () => {

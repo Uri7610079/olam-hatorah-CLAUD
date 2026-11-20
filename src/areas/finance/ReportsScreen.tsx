@@ -1,12 +1,12 @@
 import { todayLocalIso } from "@/lib/today";
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useLastSelected } from "@/lib/useLastSelected";
-import { exportRowsToExcel, logReportExport } from "@/lib/reportExport";
+import { EXPORT_LOG_FAILED_MESSAGE, exportRowsToExcel, logReportExport } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
@@ -385,6 +385,17 @@ async function fetchGroups(orgId: string): Promise<GroupOption[]> {
   return (data ?? []).map((r: any) => ({ id: r.id, name: r.name }));
 }
 
+export interface ReportContext {
+  orgId: string;
+  month: string;
+  groupId: string;
+  reportKey: string;
+}
+
+export function sameReportContext(a: ReportContext, b: ReportContext): boolean {
+  return a.orgId === b.orgId && a.month === b.month && a.groupId === b.groupId && a.reportKey === b.reportKey;
+}
+
 export function ReportsScreen() {
   const isV3 = useIsV3();
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
@@ -393,9 +404,17 @@ export function ReportsScreen() {
   const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const [groupId, setGroupId] = useState("");
   const [reportKey, setReportKey] = useState(REPORTS[0].key);
-  const [rows, setRows] = useState<ReportRow[] | null>(null);
+  // התוצאה נשמרת יחד עם ההקשר שבו הורץ הדוח (עמותה, חודש, קבוצה, סוג דוח), ומוצגת
+  // רק כשההקשר הנוכחי זהה לו. עד היום דוח שהתחיל לעמותה א' והסתיים אחרי מעבר לעמותה ב'
+  // הוצג תחת עמותה ב' - והיצוא נרשם ביומן עם העמותה הלא נכונה.
+  const [result, setResult] = useState<{ ctx: ReportContext; rows: ReportRow[] } | null>(null);
+  const requestSeq = useRef(0);
+  const currentCtx: ReportContext = { orgId, month, groupId, reportKey };
+  const rows = result && sameReportContext(result.ctx, currentCtx) ? result.rows : null;
+  const setRows = (next: null) => setResult(next);
   const [running, setRunning] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportLogWarning, setExportLogWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -410,24 +429,32 @@ export function ReportsScreen() {
   const runPreview = async () => {
     if (!orgId) return;
     if (report.needsGroup && !groupId) return;
+    const seq = ++requestSeq.current;
+    const ctx = currentCtx;
     setRunning(true);
     setError(null);
     try {
-      setRows(await report.fetch({ orgId, month, groupId }));
+      const fetched = await report.fetch({ orgId: ctx.orgId, month: ctx.month, groupId: ctx.groupId });
+      // רק הבקשה האחרונה קובעת. תשובה של בקשה ישנה שהגיעה באיחור נזרקת.
+      if (seq === requestSeq.current) setResult({ ctx, rows: fetched });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "שגיאה בהרצת הדוח");
+      if (seq === requestSeq.current) setError(e instanceof Error ? e.message : "שגיאה בהרצת הדוח");
     } finally {
-      setRunning(false);
+      if (seq === requestSeq.current) setRunning(false);
     }
   };
 
   const runExport = async () => {
-    if (!rows) return;
+    if (!result || !rows) return;
+    // היצוא והרישום ביומן לוקחים את ההקשר שבו הדוח הורץ בפועל, לא את מה שנבחר עכשיו.
+    const { ctx } = result;
+    const ctxReport = REPORTS.find((r) => r.key === ctx.reportKey) ?? report;
     setExporting(true);
     try {
-      const orgLabel = orgsQuery.data?.find((o) => o.id === orgId)?.legal_name ?? orgId;
-      exportRowsToExcel(rows, report.label, `${report.key}-${month}-${crypto.randomUUID().slice(0, 8)}.xlsx`);
-      await logReportExport(report.key, { organization: orgLabel, month, group_id: groupId || null }, rows.length);
+      const orgLabel = orgsQuery.data?.find((o) => o.id === ctx.orgId)?.legal_name ?? ctx.orgId;
+      exportRowsToExcel(rows, ctxReport.label, `${ctxReport.key}-${ctx.month}-${crypto.randomUUID().slice(0, 8)}.xlsx`);
+      const logged = await logReportExport(ctxReport.key, { organization: orgLabel, month: ctx.month, group_id: ctx.groupId || null }, rows.length);
+      setExportLogWarning(logged ? null : EXPORT_LOG_FAILED_MESSAGE);
     } finally {
       setExporting(false);
     }
@@ -532,6 +559,7 @@ export function ReportsScreen() {
       )}
 
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
+      {exportLogWarning && <div className="mb-4"><ErrorState message={exportLogWarning} /></div>}
       {running && <LoadingState rows={4} />}
       {rows && <DataTable columns={columns} rows={rows} rowKey={(r) => String(rows.indexOf(r))} emptyTitle="אין נתונים לדוח זה" />}
     </div>

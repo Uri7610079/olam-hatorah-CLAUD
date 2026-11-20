@@ -157,6 +157,20 @@ interface EligibilityBatchSummary {
   created_at: string;
 }
 
+// מצב החודש במסך הזכאות: יש שורות זכאות / נקלט דוח בלי זכאים / לא נקלט דוח.
+// "נקלט דוח" = אצוות זכאות שנקלטה (committed) עם החודש הזה. רשימת האצוות מוגבלת
+// לאחרונות, ולכן חודש ישן בלי שורות ובלי אצווה ברשימה נשאר "לא נקלט" - כמו קודם.
+export function eligibilityMonthState(
+  rowCount: number,
+  batches: { status: string; period_month: string | null }[],
+  month: string,
+): "has_rows" | "empty_report" | "no_report" {
+  if (rowCount > 0) return "has_rows";
+  const key = month.slice(0, 7);
+  const imported = batches.some((b) => b.status === "committed" && !!b.period_month && b.period_month.slice(0, 7) === key);
+  return imported ? "empty_report" : "no_report";
+}
+
 async function fetchEligibilityBatches(orgId: string): Promise<EligibilityBatchSummary[]> {
   const profile = await supabase.from("import_profiles").select("id").eq("key", "talmud_eligibility").single();
   if (!profile.data) return [];
@@ -392,7 +406,13 @@ export function EligibilityScreen() {
   const batchesWithRejected = (batchesQuery.data ?? []).filter((b) => b.status === "committed" && b.invalid_count > 0);
   // עוד לא נקלט דוח זכאות לחודש: אין עם מה להשוות. בלי ההבחנה הזו כל תלמיד פעיל
   // נספר "לא הופיע בדוח", והסכום מוצג כאפס - כאילו זו תוצאה ולא היעדר נתונים.
-  const noReport = !monthDataQuery.isLoading && !!monthDataQuery.data && monthRows.length === 0;
+  // "אין זכאים" אינו בהכרח "אין דוח": דוח שנקלט לחודש ובו אפס זכאים פעילים מוצג כתוצאה
+  // (אפסים), ורק כשאין גם אצווה שנקלטה לחודש הזה - "טרם נקלט דוח".
+  const monthState = monthDataQuery.isLoading || !monthDataQuery.data
+    ? null
+    : eligibilityMonthState(monthRows.length, batchesQuery.data ?? [], month);
+  const noReport = monthState === "no_report";
+  const emptyReport = monthState === "empty_report";
   const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: reviewBatchQuery.data?.status === "committed", previewing: !!parsedRows && !duplicateId });
   const importVisible = !isV3 || showImport || !!file;
 
@@ -468,7 +488,7 @@ export function EligibilityScreen() {
           <MetricCard
             label={`זכאות ל${formatMonth(month)}`}
             value={monthDataQuery.isLoading ? "…" : noReport ? "—" : formatMoney(monthTotal)}
-            hint={noReport ? "טרם נקלט דוח זכאות לחודש הזה" : undefined}
+            hint={noReport ? "טרם נקלט דוח זכאות לחודש הזה" : emptyReport ? "נקלט דוח לחודש הזה, ואין בו זכאים פעילים" : undefined}
             tone="primary"
             emphasis
             muted={!monthDataQuery.isLoading && monthRows.length === 0}

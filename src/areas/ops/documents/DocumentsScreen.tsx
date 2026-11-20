@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { safeStorageKey } from "@/lib/storagePath";
 import { useHasPermission } from "@/lib/permissions";
 import { useLastSelected } from "@/lib/useLastSelected";
-import { exportRowsToExcel, logReportExport } from "@/lib/reportExport";
+import { EXPORT_LOG_FAILED_MESSAGE, exportRowsToExcel, logReportExport } from "@/lib/reportExport";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -230,7 +230,7 @@ export function DocumentsScreen() {
       "מסמכים",
       "מסמכים.xlsx",
     );
-    await logReportExport("documents", { organization_id: orgId }, rows.length);
+    if (!(await logReportExport("documents", { organization_id: orgId }, rows.length))) setError(EXPORT_LOG_FAILED_MESSAGE);
   };
 
   const submitTemplate = async (e: FormEvent) => {
