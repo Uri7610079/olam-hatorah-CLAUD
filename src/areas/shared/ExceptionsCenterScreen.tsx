@@ -348,6 +348,7 @@ export function ExceptionsCenterScreen() {
             columns={columns}
             rows={v3Rows}
             rowKey={(r) => `${r.exception_type}-${r.related_id}`}
+            clientPageSize={100}
             emptyTitle={search.trim() || domain ? "אין חריגות שמתאימות לחיפוש" : "אין חריגות פתוחות"}
             emptyIcon={AlertTriangle}
             onRowClick={(r) => navigate(routeFor(areaPrefix, r))}
@@ -358,6 +359,7 @@ export function ExceptionsCenterScreen() {
           columns={columns}
           rows={exceptionsQuery.data ?? []}
           rowKey={(r) => `${r.exception_type}-${r.related_id}`}
+          clientPageSize={100}
           emptyTitle="אין חריגות פתוחות"
           emptyIcon={AlertTriangle}
           onRowClick={(r) => navigate(routeFor(areaPrefix, r))}

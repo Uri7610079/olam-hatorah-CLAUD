@@ -255,9 +255,6 @@ export function StudentDetailsTab({ student }: StudentDetailsTabProps) {
           <input id="student-study-code" value={values.study_code} onChange={(e) => setValues((v) => ({ ...v, study_code: e.target.value }))} className="input-field tabular" />
         </div>
       </div>
-      <p className="text-xs text-ink-subtle">
-        סוג תלמיד וקוד לימוד הם טקסט חופשי כרגע — יהפכו לרשימות סגורות משלב 5 (הגדרות מערכת וקודי לימוד).
-      </p>
       {error && <ErrorState message={error} />}
       <button type="submit" disabled={saving} className="btn-primary">
         {saving ? "שומרת…" : "שמירה"}

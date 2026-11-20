@@ -1,3 +1,4 @@
+import { groupLabel } from "@/lib/groupLabel";
 import { fetchAll } from "@/lib/fetchAll";
 import { todayLocalIso } from "@/lib/today";
 import { useEffect, useState, type FormEvent } from "react";
@@ -58,11 +59,11 @@ async function fetchOrgs(): Promise<OrgOption[]> {
 async function fetchOrgGroups(orgId: string): Promise<GroupOption[]> {
   const { data, error } = await supabase
     .from("groups")
-    .select("id, name, branch:branches!inner(organization_id)")
+    .select("id, name, branch:branches!inner(organization_id, internal_name, talmud_branch_code)")
     .eq("branch.organization_id", orgId)
     .order("name");
   if (error) throw error;
-  return (data ?? []).map((g: any) => ({ id: g.id, name: g.name }));
+  return (data ?? []).map((g: any) => ({ id: g.id, name: groupLabel(g.name, g.branch) }));
 }
 
 async function fetchDonations(orgId: string, unassignedOnly: boolean): Promise<DonationRow[]> {

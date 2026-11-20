@@ -101,6 +101,17 @@ export function InviteUserPanel({ roles }: { roles: RoleOption[] }) {
   };
 
   const pending = invitationsQuery.data ?? [];
+  // הזמנה שהמייל שלה כבר שייך למשתמש קיים - הזמנה ישנה שלא נסגרה. מסמנים אותה, כדי
+  // שהמשרד יחליט אם לבטל; לא מבטלים לבד (INT-13).
+  const existingQuery = useQuery({
+    queryKey: ["invitation-existing-users", pending.map((p) => p.email.toLowerCase()).sort().join(",")],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("email").in("email", pending.map((p) => p.email));
+      if (error) throw error;
+      return new Set((data ?? []).map((p) => String(p.email).toLowerCase()));
+    },
+    enabled: pending.length > 0,
+  });
 
   return (
     <div className="mb-4">
@@ -214,6 +225,11 @@ export function InviteUserPanel({ roles }: { roles: RoleOption[] }) {
                     {inv.default_area ? ` · ${AREA_LABEL[inv.default_area] ?? inv.default_area}` : ""}
                     {inv.note ? ` · ${inv.note}` : ""}
                   </span>
+                  {existingQuery.data?.has(inv.email.toLowerCase()) && (
+                    <span className="rounded-control bg-warn-soft px-1.5 py-0.5 text-xs text-warn-ink">
+                      כבר קיים משתמש עם המייל הזה - כנראה הזמנה ישנה שאפשר לבטל
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="link-action flex items-center gap-1 text-xs text-danger"

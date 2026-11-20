@@ -1,3 +1,4 @@
+import { groupLabel } from "@/lib/groupLabel";
 import { todayLocalIso } from "@/lib/today";
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState, type FormEvent } from "react";
@@ -79,11 +80,11 @@ async function fetchOrgs(): Promise<OrgOption[]> {
 async function fetchOrgGroups(orgId: string): Promise<GroupOption[]> {
   const { data, error } = await supabase
     .from("groups")
-    .select("id, name, branch:branches!inner(organization_id)")
+    .select("id, name, branch:branches!inner(organization_id, internal_name, talmud_branch_code)")
     .eq("branch.organization_id", orgId)
     .order("name");
   if (error) throw error;
-  return (data ?? []).map((g: any) => ({ id: g.id, name: g.name }));
+  return (data ?? []).map((g: any) => ({ id: g.id, name: groupLabel(g.name, g.branch) }));
 }
 
 async function fetchGroupBalance(groupId: string): Promise<number> {
@@ -469,7 +470,7 @@ export function DistributionsScreen() {
     <div>
       <PageHeader
         title="הוראות חלוקה"
-        description="חלוקה נשלפת מיתרת הקבוצה (מלגות נטו + תרומות + רטרו, פונגיבילי). אין שידור תשלום בשלב זה - אישור/נעילה כאן הם רק תוכנית מאושרת, ממתינה להכנת מס״ב."
+        description="החלוקה יוצאת מהיתרה של הקבוצה - כל הכסף שנכנס לה (מלגות נטו, תרומות ורטרו) נחשב יחד. כאן לא יוצא כסף: אישור ונעילה הם תוכנית מאושרת, והתשלום עצמו יוצא רק בהכנת מס״ב."
       />
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 max-w-lg">

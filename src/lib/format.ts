@@ -67,3 +67,27 @@ export function formatMonth(v: string | null | undefined): string {
   if (!y || !m) return v;
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("he-IL", { month: "long", year: "numeric", timeZone: "UTC" });
 }
+
+// זמן מהמסד (UTC) בשעון ישראל, לדוחות ולקבצי יצוא: "2026-11-20 09:45". עד היום חלק
+// מהדוחות חתכו את המחרוזת מהמסד והציגו שעה עולמית - אותה כניסה הופיעה ב-07:45 בדוח
+// וב-09:45 ביומן הפעילות (INT-09). בלי תלות באזור הזמן של המחשב.
+const ISRAEL_PARTS = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Jerusalem",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+export function israelDateTime(v: string | null | undefined): string {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  const p = Object.fromEntries(ISRAEL_PARTS.formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+export function israelDate(v: string | null | undefined): string {
+  const s = israelDateTime(v);
+  return s === "—" ? s : s.slice(0, 10);
+}

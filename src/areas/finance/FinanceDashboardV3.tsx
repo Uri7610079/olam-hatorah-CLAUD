@@ -1,3 +1,4 @@
+import { hasEligibilityReport } from "@/lib/eligibilityReport";
 import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -168,6 +169,9 @@ export function FinanceDashboardV3() {
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const countsQuery = useQuery({ queryKey: ["finance-dashboard-counts", orgId, month], queryFn: () => fetchFinanceCounts(orgId, month), enabled: !!orgId });
+  // בלי דוח זכאות לחודש - לא לכתוב "כל הזכאות כבר חושבה" על אפס (INT-06)
+  const reportQuery = useQuery({ queryKey: ["eligibility-report-exists", orgId, month], queryFn: () => hasEligibilityReport(orgId, month), enabled: !!orgId });
+  const noEligibilityReport = reportQuery.data === false;
   const c = countsQuery.data;
   const status = c?.period_status ?? null;
 
@@ -246,8 +250,14 @@ export function FinanceDashboardV3() {
               </div>
             ) : (
               <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-subtle">
-                <CircleCheck className="h-3.5 w-3.5 text-ok" aria-hidden="true" />
-                כל הזכאות שנקלטה לחודש הזה כבר חושבה.
+                {noEligibilityReport ? (
+                  <>טרם נקלט דוח זכאות מתלמוד לחודש הזה, ולכן אין עדיין זכאות לחשב.</>
+                ) : (
+                  <>
+                    <CircleCheck className="h-3.5 w-3.5 text-ok" aria-hidden="true" />
+                    כל הזכאות שנקלטה לחודש הזה כבר חושבה.
+                  </>
+                )}
               </p>
             )}
           </section>

@@ -1,3 +1,4 @@
+import { groupLabel } from "@/lib/groupLabel";
 import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useState, type FormEvent } from "react";
@@ -78,9 +79,15 @@ async function fetchOrgs(): Promise<OrgOption[]> {
 }
 
 async function fetchGroupBalances(orgId: string): Promise<GroupBalanceRow[]> {
-  const { data, error } = await supabase.from("group_balances").select("group_id, group_name, balance").eq("organization_id", orgId).order("group_name");
+  // שם הקבוצה מוצג עם הסניף: בעמותה יכולות להיות כמה קבוצות באותו שם (INT-03)
+  const [{ data, error }, { data: branches, error: branchesErr }] = await Promise.all([
+    supabase.from("group_balances").select("group_id, group_name, branch_id, balance").eq("organization_id", orgId).order("group_name"),
+    supabase.from("branches").select("id, internal_name, talmud_branch_code").eq("organization_id", orgId),
+  ]);
   if (error) throw error;
-  return data ?? [];
+  if (branchesErr) throw branchesErr;
+  const branchById = new Map((branches ?? []).map((b) => [b.id, b]));
+  return (data ?? []).map((r) => ({ group_id: r.group_id, group_name: groupLabel(r.group_name, branchById.get(r.branch_id)), balance: r.balance }));
 }
 
 async function fetchLedgerEntries(groupId: string): Promise<LedgerEntry[]> {

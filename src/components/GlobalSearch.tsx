@@ -1,3 +1,4 @@
+import { groupLabel } from "@/lib/groupLabel";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
@@ -25,7 +26,7 @@ async function search(term: string): Promise<SearchResult[]> {
   const like = `%${term.replace(/[,()]/g, " ").trim()}%`;
   const [students, groups, branches, orgs, tasks] = await Promise.all([
     supabase.from("students").select("id, external_id, full_name").or(`full_name.ilike.${like},external_id.ilike.${like}`).limit(5),
-    supabase.from("groups").select("id, name, branch:branches(organization_id)").ilike("name", like).limit(5),
+    supabase.from("groups").select("id, name, branch_id, branch:branches(organization_id, internal_name, talmud_branch_code, organization:organizations(legal_name))").ilike("name", like).limit(5),
     supabase.from("branches").select("id, internal_name, organization_id").ilike("internal_name", like).limit(5),
     supabase.from("organizations").select("id, legal_name").ilike("legal_name", like).limit(5),
     supabase.from("tasks").select("id, title").ilike("title", like).limit(5),
@@ -36,11 +37,21 @@ async function search(term: string): Promise<SearchResult[]> {
 
   const results: SearchResult[] = [];
   for (const s of students.data ?? []) results.push({ kind: "student", id: s.id, label: s.full_name, sublabel: s.external_id, href: `/ops/students/${s.id}` });
+  // קבוצה: עם הסניף והעמותה (כמה קבוצות באותו שם), והקישור פותח את הסניף ומדגיש את
+  // הקבוצה עצמה - לא רק את העמותה (INT-03, INT-05).
   for (const g of groups.data ?? []) {
-    const orgId = Array.isArray(g.branch) ? g.branch[0]?.organization_id : (g.branch as any)?.organization_id;
-    results.push({ kind: "group", id: g.id, label: g.name, href: orgId ? `/ops/organizations?org=${orgId}` : "/ops/organizations" });
+    const branch: any = Array.isArray(g.branch) ? g.branch[0] : g.branch;
+    const org: any = branch ? (Array.isArray(branch.organization) ? branch.organization[0] : branch.organization) : null;
+    const orgId = branch?.organization_id;
+    results.push({
+      kind: "group",
+      id: g.id,
+      label: groupLabel(g.name, branch),
+      sublabel: org?.legal_name ?? undefined,
+      href: orgId ? `/ops/organizations?org=${orgId}&branch=${g.branch_id}&group=${g.id}` : "/ops/organizations",
+    });
   }
-  for (const b of branches.data ?? []) results.push({ kind: "branch", id: b.id, label: b.internal_name, href: `/ops/organizations?org=${b.organization_id}` });
+  for (const b of branches.data ?? []) results.push({ kind: "branch", id: b.id, label: b.internal_name, href: `/ops/organizations?org=${b.organization_id}&branch=${b.id}` });
   for (const o of orgs.data ?? []) results.push({ kind: "organization", id: o.id, label: o.legal_name, href: `/ops/organizations/${o.id}` });
   for (const t of tasks.data ?? []) results.push({ kind: "task", id: t.id, label: t.title, href: `/tasks/all?open=${t.id}` });
   return results;

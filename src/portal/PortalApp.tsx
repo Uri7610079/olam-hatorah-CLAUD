@@ -128,7 +128,7 @@ function PortalLogin({ notice, onLoggedIn }: { notice: string | null; onLoggedIn
             onChange={(e) => setPassword(e.target.value)}
             className="input-field h-12 text-right text-lg"
           />
-          <p className="mt-1 text-sm text-ink-muted">בכניסה הראשונה: 4 הספרות האחרונות של הטלפון שלך.</p>
+          <p className="mt-1 text-sm text-ink-muted">בכניסה הראשונה: 4 הספרות האחרונות של הטלפון שלך. מיד אחר כך תתבקש לבחור סיסמה אישית.</p>
         </div>
 
         {error && <p role="alert" className="rounded-control bg-danger-soft p-3 text-base text-danger-ink">{error}</p>}

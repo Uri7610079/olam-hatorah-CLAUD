@@ -1,3 +1,5 @@
+import { AUDIT_ACTION_LABEL, AUDIT_RESOURCE_LABEL } from "@/areas/admin/adminLabels";
+import { groupLabel } from "@/lib/groupLabel";
 import { todayLocalIso } from "@/lib/today";
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useRef, useState } from "react";
@@ -12,7 +14,7 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { ErrorState } from "@/components/ErrorState";
 import { LoadingState } from "@/components/LoadingState";
 import { useIsV3 } from "@/lib/uiTheme";
-import { formatMoney, formatMonth, formatNumber } from "@/lib/format";
+import { formatMoney, formatMonth, formatNumber, israelDate, israelDateTime } from "@/lib/format";
 
 type ReportRow = Record<string, string | number | null>;
 
@@ -36,8 +38,14 @@ interface ReportDef {
   key: string;
   label: string;
   needsGroup?: boolean;
+  // דוח שאינו לפי חודש: מה הוא כן מציג. בלעדיו הכותרת אמרה "נובמבר" על דוח שמכיל
+  // תנועות פתוחות מכל החודשים (INT-04). כשמוגדר - בחירת החודש מוסתרת, והטקסט הזה
+  // מופיע בכותרת ובשם הקובץ במקום החודש.
+  scope?: string;
   fetch: (ctx: ReportCtx) => Promise<ReportRow[]>;
 }
+
+const CLASSIFICATION_LABEL: Record<string, string> = { unclassified: "לא מסווגת", suggested: "הוצע סיווג", confirmed: "מסווגת" };
 
 const STUDENT_STATUS_LABEL: Record<string, string> = {
   draft: "טיוטה",
@@ -98,6 +106,7 @@ const REPORTS: ReportDef[] = [
   },
   {
     key: "active_not_in_report",
+    scope: "לפי דוח הזכאות האחרון שנקלט",
     label: "תלמידים פעילים שלא הופיעו בדוח האחרון",
     fetch: async ({ orgId }) => {
       // כאן ובשאר הדוחות: שגיאת שאילתה נבלעה עד היום והדוח הוצג "ריק". עכשיו היא נזרקת
@@ -185,11 +194,17 @@ const REPORTS: ReportDef[] = [
   },
   {
     key: "group_balances",
+    scope: "יתרה נוכחית (מצטברת)",
     label: "יתרות קבוצות",
     fetch: async ({ orgId }) => {
-      const { data, error } = await supabase.from("group_balances").select("group_name, balance").eq("organization_id", orgId);
+      const [{ data, error }, { data: branches, error: branchesErr }] = await Promise.all([
+        supabase.from("group_balances").select("group_name, branch_id, balance").eq("organization_id", orgId),
+        supabase.from("branches").select("id, internal_name, talmud_branch_code").eq("organization_id", orgId),
+      ]);
       if (error) throw error;
-      return (data ?? []).map((r) => ({ "קבוצה": r.group_name, "יתרה": r.balance }));
+      if (branchesErr) throw branchesErr;
+      const branchById = new Map((branches ?? []).map((b) => [b.id, b]));
+      return (data ?? []).map((r) => ({ "קבוצה": groupLabel(r.group_name, branchById.get(r.branch_id)), "יתרה": r.balance }));
     },
   },
   {
@@ -197,6 +212,7 @@ const REPORTS: ReportDef[] = [
     // ברצף אחד. הוא מסונן לעמותה הנבחרת ככל שאר הדוחות כאן, ולכן קבוצה שמתנהלת
     // בשתי עמותות תופיע בדוח של כל עמותה בנפרד - וזו בדיוק החלוקה שנדרשה, לא מגבלה.
     key: "group_leader_rows",
+    scope: "מצב נוכחי",
     label: "קבוצות לפי ראש קבוצה",
     fetch: async ({ orgId }) => {
       const { data, error } = await supabase
@@ -224,11 +240,11 @@ const REPORTS: ReportDef[] = [
     fetch: async ({ orgId, month }) => {
       const data = await fetchAll(() => supabase
         .from("group_ledger_entries")
-        .select("entry_type, amount, reason, created_at, group:groups(name)")
+        .select("entry_type, amount, reason, created_at, group:groups(name, branch:branches(internal_name, talmud_branch_code))")
         .eq("organization_id", orgId).eq("period_month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const g = unwrap(r.group);
-        return { "קבוצה": g?.name ?? "—", "סוג תנועה": r.entry_type, "סכום": r.amount, "סיבה": r.reason ?? "—", "תאריך": r.created_at?.slice(0, 10) };
+        return { "קבוצה": g ? groupLabel(g.name, g.branch) : "—", "סוג תנועה": r.entry_type, "סכום": r.amount, "סיבה": r.reason ?? "—", "תאריך": israelDate(r.created_at) };
       });
     },
   },
@@ -242,11 +258,11 @@ const REPORTS: ReportDef[] = [
       // דרכה - שם הקבוצה נפתר בצד לקוח מרשימת קבוצות העמותה (אותו דפוס כמו מרכז החריגות).
       const [{ data, error }, { data: groupsData, error: groupsErr }] = await Promise.all([
         supabase.from("donations_view").select("donation_date, amount, donor_reference_masked, status, group_id").eq("organization_id", orgId).gte("donation_date", start).lt("donation_date", end),
-        supabase.from("groups").select("id, name"),
+        supabase.from("groups").select("id, name, branch:branches(internal_name, talmud_branch_code)"),
       ]);
       if (error) throw error;
       if (groupsErr) throw groupsErr;
-      const groupById = new Map((groupsData ?? []).map((g) => [g.id, g.name]));
+      const groupById = new Map((groupsData ?? []).map((g: any) => [g.id, groupLabel(g.name, g.branch)]));
       return (data ?? []).map((r) => ({
         "תאריך": r.donation_date,
         "סכום": r.amount,
@@ -262,13 +278,13 @@ const REPORTS: ReportDef[] = [
     fetch: async ({ orgId, month }) => {
       const data = await fetchAll(() => supabase
         .from("distribution_lines")
-        .select("amount, student:students(external_id, full_name), batch:distribution_batches!inner(organization_id, period_month, status, method, group:groups(name))")
+        .select("amount, student:students(external_id, full_name), batch:distribution_batches!inner(organization_id, period_month, status, method, group:groups(name, branch:branches(internal_name, talmud_branch_code)))")
         .eq("batch.organization_id", orgId).eq("batch.period_month", month).order("id"));
       return (data ?? []).map((r: any) => {
         const s = unwrap(r.student);
         const b = unwrap(r.batch);
         const g = b ? unwrap(b.group) : null;
-        return { "מזהה תלמיד": s?.external_id ?? "—", "שם": s?.full_name ?? "—", "קבוצה": g?.name ?? "—", "שיטה": b?.method ?? "—", "סטטוס אצווה": b?.status ?? "—", "סכום": r.amount };
+        return { "מזהה תלמיד": s?.external_id ?? "—", "שם": s?.full_name ?? "—", "קבוצה": g ? groupLabel(g.name, g.branch) : "—", "שיטה": b?.method ?? "—", "סטטוס אצווה": b?.status ?? "—", "סכום": r.amount };
       });
     },
   },
@@ -306,6 +322,7 @@ const REPORTS: ReportDef[] = [
   },
   {
     key: "unclassified_transactions",
+    scope: "כל התקופות - כל התנועות שעדיין לא סווגו",
     label: "תנועות בנק לא מסווגות",
     fetch: async ({ orgId }) => {
       const { data: accounts, error: accountsErr } = await supabase.from("organization_bank_accounts_view").select("id").eq("organization_id", orgId);
@@ -313,11 +330,14 @@ const REPORTS: ReportDef[] = [
       const accountIds = (accounts ?? []).map((a) => a.id);
       if (accountIds.length === 0) return [];
       const data = await fetchAllIn(accountIds, (chunk) => supabase.from("bank_transactions").select("execution_date, direction, amount, description, classification_status").in("organization_bank_account_id", chunk).neq("classification_status", "confirmed").order("id"));
-      return (data ?? []).map((r) => ({ "תאריך": r.execution_date, "צד": r.direction === "debit" ? "חובה" : "זכות", "סכום": r.amount, "תיאור": r.description ?? "—", "סטטוס סיווג": r.classification_status }));
+      return (data ?? [])
+        .sort((a, b) => String(a.execution_date).localeCompare(String(b.execution_date)))
+        .map((r) => ({ "תאריך": r.execution_date, "צד": r.direction === "debit" ? "חובה" : "זכות", "סכום": r.amount, "תיאור": r.description ?? "—", "סטטוס סיווג": CLASSIFICATION_LABEL[r.classification_status] ?? r.classification_status }));
     },
   },
   {
     key: "bank_reconciliation",
+    scope: "כל הפריטים הפתוחים",
     label: 'התאמה חודשית להנה"ח',
     fetch: async ({ orgId }) => {
       const data = await fetchAll(() => supabase.from("bank_reconciliation_exceptions").select("exception_type, severity, amount, related_date, description").eq("organization_id", orgId).order("severity").order("exception_type").order("related_id"));
@@ -326,6 +346,7 @@ const REPORTS: ReportDef[] = [
   },
   {
     key: "audit_attendance",
+    scope: "כל התקופות",
     label: "חוסרים בביקורת משרד החינוך",
     fetch: async ({ orgId }) => {
       const data = await fetchAll(() => supabase
@@ -341,6 +362,7 @@ const REPORTS: ReportDef[] = [
   },
   {
     key: "phone_gaps",
+    scope: "מצב נוכחי",
     label: "פערי בימות המשיח",
     fetch: async ({ orgId }) => {
       const { data: imports, error: importsErr } = await supabase.from("phone_list_imports").select("id").eq("organization_id", orgId).eq("status", "committed").order("created_at", { ascending: false }).limit(1);
@@ -358,7 +380,7 @@ const REPORTS: ReportDef[] = [
     fetch: async ({ groupId, month }) => {
       if (!groupId) return [];
       const data = await fetchAll(() => supabase.from("group_ledger_entries").select("entry_type, amount, reason, created_at").eq("group_id", groupId).eq("period_month", month).order("id"));
-      return (data ?? []).map((r) => ({ "סוג תנועה": r.entry_type, "סכום": r.amount, "סיבה": r.reason ?? "—", "תאריך": r.created_at?.slice(0, 10) }));
+      return (data ?? []).map((r) => ({ "סוג תנועה": r.entry_type, "סכום": r.amount, "סיבה": r.reason ?? "—", "תאריך": israelDate(r.created_at) }));
     },
   },
   {
@@ -368,7 +390,7 @@ const REPORTS: ReportDef[] = [
       const { start, end } = monthRange(month);
       // כל האירועים של החודש (fetchAll) - עד היום limit(500) חתך את הדוח ואת הייצוא בשקט.
       const data = await fetchAll(() => supabase.from("audit_events").select("action, resource, resource_id, created_at").gte("created_at", start).lt("created_at", end).order("created_at", { ascending: false }).order("id"));
-      return (data ?? []).map((r) => ({ "תאריך": r.created_at?.slice(0, 16).replace("T", " "), "פעולה": r.action, "משאב": r.resource, "מזהה רשומה": r.resource_id ?? "—" }));
+      return (data ?? []).map((r) => ({ "תאריך": israelDateTime(r.created_at), "פעולה": AUDIT_ACTION_LABEL[r.action] ?? r.action, "משאב": AUDIT_RESOURCE_LABEL[r.resource] ?? r.resource, "מזהה רשומה": r.resource_id ?? "—" }));
     },
   },
 ];
@@ -380,9 +402,9 @@ async function fetchOrgs(): Promise<OrgOption[]> {
 }
 
 async function fetchGroups(orgId: string): Promise<GroupOption[]> {
-  const { data, error } = await supabase.from("groups").select("id, name, branch:branches!inner(organization_id)").eq("branch.organization_id", orgId);
+  const { data, error } = await supabase.from("groups").select("id, name, branch:branches!inner(organization_id, internal_name, talmud_branch_code)").eq("branch.organization_id", orgId).order("name");
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({ id: r.id, name: r.name }));
+  return (data ?? []).map((r: any) => ({ id: r.id, name: groupLabel(r.name, r.branch) }));
 }
 
 export interface ReportContext {
@@ -444,6 +466,8 @@ export function ReportsScreen() {
     }
   };
 
+  const rowIndex = new Map((rows ?? []).map((r, i) => [r, i]));
+
   const runExport = async () => {
     if (!result || !rows) return;
     // היצוא והרישום ביומן לוקחים את ההקשר שבו הדוח הורץ בפועל, לא את מה שנבחר עכשיו.
@@ -452,8 +476,8 @@ export function ReportsScreen() {
     setExporting(true);
     try {
       const orgLabel = orgsQuery.data?.find((o) => o.id === ctx.orgId)?.legal_name ?? ctx.orgId;
-      exportRowsToExcel(rows, ctxReport.label, `${ctxReport.key}-${ctx.month}-${crypto.randomUUID().slice(0, 8)}.xlsx`);
-      const logged = await logReportExport(ctxReport.key, { organization: orgLabel, month: ctx.month, group_id: ctx.groupId || null }, rows.length);
+      exportRowsToExcel(rows, ctxReport.label, `${ctxReport.key}-${ctxReport.scope ? "כל-התקופות" : ctx.month}-${crypto.randomUUID().slice(0, 8)}.xlsx`);
+      const logged = await logReportExport(ctxReport.key, { organization: orgLabel, month: ctxReport.scope ? null : ctx.month, scope: ctxReport.scope ?? null, group_id: ctx.groupId || null }, rows.length);
       setExportLogWarning(logged ? null : EXPORT_LOG_FAILED_MESSAGE);
     } finally {
       setExporting(false);
@@ -513,10 +537,17 @@ export function ReportsScreen() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="field-label">חודש</label>
-          <input type="month" value={month.slice(0, 7)} onChange={(e) => { setMonth(e.target.value + "-01"); setRows(null); }} className="input-field" />
-        </div>
+        {report.scope ? (
+          <div>
+            <span className="field-label">טווח</span>
+            <p className="py-2 text-sm text-ink-muted">{report.scope}</p>
+          </div>
+        ) : (
+          <div>
+            <label className="field-label">חודש</label>
+            <input type="month" value={month.slice(0, 7)} onChange={(e) => { setMonth(e.target.value + "-01"); setRows(null); }} className="input-field" />
+          </div>
+        )}
         {report.needsGroup && (
           <div>
             <label className="field-label">קבוצה</label>
@@ -552,7 +583,7 @@ export function ReportsScreen() {
           {" · "}
           {orgsQuery.data?.find((o) => o.id === orgId)?.legal_name ?? ""}
           {" · "}
-          {formatMonth(month)}
+          {report.scope ?? formatMonth(month)}
           {" · "}
           <span className="tabular">{formatNumber(rows.length)}</span> שורות
         </p>
@@ -561,7 +592,7 @@ export function ReportsScreen() {
       {error && <div className="mb-4"><ErrorState message={error} /></div>}
       {exportLogWarning && <div className="mb-4"><ErrorState message={exportLogWarning} /></div>}
       {running && <LoadingState rows={4} />}
-      {rows && <DataTable columns={columns} rows={rows} rowKey={(r) => String(rows.indexOf(r))} emptyTitle="אין נתונים לדוח זה" />}
+      {rows && <DataTable columns={columns} rows={rows} rowKey={(r) => String(rowIndex.get(r))} clientPageSize={100} emptyTitle="אין נתונים לדוח זה" />}
     </div>
   );
 }

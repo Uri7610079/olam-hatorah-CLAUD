@@ -1,3 +1,4 @@
+import { hasEligibilityReport } from "@/lib/eligibilityReport";
 import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
 import { MonthField } from "@/components/MonthField";
@@ -115,6 +116,9 @@ function FinanceDashboardClassic() {
   const [month, setMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
 
   const countsQuery = useQuery({ queryKey: ["finance-dashboard-counts", orgId, month], queryFn: () => fetchFinanceCounts(orgId, month), enabled: !!orgId });
+  // בלי דוח זכאות לחודש - לא לכתוב "כל הזכאות כבר חושבה" על אפס (INT-06)
+  const reportQuery = useQuery({ queryKey: ["eligibility-report-exists", orgId, month], queryFn: () => hasEligibilityReport(orgId, month), enabled: !!orgId });
+  const noEligibilityReport = reportQuery.data === false;
 
   return (
     <div>
@@ -180,7 +184,9 @@ function FinanceDashboardClassic() {
             <p className="mt-1 text-xs text-ink-muted">
               {countsQuery.data.uncalculated_eligibility_amount > 0
                 ? "נקלט מדוח תלמוד וטרם עבר חישוב עמלות, ולכן אינו נכלל בברוטו/עמלה/נטו שלמעלה. החישוב רץ לבד אחרי הקליטה; אם הסכום נשאר כאן - החודש הכספי בבדיקה או סגור, או שהחישוב האוטומטי כבוי (ניהול ← הגדרות)."
-                : "כל הזכאות שנקלטה לחודש זה כבר חושבה."}
+                : noEligibilityReport
+                  ? "טרם נקלט דוח זכאות מתלמוד לחודש זה, ולכן אין עדיין זכאות לחשב."
+                  : "כל הזכאות שנקלטה לחודש זה כבר חושבה."}
             </p>
           </div>
 

@@ -1,3 +1,4 @@
+import { hasEligibilityReport } from "@/lib/eligibilityReport";
 import { todayLocalIso } from "@/lib/today";
 import { fetchAllIn } from "@/lib/fetchAll";
 import { useEffect, useState } from "react";
@@ -124,6 +125,9 @@ export function QuotasScreen() {
   const isV3 = useIsV3();
 
   const branchesQuery = useQuery({ queryKey: ["quota-branches", orgId], queryFn: () => fetchBranches(orgId), enabled: !!orgId });
+  // בלי דוח זכאות לחודש - "זכאים" ו"ניצול" מוצגים כ"טרם נקלט דוח" ולא כאפס (INT-06)
+  const reportQuery = useQuery({ queryKey: ["eligibility-report-exists", orgId, month], queryFn: () => hasEligibilityReport(orgId, month), enabled: !!orgId && !!month });
+  const noReport = reportQuery.data === false;
   const quotasQuery = useQuery({
     queryKey: ["quotas", orgId, month, branchesQuery.data],
     queryFn: () => fetchQuotaData(orgId, month, branchesQuery.data ?? []),
@@ -242,13 +246,14 @@ export function QuotasScreen() {
       ? { key: "registered", header: "רשומים", kind: "number", sortValue: (r) => r.registeredCount, render: (r) => formatNumber(r.registeredCount) }
       : { key: "registered", header: "רשומים", className: "tabular", render: (r) => r.registeredCount },
     isV3
-      ? { key: "eligible", header: "זכאים", kind: "number", sortValue: (r) => r.eligibleCount, render: (r) => formatNumber(r.eligibleCount) }
-      : { key: "eligible", header: "זכאים", className: "tabular", render: (r) => r.eligibleCount },
+      ? { key: "eligible", header: "זכאים", kind: "number", sortValue: (r) => r.eligibleCount, render: (r) => (noReport ? "—" : formatNumber(r.eligibleCount)) }
+      : { key: "eligible", header: "זכאים", className: "tabular", render: (r) => (noReport ? "—" : r.eligibleCount) },
     {
       key: "utilization",
       header: "ניצול",
       ...(isV3 ? { sortValue: (r: QuotaRow) => utilizationPct(r), filterValue: (r: QuotaRow) => utilizationLabel(r) } : {}),
       render: (r) => {
+        if (noReport) return <span className="text-ink-subtle">—</span>;
         if (isV3) return <UtilizationBar row={r} />;
         // מכסה שלא הוגדרה בכלל (null) שונה ממכסה שאושרה כ-0 (מסלול לגיטימי - סניף שעדיין
         // לא אושר לקלוט אף תלמיד) - בדיקת truthy הייתה מתייחסת לשתיהן אותו דבר.
@@ -319,10 +324,15 @@ export function QuotasScreen() {
               muted={withQuota.length === 0}
             />
             <MetricCard label="רשומים" value={formatNumber(totalRegistered)} hint="שיוך פעיל כרגע" muted={totalRegistered === 0} />
-            <MetricCard label="זכאים בחודש" value={formatNumber(totalEligible)} hint="זכאות פעילה לחודש שנבחר" muted={totalEligible === 0} />
+            <MetricCard
+              label="זכאים בחודש"
+              value={noReport ? "—" : formatNumber(totalEligible)}
+              hint={noReport ? "טרם נקלט דוח זכאות לחודש הזה" : "זכאות פעילה לחודש שנבחר"}
+              muted={noReport || totalEligible === 0}
+            />
             <MetricCard
               label="ניצול כולל"
-              value={totalPct === null ? "—" : `${totalPct}%`}
+              value={noReport || totalPct === null ? "—" : `${totalPct}%`}
               hint={overBranches ? `${formatNumber(overBranches)} סניפים בחריגה` : "בסניפים שהוגדרה להם מכסה"}
               tone={overBranches ? "high" : "ok"}
               muted={totalPct === null}

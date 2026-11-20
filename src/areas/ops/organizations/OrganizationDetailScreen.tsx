@@ -70,7 +70,7 @@ export function OrganizationDetailScreen() {
       {activeTab === "accounts" && <OrganizationBankAccountsTab organizationId={org.id} />}
       {activeTab === "branches" && <OrganizationBranchesTab organizationId={org.id} organizationName={org.legal_name} />}
       {activeTab === "documents" && (
-        <EmptyState title="מסמכי עמותה" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={FileText} />
+        <EmptyState title="מסמכי עמותה" description="מסמכי העמותה נמצאים במסך ״מסמכים״ בתפעול השוטף." icon={FileText} />
       )}
       {activeTab === "history" && <OrganizationHistoryTab organizationId={org.id} />}
     </div>

@@ -528,15 +528,15 @@ function AccessList() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-ink-muted">
-        ראש קבוצה נכנס עם המייל שלו, ומי שאין לו מייל - עם הטלפון. הסיסמה הראשונית היא 4 הספרות האחרונות של הטלפון.
-        המשרד יכול לקבוע סיסמה אחרת או לאפס אותה; את הסיסמה הקיימת לא רואים, כי היא שמורה מוצפנת.
+        ראש קבוצה נכנס עם המייל שלו, ומי שאין לו מייל - עם הטלפון. בכניסה הראשונה הסיסמה היא 4 הספרות האחרונות של הטלפון,
+        ומיד אחריה המערכת מחייבת אותו לבחור סיסמה אישית. כך גם אחרי שהמשרד קובע או מאפס סיסמה. את הסיסמה הקיימת לא רואים, כי היא שמורה מוצפנת.
       </p>
       {done && <p className="rounded-control bg-ok-soft p-2 text-sm text-ok-ink">{done}</p>}
       {(setPw.isError || setAccess.isError) && <ErrorState message={errText(setPw.error ?? setAccess.error)} />}
       <ConfirmDialog
         open={!!confirmReset}
         title={confirmReset ? `לאפס את הסיסמה של ${confirmReset.full_name}?` : ""}
-        description="הסיסמה הנוכחית תוחלף ב-4 הספרות האחרונות של הטלפון, ואי אפשר לשחזר אותה. ראש הקבוצה ייכנס מעכשיו עם הסיסמה החדשה."
+        description="הסיסמה הנוכחית תוחלף ב-4 הספרות האחרונות של הטלפון, ואי אפשר לשחזר אותה. ראש הקבוצה ייכנס פעם אחת עם 4 הספרות, ומיד יתבקש לבחור סיסמה אישית חדשה."
         confirmLabel="איפוס הסיסמה"
         danger
         onCancel={() => setConfirmReset(null)}

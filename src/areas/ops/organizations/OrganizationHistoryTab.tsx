@@ -1,3 +1,4 @@
+import { AUDIT_ACTION_LABEL, AUDIT_RESOURCE_LABEL } from "@/areas/admin/adminLabels";
 import { useQuery } from "@tanstack/react-query";
 import { History } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -64,8 +65,9 @@ export function OrganizationHistoryTab({ organizationId }: OrganizationHistoryTa
 
   const columns: DataTableColumn<AuditEventRow>[] = [
     { key: "created_at", header: "מועד", className: "tabular", render: (r) => new Date(r.created_at).toLocaleString("he-IL") },
-    { key: "action", header: "פעולה", render: (r) => r.action },
-    { key: "resource", header: "סוג", render: (r) => RESOURCE_LABEL[r.resource] ?? r.resource },
+    // שם הפעולה בעברית מאותה רשימה של יומן הפעילות; פעולה שאין לה תרגום - כמו שהיא (INT-12)
+    { key: "action", header: "פעולה", render: (r) => AUDIT_ACTION_LABEL[r.action] ?? r.action },
+    { key: "resource", header: "סוג", render: (r) => RESOURCE_LABEL[r.resource] ?? AUDIT_RESOURCE_LABEL[r.resource] ?? r.resource },
   ];
 
   return (

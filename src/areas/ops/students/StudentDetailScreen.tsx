@@ -42,7 +42,7 @@ const TABS_V3 = TABS.filter((t) => t.key !== "documents");
 
 const STEPS: StepDef[] = [
   { key: "draft", label: "טיוטה" },
-  { key: "details", label: "פרטים והושלמו" },
+  { key: "details", label: "פרטים הושלמו" },
   { key: "assignment", label: "שיוך פעיל" },
   { key: "bank", label: "חשבון בנק תקין" },
   { key: "ready_for_talmud", label: "מוכן לתלמוד" },
@@ -133,10 +133,13 @@ export function StudentDetailScreen() {
   const hasAssignment = assignmentGateQuery.data ?? false;
   const hasBank = bankGateQuery.data ?? false;
 
+  // כל שלב מסומן רק כשגם כל השלבים שלפניו מתקיימים - אותם תנאים שחוסמים את הקידום.
+  // עד היום תלמיד עם שיוך וחשבון אבל בלי טלפון קיבל ✓ ליד "פרטים", ובאותו מסך
+  // הופיע "חסר כדי לקדם: טלפון" (INT-08).
   let currentStep = "draft";
   if (hasDetails) currentStep = "details";
-  if (hasAssignment) currentStep = "assignment";
-  if (hasBank) currentStep = "bank";
+  if (hasDetails && hasAssignment) currentStep = "assignment";
+  if (hasDetails && hasAssignment && hasBank) currentStep = "bank";
   if (student.status === "ready_for_talmud") currentStep = "ready_for_talmud";
   if (student.status === "sent_to_talmud") currentStep = "sent_to_talmud";
   if (student.status === "active" || student.status === "active_with_error") currentStep = "active";
@@ -304,7 +307,7 @@ export function StudentDetailScreen() {
       {activeTab === "bank" && <StudentBankTab studentId={student.id} />}
       {activeTab === "audits" && <StudentAuditsTab studentId={student.id} />}
       {activeTab === "portal" && <StudentPortalTab studentId={student.id} />}
-      {activeTab === "documents" && <EmptyState title="מסמכים" description="ייבנה בשלב 13, בהתאם לתוכנית השלבים." icon={FileText} />}
+      {activeTab === "documents" && <EmptyState title="מסמכים" description="מסמכים של תלמיד עדיין לא נשמרים במערכת." icon={FileText} />}
 
       <ConfirmDialog
         open={showExit}

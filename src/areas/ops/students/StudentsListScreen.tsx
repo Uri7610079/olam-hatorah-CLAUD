@@ -501,7 +501,10 @@ export function StudentsListScreen() {
         rows={rows}
         rowKey={(s) => s.id}
         loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}
-        emptyTitle="אין תלמידים עדיין"
+        // "אין תלמידים עדיין" רק כשהמאגר באמת ריק; כשיש תלמידים אבל החיפוש או המסננים
+        // לא מצאו אף אחד - אומרים את זה (INT-07)
+        emptyTitle={(query.data?.length ?? 0) > 0 ? "לא נמצאו תלמידים התואמים לחיפוש או למסננים" : "אין תלמידים עדיין"}
+        emptyDescription={(query.data?.length ?? 0) > 0 ? "אפשר לנקות את החיפוש או את המסננים כדי לראות את כל התלמידים." : undefined}
         emptyIcon={Users}
         columnPicker
         clientPageSize={PAGE_SIZE}
