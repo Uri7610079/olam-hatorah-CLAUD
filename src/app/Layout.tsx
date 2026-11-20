@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, ClipboardList, Wallet, Settings, CheckSquare, LogOut, Menu, type LucideIcon } from "lucide-react";
 import { useArea, type Area } from "./AreaContext";
 import { screensForArea } from "./screens";
@@ -11,7 +11,10 @@ export const AREA_LABEL = { ops: "תפעול שוטף", finance: "כספים ו�
 export const AREA_ICON: Record<Area, LucideIcon> = { ops: ClipboardList, finance: Wallet, admin: Settings, tasks: CheckSquare };
 
 export function Layout() {
-  const { fullName, roleLabel, currentArea, availableAreas } = useArea();
+  const { fullName, roleLabel, currentArea, availableAreas, areasLoaded, homeArea, pathArea } = useArea();
+  // כתובת ישירה לאזור שאין למשתמש הרשאה אליו: לא מציגים את המסכים שלו. הנתונים עצמם
+  // מוגנים גם בשרת, אבל עד היום המסך נפתח ריק או עם שגיאות, כאילו אין נתונים.
+  const areaBlocked = areasLoaded && pathArea !== null && !availableAreas.includes(pathArea);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const screens = screensForArea(currentArea);
@@ -185,7 +188,15 @@ export function Layout() {
             שהעין צריכה לחצות כדי לקשר ביניהם. התקרה נדיבה מספיק לטבלאות הרחבות
             באמת (תלמידים, התאמות בנק), וחוסמת את הפריסה המיותרת בשאר. */}
         <main className="mx-auto w-full min-w-0 max-w-[1400px] flex-1 p-4 sm:p-6">
-          <Outlet />
+          {areaBlocked ? (
+            <div className="card mx-auto mt-10 max-w-md p-6 text-center">
+              <p className="font-semibold text-ink">אין לך הרשאה לאזור הזה</p>
+              <p className="mt-1 text-sm text-ink-muted">אם צריך גישה, יש לפנות למנהל המערכת.</p>
+              {homeArea && <Link to={`/${homeArea}`} className="link-action mt-4 inline-block text-sm">חזרה לאזור שלי</Link>}
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>

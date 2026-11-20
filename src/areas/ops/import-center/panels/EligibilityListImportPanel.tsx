@@ -436,7 +436,7 @@ export function EligibilityListImportPanel({ initialFile }: { initialFile?: File
             ]}
             rows={unmatchedQuery.data ?? []}
             rowKey={(r: ListRow) => `${r.branch_code}-${r.external_id}-${r.study_code}`}
-            loading={unmatchedQuery.isLoading}
+            loading={unmatchedQuery.isLoading} error={unmatchedQuery.error} onRetry={() => unmatchedQuery.refetch()}
             emptyTitle="כל הזכאים נמצאו במערכת"
           />
         </div>

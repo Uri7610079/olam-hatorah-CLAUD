@@ -1,6 +1,6 @@
 import { todayLocalIso } from "@/lib/today";
 import { fetchAll, fetchAllIn } from "@/lib/fetchAll";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { fromMonthInput, toMonthInput } from "@/components/MonthField";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Split, Upload } from "lucide-react";
@@ -178,6 +178,8 @@ export function DistributionsScreen() {
 
   const openBatch = (batch: BatchRow) => {
     setSelectedBatchId(batch.id);
+    setHydratedBatchId(null);
+    setSelectedIds(new Set());
     setAmounts({});
     setPercentages({});
     setEqualTotal("");
@@ -228,6 +230,30 @@ export function DistributionsScreen() {
   };
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // פתיחת אצווה קיימת: השורות השמורות נטענות לטופס (מי מסומן ובאיזה סכום), ורק אחרי
+  // זה אפשר לשמור. עד היום הטופס נפתח ריק - או עם הסימונים של האצווה הקודמת - ו"שמירת
+  // שורות" מיד אחרי הפתיחה מחקה את כל השורות של הטיוטה או החליפה אותן בשורות זרות.
+  const [hydratedBatchId, setHydratedBatchId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!selectedBatchId || hydratedBatchId === selectedBatchId) return;
+    if (!linesQuery.isSuccess || linesQuery.isFetching || !selectedBatch) return;
+    const saved = linesQuery.data;
+    setSelectedIds(new Set(saved.map((l) => l.student_id)));
+    setAmounts(Object.fromEntries(saved.map((l) => [l.student_id, Number(l.amount).toFixed(2)])));
+    if (selectedBatch.method === "percentages") {
+      // באחוזים נשמר רק הסכום. האחוז משוחזר מהסכום ומהסך הכול, בדיוק מספיק כדי ששמירה
+      // בלי שינוי תחזיר את אותם סכומים בדיוק.
+      const total = saved.reduce((sum, l) => sum + Number(l.amount), 0);
+      setPctTotal(total > 0 ? total.toFixed(2) : "");
+      setPercentages(Object.fromEntries(saved.map((l) => [
+        l.student_id,
+        total > 0 ? String(Number(((Number(l.amount) / total) * 100).toFixed(6))) : "",
+      ])));
+    }
+    setHydratedBatchId(selectedBatchId);
+  }, [selectedBatchId, hydratedBatchId, linesQuery.isSuccess, linesQuery.isFetching, linesQuery.data, selectedBatch]);
+  const linesReady = !!selectedBatchId && hydratedBatchId === selectedBatchId;
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -319,7 +345,7 @@ export function DistributionsScreen() {
   };
 
   const saveLines = async () => {
-    if (!selectedBatchId) return;
+    if (!selectedBatchId || !linesReady) return;
     setSavingLines(true);
     setError(null);
     const rows = Array.from(selectedIds)
@@ -329,7 +355,7 @@ export function DistributionsScreen() {
           newBatch.method === "percentages" || selectedBatch?.method === "percentages"
             ? (Number(pct || 0) * Number(pctTotal || 0)) / 100
             : Number(amounts[studentId] || 0);
-        return { student_id: studentId, amount };
+        return { student_id: studentId, amount: Math.round(amount * 100) / 100 };
       })
       .filter((r) => r.amount > 0);
 
@@ -554,7 +580,7 @@ export function DistributionsScreen() {
             columns={batchColumns}
             rows={batchesQuery.data ?? []}
             rowKey={(r) => r.id}
-            loading={batchesQuery.isLoading}
+            loading={batchesQuery.isLoading} error={batchesQuery.error} onRetry={() => batchesQuery.refetch()}
             emptyTitle="אין עדיין אצוות חלוקה לקבוצה זו"
             emptyIcon={Split}
             onRowClick={openBatch}
@@ -689,7 +715,7 @@ export function DistributionsScreen() {
                       <span className="tabular v3:font-semibold v3:text-ink">{isV3 ? formatMoney(draftTotal) : draftTotal.toLocaleString("he-IL")}</span>
                       {isV3 && ` · ${formatNumber((groupStudentsQuery.data ?? []).filter((s) => selectedIds.has(s.id)).length)} תלמידים מסומנים`}
                     </p>
-                    <button onClick={saveLines} disabled={savingLines} className={`btn-secondary flex items-center gap-2${xs}`}>
+                    <button onClick={saveLines} disabled={savingLines || !linesReady} className={`btn-secondary flex items-center gap-2${xs}`}>
                       <Upload className={isV3 ? "h-4 w-4" : "h-3.5 w-3.5"} aria-hidden="true" />
                       {savingLines ? "שומרת…" : "שמירת שורות"}
                     </button>
@@ -704,7 +730,7 @@ export function DistributionsScreen() {
                 </button>
               </div>
 
-              <DataTable columns={lineColumns} rows={lines} rowKey={(r) => r.id} loading={linesQuery.isLoading} emptyTitle="אין עדיין שורות באצווה" />
+              <DataTable columns={lineColumns} rows={lines} rowKey={(r) => r.id} loading={linesQuery.isLoading} error={linesQuery.error} onRetry={() => linesQuery.refetch()} emptyTitle="אין עדיין שורות באצווה" />
 
               <div className="flex items-center justify-between">
                 <p className="text-sm text-ink-muted">

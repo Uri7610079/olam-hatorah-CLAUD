@@ -514,7 +514,7 @@ export function DonationsScreen() {
           columns={columns}
           rows={isV3 ? shownDonations : donationsQuery.data ?? []}
           rowKey={(r) => r.id}
-          loading={donationsQuery.isLoading}
+          loading={donationsQuery.isLoading} error={donationsQuery.error} onRetry={() => donationsQuery.refetch()}
           emptyTitle={isV3 && chipFilter ? "אין תרומות במצב הזה" : unassignedOnly ? "אין תרומות לא משויכות" : "אין תרומות רשומות"}
           emptyIcon={HeartHandshake}
         />

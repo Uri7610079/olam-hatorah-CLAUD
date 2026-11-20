@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight, ChevronLeft, Columns3 } from "lucide-react";
 import { EmptyState } from "./EmptyState";
+import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
 import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "./ColumnFilter";
 import { textOf, type CellValue, type ColumnFilterState, type FilterColumn } from "@/lib/columnFilters";
@@ -69,6 +70,10 @@ interface DataTableProps<T> {
   rows: T[];
   rowKey: (row: T) => string;
   loading?: boolean;
+  // שגיאת טעינה: מוצגת הודעת שגיאה במקום "אין נתונים". עד היום שגיאה מהשרת הוצגה כרשימה
+  // ריקה, כאילו באמת אין נתונים (ביקורת 20.11.2026).
+  error?: unknown;
+  onRetry?: () => void;
   emptyTitle?: string;
   emptyDescription?: string;
   emptyIcon?: LucideIcon;
@@ -122,6 +127,8 @@ export function DataTable<T>({
   rows,
   rowKey,
   loading,
+  error,
+  onRetry,
   emptyTitle = "אין נתונים להצגה",
   emptyDescription,
   emptyIcon,
@@ -256,6 +263,8 @@ export function DataTable<T>({
       {filtersOn && <ColumnFilterSummary ctrl={ctrl} />}
       {loading ? (
         <LoadingState rows={5} />
+      ) : error && rows.length === 0 ? (
+        <ErrorState message="לא ניתן לטעון את הנתונים. ייתכן שיש בעיית תקשורת - נסו שוב." onRetry={onRetry} />
       ) : rows.length === 0 ? (
         <EmptyState title={emptyTitle} description={emptyDescription} icon={emptyIcon} />
       ) : (

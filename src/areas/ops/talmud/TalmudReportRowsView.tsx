@@ -108,7 +108,7 @@ export function TalmudReportRowsView({ reportKey, organizationId }: { reportKey:
       columns={isV3 ? COLUMNS_V3[reportKey] : COLUMNS[reportKey]}
       rows={query.data ?? []}
       rowKey={(r) => r.id}
-      loading={query.isLoading}
+      loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}
       clientPageSize={50}
       emptyTitle={`עוד לא נקלט "${STORED_REPORT_LABEL[reportKey]}"`}
       emptyDescription='מושכים מתלמוד, ואז במרכז היבוא → "קבצים מתלמוד".'

@@ -291,7 +291,7 @@ export function StudentBankTab({ studentId }: StudentBankTabProps) {
         columns={columns}
         rows={query.data ?? []}
         rowKey={(r) => r.id}
-        loading={query.isLoading}
+        loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}
         emptyTitle="אין חשבון בנק רשום"
         emptyIcon={Wallet}
       />

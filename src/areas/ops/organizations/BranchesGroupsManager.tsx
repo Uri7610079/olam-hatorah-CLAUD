@@ -876,7 +876,7 @@ export function BranchesGroupsManager({ orgId, orgName }: { orgId: string; orgNa
               columns={branchColumns}
               rows={branchesQuery.data ?? []}
               rowKey={(r) => r.id}
-              loading={branchesQuery.isLoading}
+              loading={branchesQuery.isLoading} error={branchesQuery.error} onRetry={() => branchesQuery.refetch()}
               emptyTitle="אין סניפים לעמותה זו"
               emptyIcon={Network}
               // v3: הסניף שהקבוצות שלו מוצגות מסומן, ולחיצה על שורה פותחת את הקבוצות שלו
@@ -928,7 +928,7 @@ export function BranchesGroupsManager({ orgId, orgName }: { orgId: string; orgNa
                 rows={groupsQuery.data ?? []}
                 rowKey={(r) => r.id}
                 rowClassName={(r) => (r.id === highlightGroupId ? "highlight-group-row !bg-brand-50 ring-2 ring-inset ring-brand-500" : undefined)}
-                loading={groupsQuery.isLoading}
+                loading={groupsQuery.isLoading} error={groupsQuery.error} onRetry={() => groupsQuery.refetch()}
                 emptyTitle="אין קבוצות בסניף זה"
                 emptyIcon={Users}
               />

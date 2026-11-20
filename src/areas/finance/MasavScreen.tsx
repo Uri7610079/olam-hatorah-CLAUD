@@ -305,14 +305,26 @@ export function MasavScreen() {
     setExporting(true);
     setError(null);
     try {
+      // כל שורה שמשולמת חייבת מספר חשבון מלא. עד היום, בלי הרשאה לחשיפה או כשחשיפה
+      // נכשלה, הקובץ ירד עם מספרים ממוסכים (••••1234) והאצווה סומנה "קובץ הופק".
+      const payable = linesQuery.data.filter((l) => l.status === "valid");
+      if (!canReveal) {
+        setError("להפקת הקובץ נדרשת הרשאה לצפייה במספרי חשבון מלאים. הקובץ לא הופק.");
+        return;
+      }
       const revealed = new Map<string, string>();
-      if (canReveal) {
-        for (const line of linesQuery.data.filter((l) => l.status === "valid" && l.student_bank_account_id)) {
-          const { data, error: err } = await supabase.rpc("reveal_student_bank_account_number", {
-            p_account_id: line.student_bank_account_id,
-          });
-          if (!err && data) revealed.set(line.id, data as unknown as string);
-        }
+      const missing: string[] = [];
+      for (const line of payable) {
+        if (!line.student_bank_account_id) { missing.push(line.id); continue; }
+        const { data, error: err } = await supabase.rpc("reveal_student_bank_account_number", {
+          p_account_id: line.student_bank_account_id,
+        });
+        if (!err && data) revealed.set(line.id, data as unknown as string);
+        else missing.push(line.id);
+      }
+      if (missing.length > 0) {
+        setError(`ל-${missing.length} שורות לא התקבל מספר חשבון מלא. הקובץ לא הופק, והאצווה לא סומנה. נסו שוב.`);
+        return;
       }
       const blob = buildMasavExportWorkbook(linesQuery.data, revealed);
       const fileName = `masav-draft-${selectedBatch?.period_month}-${crypto.randomUUID().slice(0, 8)}.xlsx`;
@@ -434,7 +446,7 @@ export function MasavScreen() {
           columns={batchColumns}
           rows={batchesQuery.data ?? []}
           rowKey={(r) => r.id}
-          loading={batchesQuery.isLoading}
+          loading={batchesQuery.isLoading} error={batchesQuery.error} onRetry={() => batchesQuery.refetch()}
           emptyTitle="אין עדיין אצוות מס״ב"
           emptyIcon={Landmark}
           onRowClick={(r) => setSelectedBatchId(r.id)}

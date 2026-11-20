@@ -21,9 +21,12 @@ export function exportRowsToExcel(rows: Record<string, unknown>[], sheetName: st
 // והיקף - דרישה מפורשת באפיון (שלב 14). לא חוסם את היצוא אם הרישום נכשל מסיבה כלשהי -
 // עדיף שהמשתמש יקבל את הדוח ונאבד רישום יומן, מאשר לחסום דוח תקין בגלל תקלת רישום.
 export async function logReportExport(reportType: string, filters: Record<string, unknown>, rowCount: number) {
+  // rpc לא זורק שגיאה אלא מחזיר אותה, ולכן עד היום כשל ברישום עבר בשקט לגמרי.
+  // היצוא עדיין לא נחסם, אבל הכשל נרשם בקונסול.
   try {
-    await supabase.rpc("log_report_export", { p_report_type: reportType, p_filters: filters, p_row_count: rowCount });
-  } catch {
-    // מכוון - ר' הערה למעלה.
+    const { error } = await supabase.rpc("log_report_export", { p_report_type: reportType, p_filters: filters, p_row_count: rowCount });
+    if (error) console.error("רישום היצוא ביומן נכשל:", error.message);
+  } catch (e) {
+    console.error("רישום היצוא ביומן נכשל:", e);
   }
 }

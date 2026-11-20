@@ -378,7 +378,7 @@ export function TalmudExportScreen() {
             </div>
             )}
             <SearchAndFilters searchValue={candidateSearch} onSearchChange={setCandidateSearch} searchPlaceholder="חיפוש לפי שם או מזהה…" />
-            <DataTable columns={columns} rows={filteredCandidates} rowKey={(s) => s.id} loading={candidatesQuery.isLoading} emptyTitle="אין תלמידים מתאימים" />
+            <DataTable columns={columns} rows={filteredCandidates} rowKey={(s) => s.id} loading={candidatesQuery.isLoading} error={candidatesQuery.error} onRetry={() => candidatesQuery.refetch()} emptyTitle="אין תלמידים מתאימים" />
           </div>
         )}
 
@@ -420,7 +420,7 @@ export function TalmudExportScreen() {
             ]}
             rows={historyQuery.data ?? []}
             rowKey={(b: any) => b.id}
-            loading={historyQuery.isLoading}
+            loading={historyQuery.isLoading} error={historyQuery.error} onRetry={() => historyQuery.refetch()}
             emptyTitle="אין עדיין יצוא"
           />
         </>

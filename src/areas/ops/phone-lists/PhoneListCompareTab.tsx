@@ -485,7 +485,7 @@ export function PhoneListCompareTab() {
                   ]}
                   rows={missingQuery.data ?? []}
                   rowKey={(s: MissingStudent) => s.student_id}
-                  loading={missingQuery.isLoading}
+                  loading={missingQuery.isLoading} error={missingQuery.error} onRetry={() => missingQuery.refetch()}
                   emptyTitle="כל התלמידים הפעילים בעלי טלפון מופיעים ברשימה"
                 />
               )}

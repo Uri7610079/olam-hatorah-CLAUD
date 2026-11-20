@@ -52,11 +52,13 @@ const STUDENT_STATUS_LABEL: Record<string, string> = {
 // מקבל את הערך המספרי המקורי, בלי שינוי.
 const MONEY_COLUMNS = new Set(["ברוטו", "עמלה", "נטו", "סכום", "יתרה", "סכום קודם", "סכום נוכחי", "הפרש"]);
 
+// חשבון על המחרוזת בלבד. עד היום החישוב עבר דרך השעון המקומי, ובחודש שבו עוברים
+// לשעון קיץ (מרץ) הסוף יצא 31.3 במקום 1.4 - והיום האחרון של החודש לא נכלל בדוח.
 function monthRange(month: string) {
-  const start = month;
-  const d = new Date(month);
-  d.setMonth(d.getMonth() + 1);
-  return { start, end: d.toISOString().slice(0, 10) };
+  const [y, m] = month.slice(0, 7).split("-").map(Number);
+  const nextY = m === 12 ? y + 1 : y;
+  const nextM = m === 12 ? 1 : m + 1;
+  return { start: `${month.slice(0, 7)}-01`, end: `${nextY}-${String(nextM).padStart(2, "0")}-01` };
 }
 
 function unwrap<T>(v: T | T[] | null): T | null {

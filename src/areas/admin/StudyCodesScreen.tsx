@@ -203,7 +203,7 @@ export function StudyCodesScreen() {
           )}
 
           {statusError && <div className="mb-3"><ErrorState message={statusError} /></div>}
-          <DataTable columns={columns} rows={query.data ?? []} rowKey={(r) => r.id} loading={query.isLoading} emptyTitle="אין קודי לימוד" emptyIcon={BookOpen} />
+          <DataTable columns={columns} rows={query.data ?? []} rowKey={(r) => r.id} loading={query.isLoading} error={query.error} onRetry={() => query.refetch()} emptyTitle="אין קודי לימוד" emptyIcon={BookOpen} />
         </>
       )}
 
@@ -355,7 +355,7 @@ function PointValuesTab({ canManage }: { canManage: boolean }) {
         </form>
       )}
 
-      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} loading={query.isLoading} emptyTitle="לא הוגדר עדיין שווי נקודה" emptyIcon={Coins} />
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} loading={query.isLoading} error={query.error} onRetry={() => query.refetch()} emptyTitle="לא הוגדר עדיין שווי נקודה" emptyIcon={Coins} />
     </div>
   );
 }
@@ -541,7 +541,7 @@ function StudyCodePointsTab({ canManage }: { canManage: boolean }) {
         columns={columns}
         rows={rows}
         rowKey={(r) => r.id}
-        loading={pointsQuery.isLoading}
+        loading={pointsQuery.isLoading} error={pointsQuery.error} onRetry={() => pointsQuery.refetch()}
         emptyTitle="לא הוגדר עדיין ניקוד לאף קוד לימוד"
         emptyIcon={Calculator}
       />

@@ -43,6 +43,15 @@ const WEEKDAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמ
 // דבר שדורש קריאה חיצונית ל-API). מזהה רק תבניות מפורשות: יום בשבוע בעברית ("יום חמישי"),
 // DD/MM או DD/MM/YYYY, "היום"/"מחר". טקסט שלא תואם אף תבנית - פשוט אין תאריך מוצע,
 // לא מומצא ניחוש שגוי.
+// תאריך שקיים בלוח בלבד (31/02 או 45/13 -> null, ולא משימה עם תאריך שהשמירה תדחה)
+function validIso(y: string, m: string, d: string): string | null {
+  const yy = Number(y), mm = Number(m), dd = Number(d);
+  if (mm < 1 || mm > 12 || dd < 1) return null;
+  const daysInMonth = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  if (dd > daysInMonth) return null;
+  return `${y}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
 export function guessDueDateFromText(text: string): string | null {
   // \b של JavaScript מכיר רק אותיות לטיניות, ולכן /\bהיום\b/ לא התאים אף פעם.
   // גבול מילה עברי: לפני ואחרי - תחילת/סוף טקסט או תו שאינו אות עברית.
@@ -50,17 +59,17 @@ export function guessDueDateFromText(text: string): string | null {
   if (/(^|[^א-ת])מחר($|[^א-ת])/.test(text)) return addDaysIso(1);
 
   const isoMatch = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  if (isoMatch) return isoMatch[0];
+  if (isoMatch) return validIso(isoMatch[1], isoMatch[2], isoMatch[3]);
 
   const dmyMatch = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
   if (dmyMatch) {
     const [, d, m, y] = dmyMatch;
-    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    return validIso(y, m, d);
   }
   const dmMatch = text.match(/\b(\d{1,2})\/(\d{1,2})\b/);
   if (dmMatch) {
     const [, d, m] = dmMatch;
-    return `${new Date().getFullYear()}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    return validIso(String(new Date().getFullYear()), m, d);
   }
 
   for (let dow = 0; dow < 7; dow++) {

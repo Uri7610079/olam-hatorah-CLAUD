@@ -90,14 +90,14 @@ export function StudentTalmudTab({ studentId }: { studentId: string }) {
           columns={eligibilityCols}
           rows={eligibilityQuery.data ?? []}
           rowKey={(r) => r.id}
-          loading={eligibilityQuery.isLoading}
+          loading={eligibilityQuery.isLoading} error={eligibilityQuery.error} onRetry={() => eligibilityQuery.refetch()}
           emptyTitle="אין זכאות רשומה"
           emptyIcon={ClipboardList}
         />
       </div>
       <div>
         <h3 className="mb-2 text-sm font-semibold text-ink-muted">שגיאות</h3>
-        <DataTable columns={errorCols} rows={errorsQuery.data ?? []} rowKey={(r) => r.id} loading={errorsQuery.isLoading} emptyTitle="אין שגיאות רשומות" />
+        <DataTable columns={errorCols} rows={errorsQuery.data ?? []} rowKey={(r) => r.id} loading={errorsQuery.isLoading} error={errorsQuery.error} onRetry={() => errorsQuery.refetch()} emptyTitle="אין שגיאות רשומות" />
       </div>
     </div>
   );

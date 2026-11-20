@@ -236,7 +236,7 @@ export function AdminAuditLog() {
         columns={columns}
         rows={filteredRows}
         rowKey={(r) => r.id}
-        loading={query.isLoading}
+        loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}
         emptyTitle="אין רשומות ביומן"
         emptyIcon={History}
         onRowClick={isV3 ? setOpenRow : undefined}

@@ -214,7 +214,7 @@ export function AdminUsers() {
         columns={columns}
         rows={rows}
         rowKey={(r) => r.id}
-        loading={profilesQuery.isLoading}
+        loading={profilesQuery.isLoading} error={profilesQuery.error} onRetry={() => profilesQuery.refetch()}
         emptyTitle="אין משתמשים עדיין"
         emptyIcon={UserCog}
       />

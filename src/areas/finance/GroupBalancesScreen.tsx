@@ -263,7 +263,7 @@ export function GroupBalancesScreen() {
             columns={balanceColumns}
             rows={balancesQuery.data ?? []}
             rowKey={(r) => r.group_id}
-            loading={balancesQuery.isLoading}
+            loading={balancesQuery.isLoading} error={balancesQuery.error} onRetry={() => balancesQuery.refetch()}
             emptyTitle="אין קבוצות לעמותה זו"
             emptyIcon={Wallet}
             onRowClick={openGroup}

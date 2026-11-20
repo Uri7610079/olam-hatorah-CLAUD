@@ -195,6 +195,12 @@ export function ReturnsScreen() {
     setRetryLineId("");
   }, [orgId]);
 
+  // החלפת ההחזרה שנבחרה מאפסת את פרטי התשלום החוזר שנבחרו להחזרה הקודמת
+  useEffect(() => {
+    setRetryAccountId("");
+    setRetryLineId("");
+  }, [selectedReturnId]);
+
   const batchesQuery = useQuery({ queryKey: ["returns-transmitted-batches", orgId], queryFn: () => fetchTransmittedBatches(orgId), enabled: !!orgId });
   const linesQuery = useQuery({ queryKey: ["returns-valid-lines", batchId], queryFn: () => fetchValidLines(batchId), enabled: !!batchId });
   const returnsQuery = useQuery({ queryKey: ["payment-returns", orgId], queryFn: () => fetchReturns(orgId), enabled: !!orgId });
@@ -380,7 +386,7 @@ export function ReturnsScreen() {
           columns={columns}
           rows={returnsQuery.data ?? []}
           rowKey={(r) => r.id}
-          loading={returnsQuery.isLoading}
+          loading={returnsQuery.isLoading} error={returnsQuery.error} onRetry={() => returnsQuery.refetch()}
           emptyTitle="אין החזרות רשומות"
           emptyIcon={Undo2}
           onRowClick={canManage ? (r) => setSelectedReturnId(r.id === selectedReturnId ? null : r.id) : undefined}

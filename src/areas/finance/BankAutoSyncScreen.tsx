@@ -158,7 +158,7 @@ export function BankAutoSyncPanel({ accountId }: { accountId: string }) {
             columns={runColumns}
             rows={runsQuery.data ?? []}
             rowKey={(r) => r.id}
-            loading={runsQuery.isLoading}
+            loading={runsQuery.isLoading} error={runsQuery.error} onRetry={() => runsQuery.refetch()}
             emptyTitle="עדיין לא בוצעה משיכה אוטומטית עבור חשבון זה"
             emptyIcon={RefreshCw}
           />

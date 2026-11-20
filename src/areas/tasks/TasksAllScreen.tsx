@@ -296,7 +296,7 @@ export function TasksAllScreen() {
             columns={listColumns}
             rows={listFiltered}
             rowKey={(t) => t.id}
-            loading={query.isLoading}
+            loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}
             emptyTitle="אין משימות התואמות את הסינון"
             emptyIcon={CheckSquare}
             columnPicker

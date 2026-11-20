@@ -705,7 +705,7 @@ export function CommissionRulesScreen() {
       {toggleError && <div className="mb-4"><ErrorState message={toggleError} /></div>}
 
       {orgId && (
-        <DataTable columns={columns} rows={rulesQuery.data ?? []} rowKey={(r) => r.id} loading={rulesQuery.isLoading} emptyTitle="אין כללי עמלה לעמותה זו" emptyIcon={Percent} />
+        <DataTable columns={columns} rows={rulesQuery.data ?? []} rowKey={(r) => r.id} loading={rulesQuery.isLoading} error={rulesQuery.error} onRetry={() => rulesQuery.refetch()} emptyTitle="אין כללי עמלה לעמותה זו" emptyIcon={Percent} />
       )}
     </div>
   );

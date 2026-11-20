@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { AreaProvider } from "./app/AreaContext";
+import { AreaProvider, useArea } from "./app/AreaContext";
 import { AuthGate } from "./areas/auth/AuthGate";
 import { Layout } from "./app/Layout";
 import { SCREENS } from "./app/screens";
@@ -97,6 +97,13 @@ const SCREENS_WITH_REAL_PAGES = new Set([
   "/tasks/settings",
 ]);
 
+// כניסה לכתובת הבסיס: לאזור של המשתמש (עד היום תמיד לתפעול, גם למי שאין לו גישה אליו)
+function HomeRedirect() {
+  const { areasLoaded, homeArea } = useArea();
+  if (!areasLoaded) return null;
+  return <Navigate to={`/${homeArea ?? "ops"}`} replace />;
+}
+
 function RedirectKeepQuery({ to }: { to: string }) {
   const location = useLocation();
   return <Navigate to={`${to}${location.search}`} replace />;
@@ -108,7 +115,7 @@ export default function App() {
       <AreaProvider>
         <Routes>
           <Route element={<Layout />}>
-            <Route index element={<Navigate to="/ops" replace />} />
+            <Route index element={<HomeRedirect />} />
             <Route path="/ops" element={<OpsDashboard />} />
             <Route path="/finance" element={<FinanceDashboard />} />
             <Route path="/admin" element={<AdminHome />} />

@@ -426,7 +426,7 @@ export function RetroScreen() {
       })()}
 
       {orgId && (
-        <DataTable columns={isV3 ? columnsV3 : columns} rows={retroQuery.data ?? []} rowKey={(r) => r.id} loading={retroQuery.isLoading} emptyTitle="אין רטרו רשום" emptyIcon={RotateCcw} />
+        <DataTable columns={isV3 ? columnsV3 : columns} rows={retroQuery.data ?? []} rowKey={(r) => r.id} loading={retroQuery.isLoading} error={retroQuery.error} onRetry={() => retroQuery.refetch()} emptyTitle="אין רטרו רשום" emptyIcon={RotateCcw} />
       )}
 
       {/* מתלמוד (משיכה מתלמוד → קליטה, מיגרציה 121): מה תלמוד שילם, ואיך הוא הסביר הפרשים וקיזוזים */}

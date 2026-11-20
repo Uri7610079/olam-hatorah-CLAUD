@@ -444,7 +444,7 @@ export function FinancialPeriodsScreen() {
             columns={periodColumns}
             rows={periodsQuery.data ?? []}
             rowKey={(r) => r.id}
-            loading={periodsQuery.isLoading}
+            loading={periodsQuery.isLoading} error={periodsQuery.error} onRetry={() => periodsQuery.refetch()}
             emptyTitle="אין עדיין חודשים כספיים לעמותה זו"
             emptyIcon={Calendar}
             onRowClick={(r) => setMonth(r.month)}

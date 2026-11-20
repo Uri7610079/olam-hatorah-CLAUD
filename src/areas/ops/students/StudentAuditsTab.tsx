@@ -62,7 +62,7 @@ export function StudentAuditsTab({ studentId }: { studentId: string }) {
         columns={columns}
         rows={attendanceQuery.data ?? []}
         rowKey={(r) => r.id}
-        loading={attendanceQuery.isLoading}
+        loading={attendanceQuery.isLoading} error={attendanceQuery.error} onRetry={() => attendanceQuery.refetch()}
         emptyTitle="התלמיד לא נרשם כחסר באף ביקורת"
         emptyIcon={ClipboardList}
       />

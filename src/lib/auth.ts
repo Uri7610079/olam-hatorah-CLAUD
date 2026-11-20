@@ -74,12 +74,21 @@ export function useAuth(): AuthState & {
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+    // ה-callback לא ממתין לשום קריאה למסד: Supabase מחזיק נעילה בזמן שהוא רץ, וקריאה
+    // שממתינה בתוכו לאותו לקוח עלולה להיתקע (כניסה, רענון או שחזור סיסמה שלא מסתיימים).
+    // טעינת הפרופיל נדחית לרגע שאחרי, ורק התשובה האחרונה נקלטת.
+    let seq = 0;
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return;
       if (event === "PASSWORD_RECOVERY") setRecovery(true);
       setSession(nextSession);
-      setProfile(nextSession ? await loadProfile(nextSession.user.id) : null);
-      setLoading(false);
+      const mine = ++seq;
+      setTimeout(async () => {
+        const nextProfile = nextSession ? await loadProfile(nextSession.user.id) : null;
+        if (!active || mine !== seq) return;
+        setProfile(nextProfile);
+        setLoading(false);
+      }, 0);
     });
 
     return () => {

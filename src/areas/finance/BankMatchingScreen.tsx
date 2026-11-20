@@ -205,6 +205,9 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
   // מילוי אוטומטי של סכום ההתאמה - הסכום כבר מוצג פעמיים על המסך (יתרת התנועה, וסכום
   // היעד שנבחר) כך שאין סיבה להקליד אותו שוב ידנית; עדיין ניתן לעריכה לפני יצירת ההתאמה.
   useEffect(() => {
+    // יעד והערות שנבחרו לתנועה הקודמת לא עוברים לתנועה החדשה
+    setTargetId("");
+    setNotes("");
     if (!selectedTransaction) return;
     setMatchedAmount(String(Math.max(0, remainderFor(selectedTransaction))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -364,7 +367,7 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
           columns={columns}
           rows={transactionsQuery.data ?? []}
           rowKey={(r) => r.id}
-          loading={transactionsQuery.isLoading}
+          loading={transactionsQuery.isLoading} error={transactionsQuery.error} onRetry={() => transactionsQuery.refetch()}
           emptyTitle="אין תנועות בנק בחשבון זה"
           emptyIcon={GitMerge}
           onRowClick={(r) => setSelectedTransactionId(r.id === selectedTransactionId ? null : r.id)}

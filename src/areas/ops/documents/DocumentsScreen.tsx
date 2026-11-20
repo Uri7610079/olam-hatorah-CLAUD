@@ -522,7 +522,7 @@ export function DocumentsScreen() {
             </form>
           )}
 
-          <DataTable columns={documentColumns} rows={documentsQuery.data ?? []} rowKey={(d) => d.id} loading={documentsQuery.isLoading} emptyTitle="אין מסמכים" emptyIcon={FileText} />
+          <DataTable columns={documentColumns} rows={documentsQuery.data ?? []} rowKey={(d) => d.id} loading={documentsQuery.isLoading} error={documentsQuery.error} onRetry={() => documentsQuery.refetch()} emptyTitle="אין מסמכים" emptyIcon={FileText} />
         </>
       )}
 
@@ -606,7 +606,7 @@ export function DocumentsScreen() {
             columns={letterColumns}
             rows={lettersQuery.data ?? []}
             rowKey={(l) => l.id}
-            loading={lettersQuery.isLoading}
+            loading={lettersQuery.isLoading} error={lettersQuery.error} onRetry={() => lettersQuery.refetch()}
             emptyTitle="אין מכתבים"
             emptyIcon={Mail}
             onRowClick={selectLetter}

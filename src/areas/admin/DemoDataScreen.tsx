@@ -211,7 +211,7 @@ export function DemoDataScreen() {
             columns={batchColumns}
             rows={batchesQuery.data ?? []}
             rowKey={(b) => b.id}
-            loading={batchesQuery.isLoading}
+            loading={batchesQuery.isLoading} error={batchesQuery.error} onRetry={() => batchesQuery.refetch()}
             emptyTitle="אין חבילות דמו"
             emptyIcon={FlaskConical}
           />

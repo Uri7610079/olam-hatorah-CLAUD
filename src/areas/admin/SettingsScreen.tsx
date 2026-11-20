@@ -174,7 +174,7 @@ export function SettingsScreen() {
           ]}
           rows={optional}
           rowKey={(g: GroupOption) => g.id}
-          loading={groupsQuery.isLoading}
+          loading={groupsQuery.isLoading} error={groupsQuery.error} onRetry={() => groupsQuery.refetch()}
           emptyTitle="אין קבוצות כאלה - בכל הקבוצות חשבון בנק הוא חובה"
           emptyIcon={Wallet}
         />

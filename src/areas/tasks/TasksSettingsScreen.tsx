@@ -286,7 +286,7 @@ function RecurringRulesSection() {
         columns={columns}
         rows={rulesQuery.data ?? []}
         rowKey={(r) => r.id}
-        loading={rulesQuery.isLoading}
+        loading={rulesQuery.isLoading} error={rulesQuery.error} onRetry={() => rulesQuery.refetch()}
         emptyTitle="אין כללי חזרה עדיין"
         emptyIcon={Repeat}
       />
@@ -570,7 +570,7 @@ function TaskTemplatesSection() {
         columns={columns}
         rows={templatesQuery.data ?? []}
         rowKey={(t) => t.id}
-        loading={templatesQuery.isLoading}
+        loading={templatesQuery.isLoading} error={templatesQuery.error} onRetry={() => templatesQuery.refetch()}
         emptyTitle="אין תבניות עדיין"
         emptyIcon={FileStack}
       />

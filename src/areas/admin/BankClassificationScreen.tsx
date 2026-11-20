@@ -446,7 +446,7 @@ function TransactionTypesPanel() {
 
       <div className="mt-4">
         {statusError && <div className="mb-3"><ErrorState message={statusError} /></div>}
-        <DataTable columns={columns} rows={query.data ?? []} rowKey={(r) => r.id} loading={query.isLoading} emptyTitle="אין סוגי תנועה" emptyIcon={Tags} />
+        <DataTable columns={columns} rows={query.data ?? []} rowKey={(r) => r.id} loading={query.isLoading} error={query.error} onRetry={() => query.refetch()} emptyTitle="אין סוגי תנועה" emptyIcon={Tags} />
       </div>
     </div>
   );
@@ -841,7 +841,7 @@ function RecognitionRulesPanel() {
 
       <div className="mt-4">
         {statusError && <div className="mb-3"><ErrorState message={statusError} /></div>}
-        <DataTable columns={columns} rows={rulesQuery.data ?? []} rowKey={(r) => r.id} loading={rulesQuery.isLoading} emptyTitle="אין כללי זיהוי" emptyIcon={ScanSearch} />
+        <DataTable columns={columns} rows={rulesQuery.data ?? []} rowKey={(r) => r.id} loading={rulesQuery.isLoading} error={rulesQuery.error} onRetry={() => rulesQuery.refetch()} emptyTitle="אין כללי זיהוי" emptyIcon={ScanSearch} />
       </div>
     </div>
   );

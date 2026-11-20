@@ -324,7 +324,7 @@ export function EligibilityCallListTab() {
             ]}
             rows={pageRows}
             rowKey={(r: CallRow) => r.external_id}
-            loading={callQuery.isLoading}
+            loading={callQuery.isLoading} error={callQuery.error} onRetry={() => callQuery.refetch()}
             emptyTitle="אין תלמידים בקבוצה הזו"
             emptyIcon={PhoneCall}
             pagination={{ page, pageSize: PAGE_SIZE, totalCount: shown.length, onPageChange: setPage }}

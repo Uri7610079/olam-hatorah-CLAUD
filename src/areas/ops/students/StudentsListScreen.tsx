@@ -500,7 +500,7 @@ export function StudentsListScreen() {
         columns={columns}
         rows={rows}
         rowKey={(s) => s.id}
-        loading={query.isLoading}
+        loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}
         emptyTitle="אין תלמידים עדיין"
         emptyIcon={Users}
         columnPicker

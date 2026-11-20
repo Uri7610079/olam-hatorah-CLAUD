@@ -185,7 +185,7 @@ export function OrganizationsListScreen() {
         rowClassName={isV3 ? undefined : (o) => (o.id === selectedOrgId ? "!bg-brand-50 ring-2 ring-inset ring-brand-500" : undefined)}
         selectedKey={isV3 ? selectedOrgId || null : undefined}
         onRowClick={(o) => selectOrg(o.id)}
-        loading={query.isLoading}
+        loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}
         emptyTitle="אין עמותות עדיין"
         emptyIcon={Building2}
       />

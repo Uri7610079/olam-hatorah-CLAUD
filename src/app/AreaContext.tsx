@@ -18,6 +18,12 @@ interface AreaContextValue {
   currentArea: Area;
   setCurrentArea: (area: Area) => void;
   availableAreas: Area[];
+  // ההרשאות נטענו (עד אז availableAreas ריק, וזה לא אומר "אין הרשאה")
+  areasLoaded: boolean;
+  // האזור שהמשתמש מגיע אליו כברירת מחדל
+  homeArea: Area | null;
+  // האזור שבכתובת הנוכחית, אם יש
+  pathArea: Area | null;
 }
 
 const AreaContext = createContext<AreaContextValue | null>(null);
@@ -50,7 +56,8 @@ export function AreaProvider({ children }: { children: ReactNode }) {
   const preferredArea =
     profile?.default_area && availableAreas.includes(profile.default_area) ? profile.default_area : availableAreas[0];
 
-  const currentArea = areaFromPathname(location.pathname) ?? preferredArea ?? "ops";
+  const pathArea = areaFromPathname(location.pathname);
+  const currentArea = pathArea ?? preferredArea ?? "ops";
 
   const setCurrentArea = (area: Area) => navigate(`/${area}`);
 
@@ -62,6 +69,9 @@ export function AreaProvider({ children }: { children: ReactNode }) {
         currentArea,
         setCurrentArea,
         availableAreas,
+        areasLoaded: !!permissions,
+        homeArea: preferredArea ?? null,
+        pathArea,
       }}
     >
       {children}

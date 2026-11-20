@@ -108,12 +108,32 @@ function pickField(raw: Record<string, string>, keys: string[]): string {
   return "";
 }
 
+// "10,000.00" (פסיק = אלפים) הוא הפורמט של הבנקים בארץ. נתמכים גם "1.234,56" ו-"12,50"
+// (פסיק עשרוני), שעד היום נקראו כ-1.23456 וכ-1250, ומינוס בסוף ("250.00-").
 function parseAmount(value: string): number | null {
-  // מפריד אלפים ("10,000.00") מגיע כך מהבנק - מסירים כל מה שאינו ספרה/נקודה/מינוס.
-  const cleaned = value.replace(/[^\d.-]/g, "");
-  if (!cleaned) return null;
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : null;
+  let s = value.replace(/[^\d.,-]/g, "");
+  if (!s) return null;
+  let negative = false;
+  if (s.endsWith("-")) { negative = true; s = s.slice(0, -1); }
+  if (s.startsWith("-")) { negative = !negative; s = s.slice(1); }
+  if (s.includes("-")) return null;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma > lastDot) {
+    const commas = s.split(",").length - 1;
+    if (lastDot >= 0 || (commas === 1 && /,\d{1,2}$/.test(s))) {
+      // הפסיק האחרון הוא נקודה עשרונית: הנקודות לפניו הן אלפים
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      s = s.replace(/,/g, "");
+    }
+  } else {
+    s = s.replace(/,/g, "");
+  }
+  if ((s.match(/\./g) ?? []).length > 1 || s === "" || s === ".") return null;
+  const parsed = Number(s);
+  if (!Number.isFinite(parsed)) return null;
+  return negative ? -parsed : parsed;
 }
 
 // שלושה פורמטים נתמכים:
@@ -1163,7 +1183,7 @@ export function BankTransactionsPanel({ accountId, initialFile }: { accountId: s
             columns={transactionColumns}
             rows={transactionsQuery.data ?? []}
             rowKey={(r) => r.id}
-            loading={transactionsQuery.isLoading}
+            loading={transactionsQuery.isLoading} error={transactionsQuery.error} onRetry={() => transactionsQuery.refetch()}
             emptyTitle="אין עדיין תנועות בחשבון הזה"
             emptyDescription={
               canImport

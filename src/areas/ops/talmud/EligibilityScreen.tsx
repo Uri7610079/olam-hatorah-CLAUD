@@ -638,7 +638,7 @@ export function EligibilityScreen() {
               ]}
               rows={monthDataQuery.data ?? []}
               rowKey={(r: EligibilityRow) => r.id}
-              loading={monthDataQuery.isLoading}
+              loading={monthDataQuery.isLoading} error={monthDataQuery.error} onRetry={() => monthDataQuery.refetch()}
               emptyTitle="אין זכאות לחודש זה עדיין"
             />
           )}
@@ -654,7 +654,7 @@ export function EligibilityScreen() {
               ]}
               rows={missingQuery.data ?? []}
               rowKey={(r: MissingStudent) => r.id}
-              loading={missingQuery.isLoading}
+              loading={missingQuery.isLoading} error={missingQuery.error} onRetry={() => missingQuery.refetch()}
               emptyTitle="אין חריגות - כל התלמידים הפעילים הופיעו בדוח"
             />
           )}

@@ -128,34 +128,23 @@ export interface CreateTaskInput {
   team_ids: string[];
 }
 
+// המשימה, האחראים והצוותים נשמרים בפעולה אחת (מיגרציה 137): כשל באמצע מבטל הכול, ולא
+// נשארת משימה בלי אחראים. היוצר תמיד נכלל באחראים, גם אם לא סימן את עצמו בטופס - אחרת,
+// אם יש לו רק tasks.view_assigned (בלי view_team/view_all), הוא לא יכול לראות את המשימה
+// שהוא עצמו יצר (can_view_task דורש היות אחראי/צופה/צוות תואם). היוצר נקבע בשרת לפי
+// המשתמש המחובר; created_by שבקלט נשאר לתאימות בלבד.
 export async function createTask(input: CreateTaskInput): Promise<string> {
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({
-      title: input.title,
-      description: input.description,
-      priority: input.priority,
-      category_id: input.category_id,
-      due_date: input.due_date,
-      created_by: input.created_by,
-    })
-    .select("id")
-    .single();
+  const { data, error } = await supabase.rpc("create_task_with_assignments", {
+    p_title: input.title,
+    p_description: input.description,
+    p_priority: input.priority,
+    p_category_id: input.category_id,
+    p_due_date: input.due_date,
+    p_owner_ids: input.owner_ids,
+    p_team_ids: input.team_ids,
+  });
   if (error) throw error;
-  const taskId = data.id as string;
-
-  // היוצר תמיד נכלל באחראים, גם אם לא סימן את עצמו בטופס - אחרת, אם יש לו רק
-  // tasks.view_assigned (בלי view_team/view_all), הוא לא יכול לראות את המשימה שהוא עצמו
-  // יצר (can_view_task דורש היות אחראי/צופה/צוות תואם) - נתפס בביקורת תקינות ייעודית.
-  const ownerIds = Array.from(new Set([...input.owner_ids, input.created_by]));
-  const { error: ownerError } = await supabase.from("task_owners").insert(ownerIds.map((user_id) => ({ task_id: taskId, user_id })));
-  if (ownerError) throw ownerError;
-
-  if (input.team_ids.length > 0) {
-    const { error: teamError } = await supabase.from("task_teams").insert(input.team_ids.map((team_id) => ({ task_id: taskId, team_id })));
-    if (teamError) throw teamError;
-  }
-  return taskId;
+  return data as unknown as string;
 }
 
 export interface UpdateTaskInput {
