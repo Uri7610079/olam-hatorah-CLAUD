@@ -1,3 +1,4 @@
+import { safeHttpUrl } from "@/lib/safeUrl";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Mail, AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
@@ -163,6 +164,10 @@ export function DocumentsScreen() {
       setError("יש לצרף קובץ או להזין קישור לתיקיית שיתוף");
       return;
     }
+    if (docForm.external_link.trim() && !safeHttpUrl(docForm.external_link)) {
+      setError("הקישור צריך להתחיל ב-https:// (או http://).");
+      return;
+    }
     setSavingDoc(true);
     setError(null);
     try {
@@ -179,7 +184,7 @@ export function DocumentsScreen() {
         issued_date: docForm.issued_date || null,
         expiry_date: docForm.expiry_date || null,
         file_path: filePath,
-        external_link: docForm.external_link || null,
+        external_link: safeHttpUrl(docForm.external_link),
         is_sensitive: docForm.is_sensitive,
       });
       if (err) throw new Error(err.message);
@@ -350,11 +355,13 @@ export function DocumentsScreen() {
               פתיחת קובץ
             </button>
           )}
-          {d.external_link && (
-            <a href={d.external_link} target="_blank" rel="noopener noreferrer" className="link-action text-xs">
+          {d.external_link && (safeHttpUrl(d.external_link) ? (
+            <a href={safeHttpUrl(d.external_link)!} target="_blank" rel="noopener noreferrer" className="link-action text-xs">
               קישור
             </a>
-          )}
+          ) : (
+            <span className="text-xs text-ink-subtle" title={d.external_link}>קישור לא תקין</span>
+          ))}
           {canManageDocs && d.status === "active" && (
             <button onClick={() => setConfirmArchiveDoc(d)} className="text-xs text-danger underline">
               גניזה

@@ -16,32 +16,37 @@
 // באינטרנט) - בלי זה, כל אחד שמזהה את הכתובת הציבורית הזו יכול לגרום לחיובי OpenAI
 // אמיתיים על חשבון הלקוח, בלי להתחבר בכלל לאתר. נבדק ידנית ("תבדוק שאין באגים") - זה
 // היה חור פתוח שנתפס ותוקן, לא היה קיים בגרסה הקודמת של הקובץ.
-async function isAuthenticatedUser(req) {
+//
+// ביקורת אבטחה 20.11 (ממצא 9): "מחובר" לא מספיק - גם משתמש שממתין לאישור מחובר, ולא
+// הייתה הגבלת כמות. claim_ai_task_parse (מיגרציה 139) בודקת במסד, בהרשאות של המשתמש
+// עצמו, שהוא מאושר ויש לו הרשאת יצירת משימות, ושלא עבר 30 הפעלות בשעה - ורושמת את
+// ההפעלה ביומן. כל תשובה אחרת = דחייה, והמסך עובר לפיצול הפשוט.
+async function claimAiParse(req) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) return false;
+  if (!authHeader?.startsWith("Bearer ")) return { ok: false, status: 401 };
   const token = authHeader.slice("Bearer ".length);
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey || !token) return false;
+  if (!supabaseUrl || !anonKey || !token) return { ok: false, status: 401 };
 
   try {
-    const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/claim_ai_task_parse`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, apikey: anonKey, "Content-Type": "application/json" },
+      body: "{}",
     });
-    return res.ok;
+    if (!res.ok) return { ok: false, status: 401 };
+    const r = await res.json();
+    if (r?.ok === true) return { ok: true };
+    return { ok: false, status: r?.reason === "rate_limited" ? 429 : 403 };
   } catch {
-    return false;
+    return { ok: false, status: 401 };
   }
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "method not allowed" });
-    return;
-  }
-
-  if (!(await isAuthenticatedUser(req))) {
-    res.status(401).json({ error: "authentication required" });
     return;
   }
 
@@ -54,6 +59,13 @@ export default async function handler(req, res) {
   let { text } = req.body ?? {};
   if (!text || typeof text !== "string" || !text.trim()) {
     res.status(400).json({ error: "missing text" });
+    return;
+  }
+
+  // אחרי הבדיקות הזולות: הפעלה נספרת במכסה רק כשבאמת פונים ל-OpenAI.
+  const claim = await claimAiParse(req);
+  if (!claim.ok) {
+    res.status(claim.status).json({ error: claim.status === 429 ? "rate limited" : "not allowed" });
     return;
   }
   // הגבלת אורך - בלי זה, משתמש מחובר (אבל לא בהכרח בכוונה טובה) יכול לשלוח טקסט ענק
