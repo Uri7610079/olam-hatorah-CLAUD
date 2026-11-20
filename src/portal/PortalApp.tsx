@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { LogOut, MessageCircleQuestion, Users, ClipboardList, MessagesSquare } from "lucide-react";
-import { portalLogin, portalLogout, portalRpc, portalToken, PortalSessionExpired, type PortalMe } from "./portalApi";
+import { portalChangePassword, portalLogin, portalLogout, portalRpc, portalToken, PortalPasswordChangeRequired, PortalSessionExpired, type PortalMe } from "./portalApi";
 import { PortalStudents } from "./PortalStudents";
 import { PortalRequests, PortalQuestions } from "./PortalHistory";
 import { AskDialog } from "./PortalDialogs";
@@ -13,7 +13,13 @@ import { AskDialog } from "./PortalDialogs";
 // חיבור שפג באמצע עבודה (30 דקות בלי פעילות, או שהמשרד שינה סיסמה) מחזיר
 // למסך הכניסה מכל מקום - שאילתה או שליחה - עם הסבר, ולא עם הודעת שגיאה.
 let handleExpired = () => {};
-const onError = (error: unknown) => { if (error instanceof PortalSessionExpired) handleExpired(); };
+// סיסמה ראשונית שעוד לא הוחלפה (מיגרציה 138): השרת חוסם כל פעולה, והמסך עובר לבחירת סיסמה.
+// קורה גם אחרי רענון של הדף באמצע, כשהאסימון עוד שמור אבל הסיסמה לא הוחלפה.
+let handleChangeRequired = () => {};
+const onError = (error: unknown) => {
+  if (error instanceof PortalSessionExpired) handleExpired();
+  else if (error instanceof PortalPasswordChangeRequired) handleChangeRequired();
+};
 
 const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError }),
@@ -21,7 +27,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: (count, error) => !(error instanceof PortalSessionExpired) && count < 1,
+      retry: (count, error) => !(error instanceof PortalSessionExpired) && !(error instanceof PortalPasswordChangeRequired) && count < 1,
     },
   },
 });
@@ -29,37 +35,46 @@ const queryClient = new QueryClient({
 export default function PortalApp() {
   const [loggedIn, setLoggedIn] = useState(() => !!portalToken.get());
   const [notice, setNotice] = useState<string | null>(null);
+  const [mustChange, setMustChange] = useState(false);
 
   useEffect(() => {
     handleExpired = () => {
       queryClient.clear();
       setLoggedIn(false);
+      setMustChange(false);
       setNotice("החיבור הסתיים (אחרי 30 דקות בלי פעילות, או שהסיסמה שונתה). יש להיכנס שוב.");
     };
-    return () => { handleExpired = () => {}; };
+    handleChangeRequired = () => {
+      queryClient.clear();
+      setMustChange(true);
+    };
+    return () => { handleExpired = () => {}; handleChangeRequired = () => {}; };
   }, []);
+
+  const logout = async () => {
+    await portalLogout();
+    queryClient.clear();
+    setLoggedIn(false);
+    setMustChange(false);
+    setNotice(null);
+  };
 
   return (
     <QueryClientProvider client={queryClient}>
       <div dir="rtl" className="min-h-screen bg-surface-muted text-[17px] text-ink">
-        {loggedIn ? (
-          <PortalShell
-            onLogout={async () => {
-              await portalLogout();
-              queryClient.clear();
-              setLoggedIn(false);
-              setNotice(null);
-            }}
-          />
+        {loggedIn && mustChange ? (
+          <PortalChangePassword onDone={() => { queryClient.clear(); setMustChange(false); }} onLogout={logout} />
+        ) : loggedIn ? (
+          <PortalShell onLogout={logout} />
         ) : (
-          <PortalLogin notice={notice} onLoggedIn={() => { setNotice(null); setLoggedIn(true); }} />
+          <PortalLogin notice={notice} onLoggedIn={(change) => { setNotice(null); setMustChange(change); setLoggedIn(true); }} />
         )}
       </div>
     </QueryClientProvider>
   );
 }
 
-function PortalLogin({ notice, onLoggedIn }: { notice: string | null; onLoggedIn: () => void }) {
+function PortalLogin({ notice, onLoggedIn }: { notice: string | null; onLoggedIn: (mustChange: boolean) => void }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -70,8 +85,8 @@ function PortalLogin({ notice, onLoggedIn }: { notice: string | null; onLoggedIn
     setBusy(true);
     setError(null);
     try {
-      await portalLogin(identifier, password);
-      onLoggedIn();
+      const r = await portalLogin(identifier, password);
+      onLoggedIn(r.mustChange);
     } catch (err) {
       setError(err instanceof Error ? err.message : "הכניסה נכשלה.");
     } finally {
@@ -122,6 +137,73 @@ function PortalLogin({ notice, onLoggedIn }: { notice: string | null; onLoggedIn
           {busy ? "נכנס…" : "כניסה"}
         </button>
         <p className="text-center text-sm text-ink-muted">שכחת סיסמה? יש להתקשר למשרד.</p>
+      </form>
+    </main>
+  );
+}
+
+// בחירת סיסמה אישית: בכניסה הראשונה, ואחרי שהמשרד קבע או איפס סיסמה. עד שנשמרה סיסמה
+// חדשה אין גישה לשום דבר אחר בפורטל (השרת אוכף את זה, לא רק המסך).
+function PortalChangePassword({ onDone, onLogout }: { onDone: () => void; onLogout: () => void }) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (next !== repeat) {
+      setError("הסיסמה החדשה והאימות שלה אינם זהים.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await portalChangePassword(current, next);
+      onDone();
+    } catch (err) {
+      if (err instanceof PortalSessionExpired) handleExpired();
+      else setError(err instanceof Error ? err.message : "שמירת הסיסמה נכשלה.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <form onSubmit={submit} className="card w-full max-w-md space-y-5 p-8">
+        <div>
+          <p className="text-sm font-semibold text-brand-500">עולם התורה</p>
+          <h1 className="mt-1 text-3xl font-bold">בחירת סיסמה אישית</h1>
+          <p className="mt-2 text-base text-ink-muted">
+            לפני שממשיכים, יש לבחור סיסמה חדשה שרק אתה יודע. בכניסות הבאות נכנסים איתה.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="portal-cur" className="field-label text-base">הסיסמה שאיתה נכנסת עכשיו</label>
+          <input id="portal-cur" type="password" dir="ltr" autoComplete="current-password" value={current}
+            onChange={(e) => setCurrent(e.target.value)} className="input-field h-12 text-right text-lg" autoFocus />
+        </div>
+        <div>
+          <label htmlFor="portal-new" className="field-label text-base">סיסמה חדשה</label>
+          <input id="portal-new" type="password" dir="ltr" autoComplete="new-password" value={next}
+            onChange={(e) => setNext(e.target.value)} className="input-field h-12 text-right text-lg" />
+          <p className="mt-1 text-sm text-ink-muted">לפחות 6 תווים. לא מספר הטלפון ולא רצף פשוט כמו 123456.</p>
+        </div>
+        <div>
+          <label htmlFor="portal-rep" className="field-label text-base">הסיסמה החדשה שוב, לאימות</label>
+          <input id="portal-rep" type="password" dir="ltr" autoComplete="new-password" value={repeat}
+            onChange={(e) => setRepeat(e.target.value)} className="input-field h-12 text-right text-lg" />
+        </div>
+
+        {error && <p role="alert" className="rounded-control bg-danger-soft p-3 text-base text-danger-ink">{error}</p>}
+
+        <button type="submit" disabled={busy || !current || !next || !repeat} className="btn-primary h-12 w-full text-lg">
+          {busy ? "שומר…" : "שמירת הסיסמה והמשך"}
+        </button>
+        <button type="button" onClick={onLogout} className="btn-secondary h-11 w-full text-base">יציאה</button>
       </form>
     </main>
   );

@@ -26,6 +26,12 @@ export class PortalSessionExpired extends Error {
   constructor() { super("החיבור הסתיים"); }
 }
 
+// מיגרציה 138: אחרי כניסה עם סיסמה ראשונית (4 הספרות, או סיסמה שהמשרד קבע) השרת לא
+// מאפשר שום פעולה עד שראש הקבוצה בוחר סיסמה משלו.
+export class PortalPasswordChangeRequired extends Error {
+  constructor() { super("יש לבחור סיסמה חדשה"); }
+}
+
 export async function portalRpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await client.rpc(fn, { p_token: portalToken.get(), ...args });
   if (error) {
@@ -33,6 +39,7 @@ export async function portalRpc<T>(fn: string, args: Record<string, unknown> = {
       portalToken.clear();
       throw new PortalSessionExpired();
     }
+    if (error.message.includes("portal_password_change_required")) throw new PortalPasswordChangeRequired();
     throw new Error(error.message);
   }
   return data as T;
@@ -46,18 +53,47 @@ const LOGIN_ERROR: Record<string, string> = {
   no_groups: "אין כרגע קבוצות פעילות על שמך. לפרטים יש להתקשר למשרד.",
 };
 
-export async function portalLogin(identifier: string, password: string): Promise<{ name: string }> {
+// משך נעילה בשפה פשוטה. הנעילה מתארכת: 15 דקות, חצי שעה, שעה... עד יממה.
+export function lockDurationText(minutes: number): string {
+  if (minutes < 60) return `${minutes} דקות`;
+  const hours = Math.round(minutes / 60);
+  if (hours >= 24) return "יממה";
+  return hours === 1 ? "שעה" : hours === 2 ? "שעתיים" : `${hours} שעות`;
+}
+
+export async function portalLogin(identifier: string, password: string): Promise<{ name: string; mustChange: boolean }> {
   const { data, error } = await client.rpc("portal_login", { p_identifier: identifier, p_password: password });
   if (error) throw new Error("לא ניתן להתחבר כרגע. נסו שוב בעוד כמה דקות.");
-  const r = data as { ok: boolean; token?: string; name?: string; error?: string; minutes?: number };
+  const r = data as { ok: boolean; token?: string; name?: string; error?: string; minutes?: number; must_change?: boolean };
   if (!r.ok) {
     if (r.error === "locked") {
-      throw new Error(`הכניסה ננעלה ל-${r.minutes ?? 15} דקות אחרי 5 ניסיונות שגויים. אפשר לנסות שוב אחר כך, או להתקשר למשרד.`);
+      throw new Error(`הכניסה ננעלה ל-${lockDurationText(r.minutes ?? 15)} אחרי 5 ניסיונות שגויים. אפשר לנסות שוב אחר כך, או להתקשר למשרד.`);
     }
     throw new Error(LOGIN_ERROR[r.error ?? ""] ?? "הכניסה נכשלה.");
   }
   portalToken.set(r.token!);
-  return { name: r.name ?? "" };
+  return { name: r.name ?? "", mustChange: !!r.must_change };
+}
+
+const CHANGE_ERROR: Record<string, string> = {
+  wrong_current: "הסיסמה הנוכחית אינה נכונה.",
+  too_short: "הסיסמה החדשה צריכה להכיל לפחות 6 תווים.",
+  same: "הסיסמה החדשה צריכה להיות שונה מהנוכחית.",
+  from_phone: "אי אפשר להשתמש בספרות מתוך מספר הטלפון שלך. בחרו סיסמה אחרת.",
+  too_simple: "הסיסמה פשוטה מדי (למשל 111111 או 123456). בחרו סיסמה אחרת.",
+};
+
+export async function portalChangePassword(current: string, next: string): Promise<void> {
+  const { data, error } = await client.rpc("portal_change_password", { p_token: portalToken.get(), p_current: current, p_new: next });
+  if (error) {
+    if (error.message.includes("portal_session_expired")) {
+      portalToken.clear();
+      throw new PortalSessionExpired();
+    }
+    throw new Error("לא ניתן לשמור כרגע. נסו שוב בעוד כמה דקות.");
+  }
+  const r = data as { ok: boolean; error?: string };
+  if (!r.ok) throw new Error(CHANGE_ERROR[r.error ?? ""] ?? "שמירת הסיסמה נכשלה.");
 }
 
 export async function portalLogout() {

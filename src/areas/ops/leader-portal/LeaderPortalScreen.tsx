@@ -418,9 +418,30 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
 }
 
 // ===== גישה לפורטל =====
+// מיגרציה 138: הנעילה מתארכת (עד יממה), ולכן כשהיא עוברת את היום מוצג גם התאריך.
+function lockedUntilText(iso: string) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? time : `${formatDate(iso)} ${time}`;
+}
+
+interface PasswordStatusRow {
+  group_leader_id: string;
+  must_change: boolean;
+  chosen_by_leader: boolean;
+  lockout_count: number;
+}
+
+function passwordText(a: AccessRow, p: PasswordStatusRow | undefined) {
+  if (!a.has_password) return null;
+  if (p?.chosen_by_leader) return "ראש הקבוצה בחר סיסמה";
+  if (p?.must_change) return a.password_is_default ? "סיסמת ברירת מחדל - יחליף בכניסה" : "סיסמה מהמשרד - יחליף בכניסה";
+  return a.password_is_default ? "סיסמת ברירת מחדל" : "סיסמה שנקבעה במשרד";
+}
+
 function accessStatus(a: AccessRow) {
   return !a.enabled ? { label: "חסום", severity: "high" as const }
-    : a.locked_until ? { label: `נעול עד ${new Date(a.locked_until).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`, severity: "medium" as const }
+    : a.locked_until ? { label: `נעול עד ${lockedUntilText(a.locked_until)}`, severity: "medium" as const }
     : a.problem ? { label: "דורש טיפול", severity: "medium" as const }
     : { label: "פעיל", severity: "ok" as const };
 }
@@ -438,6 +459,16 @@ function AccessList() {
       if (error) throw error;
       return (data ?? []) as AccessRow[];
     },
+  });
+  // מצב הסיסמה ורצף הנעילות (מיגרציה 138). בלי המיגרציה הקריאה נכשלת, והמסך ממשיך כמו קודם.
+  const passwordQuery = useQuery({
+    queryKey: ["portal-office-password-status"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("portal_leader_password_status");
+      if (error) throw error;
+      return new Map(((data ?? []) as PasswordStatusRow[]).map((p) => [p.group_leader_id, p]));
+    },
+    retry: false,
   });
   const groupsQuery = useQuery({
     queryKey: ["portal-office-leader-groups"],
@@ -460,10 +491,13 @@ function AccessList() {
       return pw;
     },
     onSuccess: (pw) => {
-      setDone(pw ? "הסיסמה נקבעה." : "הסיסמה אופסה ל-4 הספרות האחרונות של הטלפון.");
+      setDone(pw
+        ? "הסיסמה נקבעה. בכניסה הבאה ראש הקבוצה יתבקש לבחור סיסמה משלו."
+        : "הסיסמה אופסה ל-4 הספרות האחרונות של הטלפון. בכניסה הבאה ראש הקבוצה יתבקש לבחור סיסמה משלו.");
       setEditing(null);
       setPassword("");
       qc.invalidateQueries({ queryKey: ["portal-office-access"] });
+      qc.invalidateQueries({ queryKey: ["portal-office-password-status"] });
     },
   });
   const setAccess = useMutation({
@@ -471,7 +505,10 @@ function AccessList() {
       const { error } = await supabase.rpc("portal_set_leader_access", { p_leader_id: id, p_enabled: enabled });
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["portal-office-access"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portal-office-access"] });
+      qc.invalidateQueries({ queryKey: ["portal-office-password-status"] });
+    },
   });
 
   const groupsOf = (a: AccessRow) => (groupsQuery.data?.get(a.group_leader_id) ?? []).join(", ");
@@ -542,7 +579,12 @@ function AccessList() {
                   <td className="whitespace-nowrap px-3 py-2">{a.last_login_at ? formatDate(a.last_login_at) : "טרם נכנס"}</td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <StatusBadge severity={st.severity} label={st.label} />
-                    {a.has_password && <div className="mt-1 text-xs text-ink-muted">{a.password_is_default ? "סיסמת ברירת מחדל" : "סיסמה שנקבעה במשרד"}</div>}
+                    {a.has_password && <div className="mt-1 text-xs text-ink-muted">{passwordText(a, passwordQuery.data?.get(a.group_leader_id))}</div>}
+                    {(passwordQuery.data?.get(a.group_leader_id)?.lockout_count ?? 0) >= 2 && (
+                      <div className="mt-1 text-xs font-medium text-danger-ink">
+                        ננעל {passwordQuery.data?.get(a.group_leader_id)?.lockout_count} פעמים ברצף - ייתכן שמישהו מנחש סיסמה
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     {canManage && (editing === a.group_leader_id ? (
