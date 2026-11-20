@@ -59,7 +59,7 @@ function buildItems(c: OpsCounts): ExceptionCounter[] {
 
 async function fetchPortalCounts(): Promise<ExceptionCounter[]> {
   const [requests, questions] = await Promise.all([
-    supabase.from("portal_change_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    supabase.from("portal_change_requests_view").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("portal_questions").select("id", { count: "exact", head: true }).eq("status", "open"),
   ]);
   if (requests.error || questions.error) return [];

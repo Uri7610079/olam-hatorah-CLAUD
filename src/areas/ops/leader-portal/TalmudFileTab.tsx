@@ -52,7 +52,7 @@ interface Item {
 const one = <T,>(v: any): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null);
 
 export async function countPendingTalmudFile(): Promise<number> {
-  const { count, error } = await supabase.from("portal_change_requests")
+  const { count, error } = await supabase.from("portal_change_requests_view")
     .select("id", { count: "exact", head: true })
     .eq("status", "approved").in("kind", ["new_student", "student_left"]).is("talmud_file_at", null);
   if (error) throw error;
@@ -61,7 +61,7 @@ export async function countPendingTalmudFile(): Promise<number> {
 
 async function fetchItems(done: boolean): Promise<Item[]> {
   const build = () => {
-    let q = supabase.from("portal_change_requests")
+    let q = supabase.from("portal_change_requests_view")
       .select("id, kind, student_id, group_id, payload, decided_at, talmud_file_at, leader:group_leaders(full_name)")
       .eq("status", "approved").in("kind", ["new_student", "student_left"]);
     q = done ? q.not("talmud_file_at", "is", null).order("talmud_file_at", { ascending: false }) : q.is("talmud_file_at", null).order("decided_at");

@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { REQUEST_KIND_LABEL, REQUEST_STATUS, formatDate, requestChanges } from "@/lib/portalRequests";
 import { portalRpc, type PortalQuestion, type PortalRequest } from "./portalApi";
+import { downloadBase64 } from "@/lib/safeFile";
 
 export function PortalRequests() {
   const qc = useQueryClient();
@@ -81,13 +82,7 @@ async function downloadAnswerFile(questionId: string) {
     "portal_answer_attachment_for_leader", { p_question_id: questionId });
   const file = rows?.[0];
   if (!file) return;
-  const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = file.file_name || "קובץ";
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBase64(file.file_base64, file.file_name);
 }
 
 export function PortalQuestions({ onAsk }: { onAsk: () => void }) {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 // סדר המפתחות כאן הוא סדר ההצגה במסך "עיצוב ותצוגה". ערכה חדשה חייבת
-// להתווסף גם לסקריפט ב-index.html, אחרת היא מתאפסת בכל רענון.
+// להתווסף גם לסקריפט public/theme-init.js, אחרת היא מתאפסת בכל רענון.
 export type UiTheme = "classic" | "v2" | "v3";
 
 export const UI_THEME_STORAGE_KEY = "olam-ui-theme";
@@ -52,7 +52,7 @@ export function useIsV3(): boolean {
 }
 
 // ההעדפה נשמרת מקומית בדפדפן (לא ב-DB) בכוונה: היא נקראת ומוחלת עוד לפני
-// שהאפליקציה נטענת (ר' הסקריפט ב-index.html), כדי שלא תהיה הבזקה של הערכה
+// שהאפליקציה נטענת (ר' public/theme-init.js), כדי שלא תהיה הבזקה של הערכה
 // הלא-נכונה בכל טעינה. המחיר: ההעדפה לא עוברת בין מחשבים - סביר לחלוטין
 // להעדפת תצוגה אישית, ובפרט בזמן שמשווים בין שתי הערכות.
 export function useUiTheme() {

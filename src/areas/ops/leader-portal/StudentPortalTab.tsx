@@ -14,7 +14,7 @@ export function StudentPortalTab({ studentId }: { studentId: string }) {
     queryKey: ["student-portal", studentId],
     queryFn: async () => {
       const [requests, questions] = await Promise.all([
-        supabase.from("portal_change_requests")
+        supabase.from("portal_change_requests_view")
           .select("id, kind, status, payload, previous, decision_note, created_at, leader:group_leaders(full_name)")
           .eq("student_id", studentId).order("created_at", { ascending: false }),
         supabase.from("portal_questions")

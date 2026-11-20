@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Download, Eye, Inbox, ListTodo, Paperclip } from "lucide-react";
@@ -19,6 +19,7 @@ import { ColumnFilterSummary, ColumnHeader, useColumnFilters } from "@/component
 import type { FilterColumn } from "@/lib/columnFilters";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useIsV3 } from "@/lib/uiTheme";
+import { base64ToBytes, downloadBase64, downloadBytes, sniffViewableType } from "@/lib/safeFile";
 
 // פורטל ראשי הקבוצות - הצד של המשרד (מיגרציה 111).
 //
@@ -94,13 +95,7 @@ async function downloadRpc(fn: string, args: Record<string, unknown>): Promise<s
   const { data, error } = await supabase.rpc(fn, args);
   const file = Array.isArray(data) ? data[0] : data;
   if (error || !file) return `הורדת הקובץ נכשלה${error ? `: ${error.message}` : ""}`;
-  const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = file.file_name || "קובץ";
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBase64(file.file_base64, file.file_name);
   return null;
 }
 const errText = (e: unknown) => (e instanceof Error ? e.message : (e as { message?: string })?.message ?? "הפעולה נכשלה");
@@ -119,7 +114,7 @@ function activeGroupName(student: any): string | null {
 }
 
 async function fetchRequests(pending: boolean): Promise<RequestRow[]> {
-  let q = supabase.from("portal_change_requests").select(REQUEST_SELECT);
+  let q = supabase.from("portal_change_requests_view").select(REQUEST_SELECT);
   q = pending ? q.eq("status", "pending").order("created_at") : q.neq("status", "pending").order("created_at", { ascending: false }).limit(300);
   const { data, error } = await q;
   if (error) throw error;
@@ -338,13 +333,7 @@ export function QuestionCard({ q }: { q: QuestionRow }) {
       return;
     }
     setDownloadError(null);
-    const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = file.file_name || "קובץ";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBase64(file.file_base64, file.file_name);
   };
 
   return (
@@ -651,18 +640,27 @@ function RequestHistory() {
 }
 
 // ===== צילום ת"ז שצורף לבקשה =====
+// הקובץ הגיע מראש קבוצה, ולכן הסוג נקבע לפי התוכן ולא לפי מה שנשמר איתו: רק
+// תמונה או PDF נפתחים. כל קובץ אחר יורד למחשב ולא נפתח (ר' safeFile.ts).
 function IdPhotoButton({ requestId }: { requestId: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [type, setType] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
   const open = async () => {
     setErr(null);
     const { data, error } = await supabase.rpc("portal_request_attachment", { p_request_id: requestId });
     const file = Array.isArray(data) ? data[0] : data;
     if (error || !file) { setErr("לא ניתן לפתוח את הצילום"); return; }
-    const bytes = Uint8Array.from(atob(file.file_base64), (c) => c.charCodeAt(0));
-    setType(file.file_type ?? "");
-    setUrl(URL.createObjectURL(new Blob([bytes], { type: file.file_type || "application/octet-stream" })));
+    const bytes = base64ToBytes(file.file_base64);
+    const viewable = sniffViewableType(bytes);
+    if (!viewable) {
+      downloadBytes(bytes, file.file_name || "צילום-תעודת-זהות");
+      setErr("הקובץ אינו תמונה או PDF, ולכן הורד למחשב ולא נפתח");
+      return;
+    }
+    setType(viewable);
+    setUrl(URL.createObjectURL(new Blob([bytes], { type: viewable })));
   };
   return (
     <div className="mt-2">

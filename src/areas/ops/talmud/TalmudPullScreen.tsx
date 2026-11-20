@@ -17,6 +17,7 @@ import { TalmudReportRowsView } from "./TalmudReportRowsView";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useIsV3 } from "@/lib/uiTheme";
 import { formatDate, formatDateTime, formatMonth } from "@/lib/format";
+import { downloadBase64 } from "@/lib/safeFile";
 
 // משיכה מתלמוד (מיגרציה 118): המזכיר לוחץ, המערכת נכנסת לתלמוד בשם כל עמותה
 // עם הסיסמה השמורה, והוא מקליד רק את קוד ה-SMS. ההתקדמות עצמה נעשית בשרת
@@ -343,13 +344,7 @@ function PulledFiles({ jobId, refreshKey, autoSave }: { jobId: string; refreshKe
       return false;
     }
     setDownloadError(null);
-    const bytes = Uint8Array.from(atob(row.file_base64), (c) => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: row.file_type || "application/octet-stream" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = row.file_name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadBase64(row.file_base64, row.file_name);
     return true;
   };
   const saved = useRef<Set<string> | null>(null);

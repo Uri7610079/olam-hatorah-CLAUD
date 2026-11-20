@@ -29,7 +29,7 @@
 // קבלת תיעוד/הרשאה בפועל.
 async function fetchFromLeumi(account, sinceDate) {
   throw new Error(
-    `חיבור ה-API של לאומי טרם הוגדר - יש למלא את fetchFromLeumi() בקובץ api/bank-sync.js אחרי קבלת פרטי Open Banking מלאומי (חשבון: ${account.bank_name ?? "לא ידוע"} ${account.account_number ?? ""})`,
+    `חיבור ה-API של לאומי טרם הוגדר - יש למלא את fetchFromLeumi() בקובץ api/bank-sync.js אחרי קבלת פרטי Open Banking מלאומי`,
   );
 }
 
@@ -38,7 +38,7 @@ async function fetchFromLeumi(account, sinceDate) {
 // וקבלת מפתח API.
 async function fetchFromMercantile(account, sinceDate) {
   throw new Error(
-    `חיבור ה-API של מרכנתיל טרם הוגדר - יש למלא את fetchFromMercantile() בקובץ api/bank-sync.js אחרי הרשמה לפורטל המפתחים של מרכנתיל וקבלת מפתח API (חשבון: ${account.bank_name ?? "לא ידוע"} ${account.account_number ?? ""})`,
+    `חיבור ה-API של מרכנתיל טרם הוגדר - יש למלא את fetchFromMercantile() בקובץ api/bank-sync.js אחרי הרשמה לפורטל המפתחים של מרכנתיל וקבלת מפתח API`,
   );
 }
 
@@ -47,7 +47,7 @@ async function fetchFromMercantile(account, sinceDate) {
 // גם על חשבונות פאג"י ספציפית - יש לברר זאת ישירות מול הבנק/הבינלאומי לפני שממלאים כאן.
 async function fetchFromPagi(account, sinceDate) {
   throw new Error(
-    `חיבור ה-API של פאג"י טרם הוגדר - יש לוודא קודם מול הבנק הבינלאומי הראשון (הבעלים של פאג"י) האם ה-API העסקי שלו חל על חשבונות פאג"י, ואז למלא את fetchFromPagi() (חשבון: ${account.bank_name ?? "לא ידוע"} ${account.account_number ?? ""})`,
+    `חיבור ה-API של פאג"י טרם הוגדר - יש לוודא קודם מול הבנק הבינלאומי הראשון (הבעלים של פאג"י) האם ה-API העסקי שלו חל על חשבונות פאג"י, ואז למלא את fetchFromPagi()`,
   );
 }
 
@@ -86,11 +86,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Vercel Cron שולח בקשת GET; מאפשרים גם POST ידני לבדיקה, אבל תמיד מוגנים ע"י
-  // secret ה-Cron של Vercel עצמו (CRON_SECRET, נבדק אוטומטית ע"י Vercel) - כאן רק
-  // ודאות נוספת שלא קוראים בטעות בלי הכתובת הנכונה.
   if (req.method !== "GET" && req.method !== "POST") {
     res.status(405).json({ error: "method not allowed" });
+    return;
+  }
+
+  // רק Vercel Cron רשאי להפעיל. Vercel שולח "Authorization: Bearer <CRON_SECRET>" כשהמשתנה
+  // CRON_SECRET מוגדר בפרויקט - הוא לא בודק את זה בעצמו, הבדיקה חייבת להיות כאן. עד
+  // ביקורת האבטחה (20.11.2026) כל אחד באינטרנט יכול היה להפעיל את הפונקציה ולקבל
+  // בתשובה את הודעות השגיאה, ובהן מספרי החשבון. בלי CRON_SECRET - הכול חסום.
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || req.headers.authorization !== `Bearer ${cronSecret}`) {
+    res.status(401).json({ error: "unauthorized" });
     return;
   }
 
@@ -143,7 +150,7 @@ export default async function handler(req, res) {
         } catch (logErr) {
           console.error("log_failed_bank_sync_run also failed:", logErr);
         }
-        results.push({ setting_id: account.setting_id, ok: false, error: String(err?.message ?? err) });
+        results.push({ setting_id: account.setting_id, ok: false });
       }
     }
   } catch (err) {
