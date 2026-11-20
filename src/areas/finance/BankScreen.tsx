@@ -48,7 +48,7 @@ export function BankScreen({ initialTab = "transactions" }: { initialTab?: BankT
   const [searchParams] = useSearchParams();
   const orgsQuery = useQuery({ queryKey: ["organizations-active"], queryFn: fetchOrgs });
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [accountId, setAccountId] = useLastSelected<string>("last-bank-account", "");
+  const [savedAccountId, setAccountId] = useLastSelected<string>("last-bank-account", "");
   const [tab, setTab] = useState<BankTab>(initialTab);
 
   // קישור מכרטיס חריגה בדשבורד הכספי מגיע עם ?org=<id> - עדיף על "הבחירה האחרונה"
@@ -60,6 +60,12 @@ export function BankScreen({ initialTab = "transactions" }: { initialTab?: BankT
   }, []);
 
   const bankAccountsQuery = useQuery({ queryKey: ["bank-org-accounts", orgId], queryFn: () => fetchOrgBankAccounts(orgId), enabled: !!orgId });
+
+  // "החשבון האחרון שנבחר" נשמר בנפרד מהעמותה, ויכול להיות של עמותה אחרת: למשל כשהעמותה
+  // הוחלפה מקישור (?org=) או במסך אחר. בלי הבדיקה הזו המסך הציג עמותה אחת ותנועות
+  // והתאמות של חשבון מעמותה אחרת. חשבון נחשב נבחר רק כשהוא ברשימת החשבונות של העמותה.
+  const accountId =
+    savedAccountId && (bankAccountsQuery.data ?? []).some((a) => a.id === savedAccountId) ? savedAccountId : "";
 
   return (
     <div>

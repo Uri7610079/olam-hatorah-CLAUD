@@ -346,6 +346,7 @@ function TransactionTypesPanel() {
   const [form, setForm] = useState(EMPTY_TYPE_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["bank-transaction-types"] });
 
@@ -365,7 +366,9 @@ function TransactionTypesPanel() {
   };
 
   const toggleActive = async (row: TransactionTypeRow) => {
-    await supabase.from("bank_transaction_types").update({ is_active: !row.is_active }).eq("id", row.id);
+    // עד היום כישלון נבלע, והלחיצה נראתה כאילו לא עשתה כלום
+    const { error: toggleErr } = await supabase.from("bank_transaction_types").update({ is_active: !row.is_active }).eq("id", row.id);
+    setStatusError(toggleErr ? `שינוי הסטטוס נכשל: ${toggleErr.message}` : null);
     refresh();
   };
 
@@ -442,6 +445,7 @@ function TransactionTypesPanel() {
       )}
 
       <div className="mt-4">
+        {statusError && <div className="mb-3"><ErrorState message={statusError} /></div>}
         <DataTable columns={columns} rows={query.data ?? []} rowKey={(r) => r.id} loading={query.isLoading} emptyTitle="אין סוגי תנועה" emptyIcon={Tags} />
       </div>
     </div>
@@ -558,6 +562,7 @@ function RecognitionRulesPanel() {
   const [form, setForm] = useState(EMPTY_RULE_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   // תרומה שזוהתה לפי הכלל נרשמת לקבוצה הזו ומאושרת לבד (125). בלי קבוצה - ממתינה לשיוך.
   const groupsQuery = useQuery({
@@ -609,7 +614,9 @@ function RecognitionRulesPanel() {
   };
 
   const toggleActive = async (rule: RuleRow) => {
-    await supabase.from("recognition_rules").update({ is_active: !rule.is_active }).eq("id", rule.id);
+    // עד היום כישלון נבלע, והלחיצה נראתה כאילו לא עשתה כלום
+    const { error: toggleErr } = await supabase.from("recognition_rules").update({ is_active: !rule.is_active }).eq("id", rule.id);
+    setStatusError(toggleErr ? `שינוי הסטטוס נכשל: ${toggleErr.message}` : null);
     refresh();
   };
 
@@ -833,6 +840,7 @@ function RecognitionRulesPanel() {
       )}
 
       <div className="mt-4">
+        {statusError && <div className="mb-3"><ErrorState message={statusError} /></div>}
         <DataTable columns={columns} rows={rulesQuery.data ?? []} rowKey={(r) => r.id} loading={rulesQuery.isLoading} emptyTitle="אין כללי זיהוי" emptyIcon={ScanSearch} />
       </div>
     </div>

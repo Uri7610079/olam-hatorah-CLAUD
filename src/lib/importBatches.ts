@@ -148,9 +148,11 @@ export async function createImportBatch(params: CreateBatchParams, rows: Classif
   const { error: uploadError } = await supabase.storage.from(storageBucket).upload(path, file);
   if (uploadError) throw new Error(`העלאת הקובץ נכשלה: ${uploadError.message}`);
 
-  const { data: batch, error: batchError } = await supabase
-    .from("import_batches")
-    .insert({
+  // האצווה והשורות שלה נשמרות בפעולה אחת (מיגרציה 135). עד היום אלה היו שתי קריאות:
+  // כשל בשמירת השורות השאיר אצווה ריקה, ובגלל שאסור לקלוט אותו קובץ פעמיים (לפי
+  // טביעת הקובץ) - גם ניסיון חוזר נחסם. עכשיו כשל מבטל הכול, ואפשר פשוט לנסות שוב.
+  const { data: batchId, error: batchError } = await supabase.rpc("create_import_batch_with_rows", {
+    p_batch: {
       profile_id: profileId,
       organization_id: organizationId || null,
       period_month: periodMonth || null,
@@ -161,24 +163,17 @@ export async function createImportBatch(params: CreateBatchParams, rows: Classif
       valid_count: rows.filter((r) => r.status === "valid").length,
       needs_decision_count: rows.filter((r) => r.status === "needs_decision").length,
       invalid_count: rows.filter((r) => r.status === "invalid").length,
-      status: "previewed",
-    })
-    .select("id")
-    .single();
-  if (batchError || !batch) throw new Error(batchError?.message ?? "יצירת האצווה נכשלה");
-
-  const { error: rowsError } = await supabase.from("import_rows").insert(
-    rows.map((r) => ({
-      batch_id: batch.id,
+    },
+    p_rows: rows.map((r) => ({
       row_number: r.rowNumber,
       raw: r.raw,
       status: r.status,
       error_message: r.errorMessage,
     })),
-  );
-  if (rowsError) throw new Error(`שמירת השורות נכשלה: ${rowsError.message}`);
+  });
+  if (batchError || !batchId) throw new Error(batchError?.message ?? "יצירת האצווה נכשלה");
 
-  return { batchId: batch.id, rows };
+  return { batchId: batchId as string, rows };
 }
 
 export interface StoredImportRow {

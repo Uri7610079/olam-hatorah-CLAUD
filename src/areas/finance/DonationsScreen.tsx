@@ -1,3 +1,4 @@
+import { fetchAll } from "@/lib/fetchAll";
 import { todayLocalIso } from "@/lib/today";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -65,16 +66,19 @@ async function fetchOrgGroups(orgId: string): Promise<GroupOption[]> {
 }
 
 async function fetchDonations(orgId: string, unassignedOnly: boolean): Promise<DonationRow[]> {
-  let query = supabase
-    .from("donations_view")
-    .select(
-      "id, organization_id, group_id, donation_date, amount, donor_reference_masked, reference, status, rejection_reason, source_file_path, notes, group:groups(name)",
-    )
-    .eq("organization_id", orgId)
-    .order("donation_date", { ascending: false });
-  if (unassignedOnly) query = query.is("group_id", null);
-  const { data, error } = await query;
-  if (error) throw error;
+  // fetchAll: מעבר ל-1,000 תרומות הרשימה נחתכה בשקט. id בסוף - לחלוקה יציבה לחלקים.
+  const data = await fetchAll(() => {
+    let query = supabase
+      .from("donations_view")
+      .select(
+        "id, organization_id, group_id, donation_date, amount, donor_reference_masked, reference, status, rejection_reason, source_file_path, notes, group:groups(name)",
+      )
+      .eq("organization_id", orgId)
+      .order("donation_date", { ascending: false })
+      .order("id");
+    if (unassignedOnly) query = query.is("group_id", null);
+    return query;
+  });
   return (data ?? []).map((r: any) => ({ ...r, group: Array.isArray(r.group) ? (r.group[0] ?? null) : r.group }));
 }
 

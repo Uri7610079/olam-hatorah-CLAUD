@@ -208,7 +208,7 @@ export function MasavScreen() {
   const [searchParams] = useSearchParams();
 
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
-  const [bankAccountId, setBankAccountId] = useLastSelected<string>("last-bank-account", "");
+  const [savedBankAccountId, setBankAccountId] = useLastSelected<string>("last-bank-account", "");
   const [periodMonth, setPeriodMonth] = useState(() => todayLocalIso().slice(0, 7) + "-01");
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -228,6 +228,11 @@ export function MasavScreen() {
   }, []);
 
   const bankAccountsQuery = useQuery({ queryKey: ["masav-org-accounts", orgId], queryFn: () => fetchOrgBankAccounts(orgId), enabled: !!orgId });
+  // החשבון המשלם נחשב נבחר רק כשהוא של העמותה הנבחרת. "החשבון האחרון" נשמר בנפרד
+  // מהעמותה, ובלי הבדיקה הזו אפשר היה להכין מס"ב מחשבון של עמותה אחרת (גם השרת
+  // חוסם את זה מעכשיו - מיגרציה 135).
+  const bankAccountId =
+    savedBankAccountId && (bankAccountsQuery.data ?? []).some((a) => a.id === savedBankAccountId) ? savedBankAccountId : "";
   const batchesQuery = useQuery({ queryKey: ["masav-batches", orgId], queryFn: () => fetchBatches(orgId), enabled: !!orgId });
   const linesQuery = useQuery({ queryKey: ["masav-lines", selectedBatchId], queryFn: () => fetchLines(selectedBatchId!), enabled: !!selectedBatchId });
 

@@ -333,13 +333,14 @@ function PulledFiles({ jobId, refreshKey, autoSave }: { jobId: string; refreshKe
   });
   const isV3 = useIsV3();
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const download = async (f: PulledFile) => {
+  // מחזירה true רק כשהקובץ באמת ירד - כדי שההורדה האוטומטית תסמן "נשמר" רק אחרי הצלחה.
+  const download = async (f: PulledFile): Promise<boolean> => {
     const { data, error } = await supabase.rpc("talmud_pulled_file", { p_file_id: f.id });
     const row = Array.isArray(data) ? data[0] : data;
     // עד היום כשל בהורדה נבלע בשקט - הלחיצה פשוט לא עשתה כלום
     if (error || !row) {
       setDownloadError(`הורדת ${f.file_name} נכשלה${error ? `: ${error.message}` : ""}`);
-      return;
+      return false;
     }
     setDownloadError(null);
     const bytes = Uint8Array.from(atob(row.file_base64), (c) => c.charCodeAt(0));
@@ -349,20 +350,29 @@ function PulledFiles({ jobId, refreshKey, autoSave }: { jobId: string; refreshKe
     a.download = row.file_name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
   };
   const saved = useRef<Set<string> | null>(null);
+  const inProgress = useRef(new Set<string>());
   useEffect(() => {
     if (!autoSave || !files.data?.length) return;
     saved.current ??= loadSaved(jobId);
-    const fresh = files.data.filter((f) => !saved.current!.has(f.id));
+    const fresh = files.data.filter((f) => !saved.current!.has(f.id) && !inProgress.current.has(f.id));
     if (!fresh.length) return;
     (async () => {
       for (const f of fresh) {
-        saved.current!.add(f.id);
-        await download(f);
+        // "בטיפול" כבר עכשיו, כדי שרענון רשימה בזמן ההורדה לא יוריד את הקובץ פעמיים
+        inProgress.current.add(f.id);
+        const ok = await download(f);
+        inProgress.current.delete(f.id);
+        // נשמר רק אחרי הורדה מוצלחת. עד היום הקובץ סומן "נשמר" לפני ההורדה, והורדה
+        // שנכשלה לא נוסתה שוב לעולם.
+        if (ok) {
+          saved.current!.add(f.id);
+          rememberSaved(jobId, saved.current!);
+        }
         await new Promise((r) => setTimeout(r, 400)); // דפדפן חוסם הרבה הורדות בבת אחת
       }
-      rememberSaved(jobId, saved.current!);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSave, files.data, jobId]);

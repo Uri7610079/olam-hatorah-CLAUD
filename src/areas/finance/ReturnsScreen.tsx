@@ -184,6 +184,17 @@ export function ReturnsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // החלפת עמותה (בבורר או מקישור) מאפסת את כל מה שנבחר בתוך העמותה הקודמת - אצווה,
+  // שורת תשלום, החזרה ופרטי התשלום החוזר. עד היום הם נשארו, והטופס יכול היה להציג
+  // עמותה אחת עם תשלום מעמותה אחרת.
+  useEffect(() => {
+    setBatchId("");
+    setLineId("");
+    setSelectedReturnId(null);
+    setRetryAccountId("");
+    setRetryLineId("");
+  }, [orgId]);
+
   const batchesQuery = useQuery({ queryKey: ["returns-transmitted-batches", orgId], queryFn: () => fetchTransmittedBatches(orgId), enabled: !!orgId });
   const linesQuery = useQuery({ queryKey: ["returns-valid-lines", batchId], queryFn: () => fetchValidLines(batchId), enabled: !!batchId });
   const returnsQuery = useQuery({ queryKey: ["payment-returns", orgId], queryFn: () => fetchReturns(orgId), enabled: !!orgId });

@@ -115,33 +115,41 @@ async function fetchMasavBatchOptions(accountId: string): Promise<MasavBatchOpti
 async function fetchDonationOptions(orgId: string): Promise<DonationOption[]> {
   // donations_view (לא הטבלה הבסיסית) - donor_reference ממוסך כברירת מחדל, בדיוק כמו בכל
   // מסך אחר שמציג תרומות (ר' תיקון שלב 16: הטבלה הבסיסית עצמה דורשת עכשיו view_sensitive).
-  const { data, error } = await supabase
-    .from("donations_view")
-    .select("id, amount, donation_date, donor_reference_masked")
-    .eq("organization_id", orgId)
-    .eq("status", "approved")
-    .order("donation_date", { ascending: false })
-    .limit(50);
-  if (error) throw error;
-  return data ?? [];
+  // כל התרומות המאושרות (fetchAll) - עד היום רק 50 האחרונות, ותרומה ישנה יותר לא
+  // הופיעה כאפשרות התאמה בכלל.
+  return fetchAll(() =>
+    supabase
+      .from("donations_view")
+      .select("id, amount, donation_date, donor_reference_masked")
+      .eq("organization_id", orgId)
+      .eq("status", "approved")
+      .order("donation_date", { ascending: false })
+      .order("id"),
+  );
 }
 
 async function fetchReturnOptions(orgId: string): Promise<ReturnOption[]> {
   // payment_returns has two FKs into masav_lines (original + retry) - חייבים לציין את שם
   // ה-FK במפורש (אותו דפוס PGRST201 שכבר תועד ב-ReturnsScreen/שלב 10).
-  const { data, error } = await supabase
-    .from("payment_returns")
-    .select("id, amount, return_date, reason, masav_line:masav_lines!payment_returns_masav_line_id_fkey(batch:masav_batches(organization_id))")
-    .in("status", ["open", "retried"])
-    .order("return_date", { ascending: false });
-  if (error) throw error;
+  // fetchAll: הסינון לעמותה נעשה אחרי הטעינה, ולכן חייבים את כל השורות
+  const data = await fetchAll(() =>
+    supabase
+      .from("payment_returns")
+      .select("id, amount, return_date, reason, masav_line:masav_lines!payment_returns_masav_line_id_fkey(batch:masav_batches(organization_id))")
+      .in("status", ["open", "retried"])
+      .order("return_date", { ascending: false })
+      .order("id"),
+  );
   return (data ?? [])
     .map((r: any) => ({ ...r, masav_line: Array.isArray(r.masav_line) ? r.masav_line[0] : r.masav_line }))
     .map((r: any) => ({ ...r, _orgId: Array.isArray(r.masav_line.batch) ? r.masav_line.batch[0]?.organization_id : r.masav_line.batch?.organization_id }))
     .filter((r: any) => r._orgId === orgId);
 }
 
-async function fetchInterAccountOptions(orgId: string, excludeTransactionId: string): Promise<InterAccountOption[]> {
+// העברה בין חשבונות: הצד השני הוא תנועה באותו סכום בחשבון אחר של העמותה. עד היום
+// הוצגו 50 התנועות האחרונות מכל הסוגים - והצד השני של העברה ישנה לא הופיע. עכשיו:
+// כל התנועות באותו סכום, בלי הגבלה.
+async function fetchInterAccountOptions(orgId: string, excludeTransactionId: string, amount: number): Promise<InterAccountOption[]> {
   const { data: accounts } = await supabase.from("organization_bank_accounts_view").select("id").eq("organization_id", orgId);
   const accountIds = (accounts ?? []).map((a) => a.id);
   if (accountIds.length === 0) return [];
@@ -150,8 +158,8 @@ async function fetchInterAccountOptions(orgId: string, excludeTransactionId: str
     .select("id, execution_date, amount, description")
     .in("organization_bank_account_id", accountIds)
     .neq("id", excludeTransactionId)
-    .order("execution_date", { ascending: false })
-    .limit(50);
+    .eq("amount", amount)
+    .order("execution_date", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
@@ -182,8 +190,8 @@ export function BankMatchingPanel({ orgId, accountId }: { orgId: string; account
   const returnOptionsQuery = useQuery({ queryKey: ["matching-return-options", orgId], queryFn: () => fetchReturnOptions(orgId), enabled: !!orgId && matchType === "return" });
   const interAccountOptionsQuery = useQuery({
     queryKey: ["matching-inter-account-options", orgId, selectedTransactionId],
-    queryFn: () => fetchInterAccountOptions(orgId, selectedTransactionId!),
-    enabled: !!orgId && !!selectedTransactionId && matchType === "inter_account_transfer",
+    queryFn: () => fetchInterAccountOptions(orgId, selectedTransactionId!, transactionsQuery.data?.find((t) => t.id === selectedTransactionId)?.amount ?? 0),
+    enabled: !!orgId && !!selectedTransactionId && !!transactionsQuery.data && matchType === "inter_account_transfer",
   });
 
   const selectedTransaction = transactionsQuery.data?.find((t) => t.id === selectedTransactionId) ?? null;

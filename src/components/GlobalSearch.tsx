@@ -20,7 +20,9 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
 };
 
 async function search(term: string): Promise<SearchResult[]> {
-  const like = `%${term}%`;
+  // פסיק וסוגריים שוברים את תחביר ה-or של PostgREST ("full_name.ilike...,external_id...") -
+  // מסירים אותם מהמונח. % ו-_ הם תווים כלליים של ilike, ונשארים כמו קודם.
+  const like = `%${term.replace(/[,()]/g, " ").trim()}%`;
   const [students, groups, branches, orgs, tasks] = await Promise.all([
     supabase.from("students").select("id, external_id, full_name").or(`full_name.ilike.${like},external_id.ilike.${like}`).limit(5),
     supabase.from("groups").select("id, name, branch:branches(organization_id)").ilike("name", like).limit(5),
@@ -28,6 +30,9 @@ async function search(term: string): Promise<SearchResult[]> {
     supabase.from("organizations").select("id, legal_name").ilike("legal_name", like).limit(5),
     supabase.from("tasks").select("id, title").ilike("title", like).limit(5),
   ]);
+
+  // כל החיפושים נכשלו (בעיית רשת, למשל) - שגיאה, ולא "אין תוצאות" שמטעה
+  if ([students, groups, branches, orgs, tasks].every((r) => r.error)) throw new Error("search failed");
 
   const results: SearchResult[] = [];
   for (const s of students.data ?? []) results.push({ kind: "student", id: s.id, label: s.full_name, sublabel: s.external_id, href: `/ops/students/${s.id}` });
@@ -48,6 +53,7 @@ async function search(term: string): Promise<SearchResult[]> {
 export function GlobalSearch() {
   const navigate = useNavigate();
   const [term, setTerm] = useState("");
+  const [searchFailed, setSearchFailed] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,13 +63,28 @@ export function GlobalSearch() {
       setResults([]);
       return;
     }
+    // תשובה של חיפוש קודם שמגיעה אחרי שהמונח השתנה - לא מוצגת (עד היום יכלה לדרוס
+    // את תוצאות החיפוש החדש).
+    let stale = false;
     const handle = setTimeout(() => {
-      search(term.trim()).then((r) => {
-        setResults(r);
-        setOpen(true);
-      });
+      search(term.trim())
+        .then((r) => {
+          if (stale) return;
+          setSearchFailed(false);
+          setResults(r);
+          setOpen(true);
+        })
+        .catch(() => {
+          if (stale) return;
+          setSearchFailed(true);
+          setResults([]);
+          setOpen(true);
+        });
     }, 250);
-    return () => clearTimeout(handle);
+    return () => {
+      stale = true;
+      clearTimeout(handle);
+    };
   }, [term]);
 
   useEffect(() => {
@@ -108,7 +129,7 @@ export function GlobalSearch() {
         </div>
       )}
       {open && term.trim().length >= 2 && results.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-control border border-line bg-surface p-3 text-sm text-ink-subtle shadow-lg">אין תוצאות</div>
+        <div className="absolute z-20 mt-1 w-full rounded-control border border-line bg-surface p-3 text-sm text-ink-subtle shadow-lg">{searchFailed ? "החיפוש נכשל. כדאי לנסות שוב." : "אין תוצאות"}</div>
       )}
     </div>
   );

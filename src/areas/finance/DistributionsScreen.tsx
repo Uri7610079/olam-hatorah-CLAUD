@@ -333,19 +333,13 @@ export function DistributionsScreen() {
       })
       .filter((r) => r.amount > 0);
 
-    const { error: delErr } = await supabase.from("distribution_lines").delete().eq("batch_id", selectedBatchId);
-    if (delErr) {
+    // מחיקה והוספה בפעולה אחת (מיגרציה 135): אם ההוספה נכשלת, גם המחיקה מתבטלת
+    // והשורות הקודמות נשארות. עד היום אלה היו שתי קריאות, וכשל בשנייה השאיר אצווה ריקה.
+    const { error: saveErr } = await supabase.rpc("replace_distribution_lines", { p_batch_id: selectedBatchId, p_lines: rows });
+    if (saveErr) {
       setSavingLines(false);
-      setError(delErr.message);
+      setError(saveErr.message);
       return;
-    }
-    if (rows.length > 0) {
-      const { error: insErr } = await supabase.from("distribution_lines").insert(rows.map((r) => ({ batch_id: selectedBatchId, ...r })));
-      if (insErr) {
-        setSavingLines(false);
-        setError(insErr.message);
-        return;
-      }
     }
     setSavingLines(false);
     refreshBatch();

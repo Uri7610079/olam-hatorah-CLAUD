@@ -718,7 +718,9 @@ export function TasksSettingsScreen() {
   };
 
   const toggleTeamActive = async (team: TeamRow) => {
-    await supabase.from("teams").update({ is_active: !team.is_active }).eq("id", team.id);
+    // עד היום כישלון נבלע, והלחיצה נראתה כאילו לא עשתה כלום
+    const { error: toggleErr } = await supabase.from("teams").update({ is_active: !team.is_active }).eq("id", team.id);
+    setError(toggleErr ? `שינוי הסטטוס נכשל: ${toggleErr.message}` : null);
     queryClient.invalidateQueries({ queryKey: ["all-teams"] });
     queryClient.invalidateQueries({ queryKey: ["teams"] });
   };
@@ -738,7 +740,9 @@ export function TasksSettingsScreen() {
   };
 
   const toggleCategoryActive = async (cat: { id: string; is_active: boolean }) => {
-    await supabase.from("task_categories").update({ is_active: !cat.is_active }).eq("id", cat.id);
+    // עד היום כישלון נבלע, והלחיצה נראתה כאילו לא עשתה כלום
+    const { error: toggleErr } = await supabase.from("task_categories").update({ is_active: !cat.is_active }).eq("id", cat.id);
+    setError(toggleErr ? `שינוי הסטטוס נכשל: ${toggleErr.message}` : null);
     queryClient.invalidateQueries({ queryKey: ["all-task-categories"] });
     queryClient.invalidateQueries({ queryKey: ["task-categories"] });
   };

@@ -82,6 +82,7 @@ export function StudyCodesScreen() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["study-codes"] });
 
@@ -105,7 +106,9 @@ export function StudyCodesScreen() {
   };
 
   const toggleActive = async (row: StudyCode) => {
-    await supabase.from("study_codes").update({ is_active: !row.is_active }).eq("id", row.id);
+    // עד היום כישלון נבלע, והלחיצה נראתה כאילו לא עשתה כלום
+    const { error: toggleErr } = await supabase.from("study_codes").update({ is_active: !row.is_active }).eq("id", row.id);
+    setStatusError(toggleErr ? `שינוי הסטטוס נכשל: ${toggleErr.message}` : null);
     refresh();
   };
 
@@ -199,6 +202,7 @@ export function StudyCodesScreen() {
             </form>
           )}
 
+          {statusError && <div className="mb-3"><ErrorState message={statusError} /></div>}
           <DataTable columns={columns} rows={query.data ?? []} rowKey={(r) => r.id} loading={query.isLoading} emptyTitle="אין קודי לימוד" emptyIcon={BookOpen} />
         </>
       )}

@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/EmptyState";
 import { todayLocalIso } from "@/lib/today";
 import { fetchAll } from "@/lib/fetchAll";
 import { useState } from "react";
@@ -229,7 +230,8 @@ export function EligibilityScreen() {
   const amountCheckQuery = useQuery({
     queryKey: ["eligibility-amount-check", orgId, month],
     queryFn: () => fetchAmountCheck(orgId, month),
-    enabled: !!orgId && !!month && sectionTab === "amounts",
+    // v3: נטען כבר בפתיחת המסך, כדי שכרטיס "פערי סכומים" יציג מספר ולא יסתיר חריגה
+    enabled: !!orgId && !!month && (sectionTab === "amounts" || isV3),
   });
 
   const resetForm = () => {
@@ -388,6 +390,9 @@ export function EligibilityScreen() {
   const monthTotal = monthRows.reduce((sum, r) => sum + Number(r.gross_amount || 0), 0);
   const gapCount = amountCheckQuery.data ? amountCheckQuery.data.filter((r) => hasGap(r.difference)).length : null;
   const batchesWithRejected = (batchesQuery.data ?? []).filter((b) => b.status === "committed" && b.invalid_count > 0);
+  // עוד לא נקלט דוח זכאות לחודש: אין עם מה להשוות. בלי ההבחנה הזו כל תלמיד פעיל
+  // נספר "לא הופיע בדוח", והסכום מוצג כאפס - כאילו זו תוצאה ולא היעדר נתונים.
+  const noReport = !monthDataQuery.isLoading && !!monthDataQuery.data && monthRows.length === 0;
   const importStep = batchImportStep({ reviewing: !!reviewBatchId, committed: reviewBatchQuery.data?.status === "committed", previewing: !!parsedRows && !duplicateId });
   const importVisible = !isV3 || showImport || !!file;
 
@@ -462,26 +467,27 @@ export function EligibilityScreen() {
         <div className="mb-4 grid max-w-4xl grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard
             label={`זכאות ל${formatMonth(month)}`}
-            value={monthDataQuery.isLoading ? "…" : formatMoney(monthTotal)}
+            value={monthDataQuery.isLoading ? "…" : noReport ? "—" : formatMoney(monthTotal)}
+            hint={noReport ? "טרם נקלט דוח זכאות לחודש הזה" : undefined}
             tone="primary"
             emphasis
             muted={!monthDataQuery.isLoading && monthRows.length === 0}
           />
           <MetricCard
             label="תלמידים זכאים"
-            value={monthDataQuery.isLoading ? "…" : formatCount(monthRows.length)}
+            value={monthDataQuery.isLoading ? "…" : noReport ? "—" : formatCount(monthRows.length)}
             muted={!monthDataQuery.isLoading && monthRows.length === 0}
           />
           <MetricCard
             label="פעילים שלא הופיעו בדוח"
-            value={missingQuery.isLoading ? "…" : formatCount(missingQuery.data?.length ?? 0)}
+            value={noReport ? "—" : missingQuery.isLoading ? "…" : formatCount(missingQuery.data?.length ?? 0)}
+            hint={noReport ? "אין עדיין דוח להשוות אליו" : undefined}
             tone="warn"
-            muted={!missingQuery.data?.length}
+            muted={noReport || !missingQuery.data?.length}
           />
           <MetricCard
             label="פערי סכומים לבירור"
-            value={gapCount === null ? "—" : formatCount(gapCount)}
-            hint={gapCount === null ? "נבדק בלשונית \"בדיקת סכומים\"" : undefined}
+            value={noReport ? "—" : gapCount === null ? "…" : formatCount(gapCount)}
             tone="high"
             muted={!gapCount}
           />
@@ -493,7 +499,10 @@ export function EligibilityScreen() {
       {isV3 && orgId && batchesWithRejected.length > 0 && sectionTab !== "history" && (
         <div className="mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-2 rounded-control border border-warn/30 bg-warn-soft px-3 py-2.5 text-sm text-warn-ink">
           <span>
-            {batchesWithRejected.length === 1 ? "יבוא אחד נקלט" : `${formatCount(batchesWithRejected.length)} יבואים נקלטו`} עם שורות שנדחו. אם הנתונים החסרים כבר הוזנו - אפשר להשלים אותן.
+            {batchesWithRejected.length === 1 ? "יבוא אחד נקלט" : `${formatCount(batchesWithRejected.length)} יבואים נקלטו`} עם שורות שנדחו
+            {/* לאיזה חודש שייך כל יבוא - ההודעה נגזרת מכל היסטוריית העמותה, לא רק מהחודש שנבחר */}
+            {` (${[...new Set(batchesWithRejected.map((b) => (b.period_month ? formatMonth(b.period_month) : "בלי חודש")))].join(", ")}; ${formatCount(batchesWithRejected.reduce((n, b) => n + b.invalid_count, 0))} שורות)`}
+            . אם הנתונים החסרים כבר הוזנו - אפשר להשלים אותן.
           </span>
           <button type="button" onClick={() => setSectionTab("history")} className="btn-secondary px-3 py-1.5 text-sm">
             להשלמת שורות שנדחו
@@ -634,7 +643,10 @@ export function EligibilityScreen() {
             />
           )}
 
-          {sectionTab === "missing" && (
+          {sectionTab === "missing" && noReport && (
+            <EmptyState title="טרם נקלט דוח זכאות לחודש הזה" description="אחרי קליטת הדוח יוצגו כאן תלמידים פעילים שלא הופיעו בו." />
+          )}
+          {sectionTab === "missing" && !noReport && (
             <DataTable
               columns={[
                 { key: "id", header: "מזהה", className: "tabular ltr-num", render: (r: MissingStudent) => r.external_id },
