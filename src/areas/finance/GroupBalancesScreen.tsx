@@ -90,6 +90,28 @@ async function fetchGroupBalances(orgId: string): Promise<GroupBalanceRow[]> {
   return (data ?? []).map((r) => ({ group_id: r.group_id, group_name: groupLabel(r.group_name, branchById.get(r.branch_id)), balance: r.balance }));
 }
 
+// כסף שנכנס לעמותה עבור תלמידים בלי קבוצה: החישוב החודשי מחשב להם נטו, אבל אין קבוצה
+// שאפשר לזקוף לה אותו, ולכן הוא לא מופיע באף יתרה. מוצג בנפרד כ"חסרי שיוך" - כדי שהכסף
+// לא ייעלם מהתמונה עד שהתלמידים ישויכו.
+export interface UnassignedMoney {
+  net: number;
+  students: number;
+}
+export function sumUnassigned(rows: { net_amount: number | string; student_id: string }[]): UnassignedMoney {
+  const net = rows.reduce((sum, r) => sum + (Number(r.net_amount) || 0), 0);
+  return { net: Math.round(net * 100) / 100, students: new Set(rows.map((r) => r.student_id)).size };
+}
+async function fetchUnassignedMoney(orgId: string): Promise<UnassignedMoney> {
+  const data = await fetchAll(() => supabase
+    .from("eligibility_financial_results")
+    .select("id, net_amount, student_id")
+    .eq("organization_id", orgId)
+    .eq("status", "active")
+    .is("group_id", null)
+    .order("id"));
+  return sumUnassigned((data ?? []) as { net_amount: number; student_id: string }[]);
+}
+
 async function fetchLedgerEntries(groupId: string): Promise<LedgerEntry[]> {
   const data = await fetchAll(() => supabase
     .from("group_ledger_entries")
@@ -115,6 +137,8 @@ export function GroupBalancesScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const balancesQuery = useQuery({ queryKey: ["group-balances", orgId], queryFn: () => fetchGroupBalances(orgId), enabled: !!orgId });
+  const unassignedQuery = useQuery({ queryKey: ["group-balances-unassigned", orgId], queryFn: () => fetchUnassignedMoney(orgId), enabled: !!orgId });
+  const unassigned = unassignedQuery.data;
   const entriesQuery = useQuery({ queryKey: ["group-ledger-entries", selectedGroupId], queryFn: () => fetchLedgerEntries(selectedGroupId), enabled: !!selectedGroupId });
 
   const selectedGroup = balancesQuery.data?.find((g) => g.group_id === selectedGroupId) ?? null;
@@ -240,7 +264,7 @@ export function GroupBalancesScreen() {
           {isV3 ? (
             // v3: הסכום הכולל, וכמה קבוצות ביתרת חוב - שני מספרים מהשורות שכבר נטענו
             balancesQuery.data && (
-              <div className="mb-4 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="mb-4 grid max-w-4xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                   label="סך היתרות לכל הקבוצות"
                   value={formatMoney(totalLiabilities)}
@@ -255,6 +279,18 @@ export function GroupBalancesScreen() {
                   tone="danger"
                   muted={negativeCount === 0}
                 />
+                <MetricCard
+                  label="חסרי שיוך"
+                  value={unassigned ? formatMoney(unassigned.net) : "…"}
+                  hint={
+                    unassigned && unassigned.students > 0
+                      ? `נכנס לעמותה, שייך לקבוצות - חסרי שיוך · ${formatNumber(unassigned.students)} תלמידים`
+                      : "נכנס לעמותה, שייך לקבוצות - חסרי שיוך"
+                  }
+                  tone="warn"
+                  muted={!unassigned || unassigned.net === 0}
+                  href="/ops/students/unassigned"
+                />
               </div>
             )
           ) : (
@@ -262,6 +298,11 @@ export function GroupBalancesScreen() {
             <p className="text-xs text-ink-subtle">סך התחייבויות לכל הקבוצות</p>
             <p className={`mt-1 text-xl font-bold tabular ${totalLiabilities < 0 ? "text-danger" : "text-ink"}`}>
               {totalLiabilities.toLocaleString("he-IL")}
+            </p>
+            <p className="mt-3 text-xs text-ink-subtle">חסרי שיוך</p>
+            <p className="mt-1 text-lg font-bold tabular text-ink">{unassigned ? unassigned.net.toLocaleString("he-IL") : "…"}</p>
+            <p className="text-xs text-ink-subtle">
+              נכנס לעמותה, שייך לקבוצות - חסרי שיוך{unassigned && unassigned.students > 0 ? ` · ${unassigned.students} תלמידים` : ""}
             </p>
           </div>
           )}
