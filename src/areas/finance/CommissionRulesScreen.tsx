@@ -17,7 +17,7 @@ import { ErrorState } from "@/components/ErrorState";
 import { CommissionRulesImportPanel } from "./CommissionRulesImportPanel";
 import { ActionsMenu } from "@/components/ActionsMenu";
 import { useIsV3 } from "@/lib/uiTheme";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatMonth } from "@/lib/format";
 
 interface OrgOption {
   id: string;
@@ -61,9 +61,16 @@ interface CommissionRule {
   notes: string | null;
   group: { name: string } | null;
   student: { external_id: string; full_name: string } | null;
+  created_at: string;
 }
 
 const TYPE_LABEL: Record<CalculationType, string> = { percentage: "אחוז", fixed: "קבוע", combined: "משולב" };
+// בטופס - מה כל סוג אומר בפועל
+const TYPE_OPTION_LABEL: Record<CalculationType, string> = {
+  percentage: "אחוז מהזכאות של כל תלמיד",
+  fixed: "סכום קבוע לכל תלמיד בכל חודש",
+  combined: "משולב: אחוז ועוד סכום קבוע",
+};
 // rounding_rule מציין מעתה *כיוון* בלבד; לאיזו כפולה מעגלים נקבע ב-rounding_step
 // (מיגרציה 105). הערכים לא שונו כדי שכללים קיימים ימשיכו לעבוד.
 const ROUNDING_LABEL: Record<RoundingRule, string> = { none: "ללא עיגול", round_int: "לקרוב", ceil_int: "כלפי מעלה", floor_int: "כלפי מטה" };
@@ -110,27 +117,83 @@ async function fetchOrgStudents(orgId: string): Promise<StudentOption[]> {
     .select("students!inner(id, external_id, full_name)")
     .eq("organization_id", orgId)
     .eq("is_active", true).order("id"));
-  return (data ?? []).map((r: any) => r.students);
+  // תלמיד עם יותר משיוך פעיל אחד הופיע ברשימה פעמיים
+  const byId = new Map<string, StudentOption>();
+  for (const r of data ?? []) byId.set((r as any).students.id, (r as any).students);
+  return [...byId.values()];
+}
+
+// החודש הראשון שיש בו זכאות בעמותה - ברירת המחדל של "בתוקף מתאריך" ושל תאריך הסימולציה.
+// עד היום ברירת המחדל הייתה היום, וכלל שנשמר כך לא חל על החודשים שכבר נקלטו.
+async function fetchFirstEligibilityMonth(orgId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("monthly_eligibility")
+    .select("month")
+    .eq("organization_id", orgId)
+    .eq("status", "active")
+    .order("month", { ascending: true })
+    .limit(1);
+  if (error) throw error;
+  return (data?.[0]?.month as string | undefined) ?? null;
+}
+
+// הודעת שגיאה מהמסד בשפה של המשתמש. ההודעות של כללי העמלה כבר בעברית (מיגרציה 140);
+// שגיאת אילוץ טכנית באנגלית מוחלפת בהסבר כללי.
+function friendlyError(message: string): string {
+  if (/violates check constraint|invalid input syntax/i.test(message)) return "אחד הערכים בכלל אינו תקין. כדאי לבדוק את האחוז, הסכום והתאריכים.";
+  if (/permission denied|row-level security/i.test(message)) return "אין לך הרשאה לשנות כללי עמלה.";
+  return message;
+}
+
+// בדיקה לפני שמירה, באותן מילים כמו במסד - כדי שהמשתמש יראה את הבעיה לפני הלחיצה
+export function validateRuleForm(f: { calculationType: CalculationType; percentage: string; fixedAmount: string; effectiveFrom: string; effectiveUntil: string }): string | null {
+  const pct = f.percentage.trim() === "" ? null : Number(f.percentage);
+  const fixed = f.fixedAmount.trim() === "" ? null : Number(f.fixedAmount);
+  if ((f.calculationType === "percentage" || f.calculationType === "combined") && (pct === null || Number.isNaN(pct))) return "צריך למלא את אחוז העמלה.";
+  if ((f.calculationType === "fixed" || f.calculationType === "combined") && (fixed === null || Number.isNaN(fixed))) return "צריך למלא את הסכום הקבוע.";
+  if (pct !== null && (pct < 0 || pct > 100)) return "האחוז צריך להיות בין 0 ל-100.";
+  if (fixed !== null && fixed < 0) return "הסכום הקבוע לא יכול להיות שלילי.";
+  if (!f.effectiveFrom) return "צריך לבחור מאיזה תאריך הכלל בתוקף.";
+  if (f.effectiveUntil && f.effectiveUntil < f.effectiveFrom) return "תאריך הסיום לא יכול להיות לפני תאריך ההתחלה.";
+  return null;
+}
+
+// כלל פעיל קיים לאותו היקף (אותה קבוצה, קוד ותלמיד) שהתאריכים שלו חופפים לכלל החדש
+export function overlappingRule(
+  rules: { group_id: string | null; study_code: string | null; student_id: string | null; is_active: boolean; effective_from: string; effective_until: string | null }[],
+  scope: { groupId: string | null; studyCode: string | null; studentId: string | null },
+  from: string,
+  until: string | null,
+): boolean {
+  return rules.some((r) =>
+    r.is_active &&
+    r.group_id === scope.groupId && r.study_code === scope.studyCode && r.student_id === scope.studentId &&
+    (until === null || r.effective_from <= until) &&
+    (r.effective_until === null || !from || r.effective_until >= from));
 }
 
 async function fetchRules(orgId: string): Promise<CommissionRule[]> {
   const { data, error } = await supabase
     .from("commission_rules")
     .select(
-      "id, group_id, study_code, student_id, calculation_type, percentage, fixed_amount, rounding_rule, rounding_step, rounding_target, priority, effective_from, effective_until, is_active, notes, group:groups(name), student:students(external_id, full_name)",
+      "id, group_id, study_code, student_id, calculation_type, percentage, fixed_amount, rounding_rule, rounding_step, rounding_target, priority, effective_from, effective_until, is_active, notes, created_at, group:groups(name, branch:branches(internal_name, talmud_branch_code)), student:students(external_id, full_name)",
     )
     .eq("organization_id", orgId)
     .order("priority", { ascending: false })
     .order("effective_from", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    ...r,
-    group: Array.isArray(r.group) ? (r.group[0] ?? null) : r.group,
-    student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student,
-  }));
+  return (data ?? []).map((r: any) => {
+    const g = Array.isArray(r.group) ? (r.group[0] ?? null) : r.group;
+    return {
+      ...r,
+      // שם הקבוצה עם הסניף - כמה קבוצות באותו שם
+      group: g ? { name: groupLabel(g.name, g.branch) } : null,
+      student: Array.isArray(r.student) ? (r.student[0] ?? null) : r.student,
+    };
+  });
 }
 
-const EMPTY_FORM = {
+const emptyForm = (effectiveFrom: string) => ({
   groupIds: [] as string[],
   studyCodes: [] as string[],
   studentIds: [] as string[],
@@ -141,12 +204,12 @@ const EMPTY_FORM = {
   roundingStep: "1",
   roundingTarget: "commission" as RoundingTarget,
   priority: "0",
-  effectiveFrom: todayLocalIso(),
+  effectiveFrom,
   effectiveUntil: "",
   notes: "",
-};
+});
 
-const EMPTY_SIM = { groupId: "", studyCode: "", studentId: "", date: todayLocalIso(), grossAmount: "" };
+const emptySim = (date: string) => ({ groupId: "", studyCode: "", studentId: "", date, grossAmount: "" });
 
 export function CommissionRulesScreen() {
   const queryClient = useQueryClient();
@@ -157,25 +220,56 @@ export function CommissionRulesScreen() {
   const [orgId, setOrgId] = useLastSelected<string>("last-org", "");
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() => emptyForm(todayLocalIso()));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [showSim, setShowSim] = useState(false);
-  const [sim, setSim] = useState(EMPTY_SIM);
+  const [sim, setSimState] = useState(() => emptySim(todayLocalIso()));
   const [simRunning, setSimRunning] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
   const [simResult, setSimResult] = useState<{
     rule_id: string | null;
     calculation_type: CalculationType | null;
+    percentage: number | null;
+    fixed_amount: number | null;
     commission_amount: number;
     net_amount: number;
   } | null>(null);
+  // כל שינוי בפרטי הסימולציה מוחק את התוצאה הקודמת - שלא תוצג תוצאה של נתונים אחרים
+  const setSim: typeof setSimState = (v) => {
+    setSimResult(null);
+    setSimState(v);
+  };
 
   const groupsQuery = useQuery({ queryKey: ["commission-org-groups", orgId], queryFn: () => fetchOrgGroups(orgId), enabled: !!orgId });
   const studyCodesQuery = useQuery({ queryKey: ["study-codes-active"], queryFn: fetchStudyCodes });
   const studentsQuery = useQuery({ queryKey: ["commission-org-students", orgId], queryFn: () => fetchOrgStudents(orgId), enabled: !!orgId });
   const rulesQuery = useQuery({ queryKey: ["commission-rules", orgId], queryFn: () => fetchRules(orgId), enabled: !!orgId });
+  const firstMonthQuery = useQuery({ queryKey: ["commission-first-eligibility", orgId], queryFn: () => fetchFirstEligibilityMonth(orgId), enabled: !!orgId });
+  const firstMonth = firstMonthQuery.data ?? null;
+  const defaultFrom = firstMonth ?? todayLocalIso();
+
+  // מעבר עמותה: הבחירות בטופס ובסימולציה שייכות לעמותה הקודמת - מתאפסות.
+  // עד היום אפשר היה לשמור כלל לעמותה ב' עם קבוצות של עמותה א'.
+  const changeOrg = (id: string) => {
+    setOrgId(id);
+    setForm(emptyForm(todayLocalIso()));
+    setSimState(emptySim(todayLocalIso()));
+    setSimResult(null);
+    setShowAdd(false);
+    setError(null);
+  };
+  const openAdd = () => {
+    if (!showAdd) setForm(emptyForm(defaultFrom));
+    setShowAdd((v) => !v);
+    setShowImport(false);
+  };
+  const toggleSim = () => {
+    if (!showSim) setSimState(emptySim(defaultFrom));
+    setSimResult(null);
+    setShowSim((v) => !v);
+  };
 
   const toNum = (v: string) => (v.trim() === "" ? null : Number(v));
 
@@ -194,8 +288,18 @@ export function CommissionRulesScreen() {
   };
   const ruleCount = buildRuleRows().length;
 
+  const usesPct = form.calculationType === "percentage" || form.calculationType === "combined";
+  const usesFixed = form.calculationType === "fixed" || form.calculationType === "combined";
+  const hasOverlap = buildRuleRows().some((t) => overlappingRule(rulesQuery.data ?? [], t, form.effectiveFrom, form.effectiveUntil || null));
+  const startsAfterEligibility = !!firstMonth && !!form.effectiveFrom && form.effectiveFrom > firstMonth;
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const invalid = validateRuleForm(form);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const rows = buildRuleRows();
@@ -206,8 +310,9 @@ export function CommissionRulesScreen() {
       study_code: t.studyCode,
       student_id: t.studentId,
       calculation_type: form.calculationType,
-      percentage: toNum(form.percentage),
-      fixed_amount: toNum(form.fixedAmount),
+      // שדה שלא שייך לסוג שנבחר לא נשמר - עד היום הוא נשמר ופשוט לא השפיע
+      percentage: usesPct ? toNum(form.percentage) : null,
+      fixed_amount: usesFixed ? toNum(form.fixedAmount) : null,
       rounding_rule: form.roundingRule,
       rounding_step: Number(form.roundingStep) || 1,
       rounding_target: form.roundingTarget,
@@ -219,10 +324,10 @@ export function CommissionRulesScreen() {
     );
     setSubmitting(false);
     if (err) {
-      setError(err.message);
+      setError(friendlyError(err.message));
       return;
     }
-    setForm(EMPTY_FORM);
+    setForm(emptyForm(defaultFrom));
     setShowAdd(false);
     queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
   };
@@ -241,7 +346,7 @@ export function CommissionRulesScreen() {
     const { error: err } = await supabase.rpc("delete_commission_rule", { p_id: ruleToDelete.id });
     setDeleting(false);
     if (err) {
-      setDeleteError(err.message);
+      setDeleteError(friendlyError(err.message));
       return;
     }
     setRuleToDelete(null);
@@ -254,7 +359,7 @@ export function CommissionRulesScreen() {
     setToggleError(null);
     const { error: err } = await supabase.from("commission_rules").update({ is_active: !rule.is_active }).eq("id", rule.id);
     if (!err) queryClient.invalidateQueries({ queryKey: ["commission-rules", orgId] });
-    else setToggleError(err.message);
+    else setToggleError(friendlyError(err.message));
   };
 
   const exportToExcel = () => {
@@ -275,6 +380,17 @@ export function CommissionRulesScreen() {
     exportRowsToExcel(rows, "כללי עמלה", `commission-rules-${todayLocalIso()}.xlsx`);
   };
 
+  // איזה כלל נבחר בסימולציה, במילים: על מי הוא חל, כמה, ובאיזו עדיפות - כדי לראות
+  // אם נבחר הכלל שציפית לו (למשל החריג לקבוצה ולא הכלל הכללי)
+  const simRuleText = (ruleId: string) => {
+    const r = (rulesQuery.data ?? []).find((x) => x.id === ruleId);
+    if (!r) return "כלל שאינו מופיע ברשימה";
+    const scope = [r.student ? `תלמיד ${r.student.full_name}` : null, r.group ? `קבוצה ${r.group.name}` : null, r.study_code ? `קוד ${r.study_code}` : null]
+      .filter(Boolean).join(" · ") || "כל העמותה";
+    const value = [r.percentage != null ? `${r.percentage}%` : null, r.fixed_amount != null ? formatMoney(r.fixed_amount) : null].filter(Boolean).join(" + ");
+    return `${scope} - ${value || TYPE_LABEL[r.calculation_type]}${r.priority ? ` (עדיפות ${r.priority})` : ""}`;
+  };
+
   const runSimulation = async () => {
     if (!sim.grossAmount) return;
     setSimRunning(true);
@@ -291,7 +407,7 @@ export function CommissionRulesScreen() {
       .single();
     setSimRunning(false);
     if (err) {
-      setSimError(err.message);
+      setSimError(friendlyError(err.message));
       return;
     }
     setSimResult(data as any);
@@ -395,7 +511,7 @@ export function CommissionRulesScreen() {
       />
       <PageHeader
         title="כללי עמלה"
-        description="כלל תואם לפי עמותה, קבוצה, קוד לימוד או חריג לתלמיד ספציפי, בטווח תאריכים. כשכמה כללים תואמים - מנצח העדיפות הגבוהה ביותר."
+        description="כאן קובעים כמה עמלה העמותה לוקחת מהזכאות של כל תלמיד. בדרך כלל מספיק כלל אחד לכל העמותה; אפשר להוסיף חריג לקבוצה, לקוד לימוד או לתלמיד, והחריג גובר על הכלל הכללי."
         primaryAction={
           orgId &&
           (isV3 ? (
@@ -420,19 +536,13 @@ export function CommissionRulesScreen() {
                 ]}
               />
               {canManage && (
-                <button onClick={() => setShowSim((v) => !v)} className="btn-secondary">
+                <button onClick={toggleSim} className="btn-secondary">
                   <FlaskConical className="h-4 w-4" aria-hidden="true" />
                   {showSim ? "סגירת סימולציה" : "סימולציה"}
                 </button>
               )}
               {canManage && (
-                <button
-                  onClick={() => {
-                    setShowAdd((v) => !v);
-                    setShowImport(false);
-                  }}
-                  className="btn-primary"
-                >
+                <button onClick={openAdd} className="btn-primary">
                   {showAdd ? "סגירה" : "כלל חדש"}
                 </button>
               )}
@@ -440,7 +550,7 @@ export function CommissionRulesScreen() {
           ) : (
             <div className="flex flex-wrap gap-2">
               {canManage && (
-                <button onClick={() => setShowSim((v) => !v)} className="btn-secondary flex items-center gap-2">
+                <button onClick={toggleSim} className="btn-secondary flex items-center gap-2">
                   <FlaskConical className="h-4 w-4" aria-hidden="true" />
                   {showSim ? "סגירת סימולציה" : "סימולציה"}
                 </button>
@@ -460,13 +570,7 @@ export function CommissionRulesScreen() {
                 ייצוא לאקסל
               </button>
               {canManage && (
-                <button
-                  onClick={() => {
-                    setShowAdd((v) => !v);
-                    setShowImport(false);
-                  }}
-                  className="btn-primary"
-                >
+                <button onClick={openAdd} className="btn-primary">
                   {showAdd ? "סגירה" : "כלל חדש"}
                 </button>
               )}
@@ -477,7 +581,7 @@ export function CommissionRulesScreen() {
 
       <div className="mb-4 max-w-sm">
         <label className="field-label">עמותה</label>
-        <select value={orgId} onChange={(e) => setOrgId(e.target.value)} className="input-field">
+        <select value={orgId} onChange={(e) => changeOrg(e.target.value)} className="input-field">
           <option value="">— בחרי —</option>
           {(orgsQuery.data ?? []).map((o) => (
             <option key={o.id} value={o.id}>
@@ -486,6 +590,20 @@ export function CommissionRulesScreen() {
           ))}
         </select>
       </div>
+
+      {orgId && (
+        <div className="mb-4 max-w-3xl space-y-1 text-sm text-ink-muted">
+          <p>אין עריכה של כלל: כדי לשנות כלל מכבים אותו ויוצרים כלל חדש.</p>
+          <p>
+            שינוי כלל לא משנה חודשים שכבר חושבו. כדי לעדכן חודש כזה מריצים לו שוב &quot;חישוב עמלות&quot; במסך &quot;חודשים כספיים&quot;.
+          </p>
+          {!rulesQuery.isLoading && (rulesQuery.data ?? []).filter((r) => r.is_active).length === 0 && (
+            <p className="rounded-control bg-warn-soft p-2 text-warn-ink">
+              לעמותה הזו אין כלל עמלה פעיל. בלי כלל, העמלה היא 0 וכל הזכאות נכנסת לקבוצות.
+            </p>
+          )}
+        </div>
+      )}
 
       {showSim && orgId && (
         <div className="card mb-6 max-w-3xl space-y-3 p-4">
@@ -541,7 +659,9 @@ export function CommissionRulesScreen() {
             <div className="rounded-md bg-surface-muted p-3 text-sm">
               {simResult.rule_id ? (
                 <p>
-                  כלל תואם: <strong>{TYPE_LABEL[simResult.calculation_type as CalculationType]}</strong> · עמלה:{" "}
+                  נבחר הכלל: <strong>{simRuleText(simResult.rule_id)}</strong>
+                  <br />
+                  עמלה:{" "}
                   <strong className="tabular">{isV3 ? formatMoney(simResult.commission_amount) : simResult.commission_amount.toLocaleString("he-IL")}</strong> · נטו:{" "}
                   <strong className="tabular">{isV3 ? formatMoney(simResult.net_amount) : simResult.net_amount.toLocaleString("he-IL")}</strong>
                 </p>
@@ -603,19 +723,23 @@ export function CommissionRulesScreen() {
               <select value={form.calculationType} onChange={(e) => setForm((f) => ({ ...f, calculationType: e.target.value as CalculationType }))} className="input-field">
                 {(Object.keys(TYPE_LABEL) as CalculationType[]).map((t) => (
                   <option key={t} value={t}>
-                    {TYPE_LABEL[t]}
+                    {TYPE_OPTION_LABEL[t]}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="field-label">אחוז</label>
-              <input type="number" step="0.01" value={form.percentage} onChange={(e) => setForm((f) => ({ ...f, percentage: e.target.value }))} className="input-field tabular" />
-            </div>
-            <div>
-              <label className="field-label">סכום קבוע</label>
-              <input type="number" step="0.01" value={form.fixedAmount} onChange={(e) => setForm((f) => ({ ...f, fixedAmount: e.target.value }))} className="input-field tabular" />
-            </div>
+            {usesPct && (
+              <div>
+                <label className="field-label" htmlFor="rule-pct">אחוז עמלה (%)</label>
+                <input id="rule-pct" required type="number" min="0" max="100" step="0.01" value={form.percentage} onChange={(e) => setForm((f) => ({ ...f, percentage: e.target.value }))} className="input-field tabular" />
+              </div>
+            )}
+            {usesFixed && (
+              <div>
+                <label className="field-label" htmlFor="rule-fixed">סכום קבוע לתלמיד לחודש (₪)</label>
+                <input id="rule-fixed" required type="number" min="0" step="0.01" value={form.fixedAmount} onChange={(e) => setForm((f) => ({ ...f, fixedAmount: e.target.value }))} className="input-field tabular" />
+              </div>
+            )}
             <div>
               <label className="field-label">כיוון עיגול</label>
               <select value={form.roundingRule} onChange={(e) => setForm((f) => ({ ...f, roundingRule: e.target.value as RoundingRule }))} className="input-field">
@@ -674,14 +798,25 @@ export function CommissionRulesScreen() {
             </div>
           )}
 
+          {usesFixed && (
+            <p className="text-xs text-ink-muted">
+              הסכום הקבוע יורד מהזכאות של כל תלמיד בכל חודש. אם הזכאות של תלמיד קטנה מהסכום, כל הזכאות שלו הולכת לעמלה והוא מקבל 0.
+            </p>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="field-label">עדיפות (מספר גבוה יותר מנצח)</label>
+              <label className="field-label">עדיפות (בדרך כלל להשאיר 0)</label>
               <input type="number" value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className="input-field tabular" />
             </div>
             <div>
               <label className="field-label">בתוקף מתאריך</label>
               <input required type="date" value={form.effectiveFrom} onChange={(e) => setForm((f) => ({ ...f, effectiveFrom: e.target.value }))} className="input-field" />
+              {startsAfterEligibility && (
+                <p className="mt-1 text-xs text-warn-ink">
+                  שימי לב: בעמותה יש זכאות כבר מ-{formatMonth(firstMonth)}. הכלל לא יחול על החודשים שלפני {formatDate(form.effectiveFrom)}.
+                </p>
+              )}
             </div>
             <div>
               <label className="field-label">בתוקף עד (לא חובה)</label>
@@ -694,6 +829,11 @@ export function CommissionRulesScreen() {
             <input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="input-field" />
           </div>
 
+          {hasOverlap && (
+            <p className="rounded-control bg-warn-soft p-2 text-sm text-warn-ink">
+              כבר יש כלל פעיל לאותה קבוצה, קוד ותלמיד בתאריכים חופפים. אם תשמרי, הכלל החדש יחול במקומו - ואת הישן כדאי לכבות.
+            </p>
+          )}
           {error && <ErrorState message={error} />}
           {/* הספירה על הכפתור: שלוש קבוצות ושני קודים הם שישה כללים,
               ועדיף לדעת את זה לפני הלחיצה ולא מהטבלה אחריה. */}
