@@ -1,3 +1,4 @@
+import { FinanceSnapshotCard } from "./FinanceSnapshotCard";
 import { hasEligibilityReport } from "@/lib/eligibilityReport";
 import { todayLocalIso } from "@/lib/today";
 import { useState } from "react";
@@ -140,6 +141,8 @@ function FinanceDashboardClassic() {
       </div>
 
       {!orgId && <p className="text-sm text-ink-subtle">בחרי עמותה כדי להציג את מצב החודש.</p>}
+      {/* תמונת מצב חודשית: בנק, נכנס/יצא, שולם, חייבים, בעיות - במקום אחד */}
+      {orgId && <FinanceSnapshotCard orgId={orgId} month={month} counts={countsQuery.data} />}
       {countsQuery.isLoading && <LoadingState rows={3} />}
       {countsQuery.isError && <ErrorState message="שגיאה בטעינת נתוני הדשבורד." />}
       {countsQuery.data && (
