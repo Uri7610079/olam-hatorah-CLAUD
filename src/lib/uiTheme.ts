@@ -2,20 +2,26 @@ import { useCallback, useEffect, useState } from "react";
 
 // סדר המפתחות כאן הוא סדר ההצגה במסך "עיצוב ותצוגה". ערכה חדשה חייבת
 // להתווסף גם לסקריפט public/theme-init.js, אחרת היא מתאפסת בכל רענון.
-export type UiTheme = "classic" | "v2" | "v3";
+export type UiTheme = "v3" | "v2" | "classic";
 
-export const UI_THEME_STORAGE_KEY = "olam-ui-theme";
+// ברירת המחדל לכולם (25.11.2026): העיצוב החדש, v3. מופיעה גם ב-public/theme-init.js
+// וב-index.html - שלושת המקומות חייבים להיות זהים.
+export const DEFAULT_UI_THEME: UiTheme = "v3";
+
+// מפתח חדש בכוונה: עם החלפת ברירת המחדל גם מי שבחר בעבר ערכה אחרת (מפתח
+// "olam-ui-theme") מקבל את העיצוב החדש. בחירה שנעשית מעכשיו נשמרת כרגיל.
+export const UI_THEME_STORAGE_KEY = "olam-ui-theme-2";
 
 export const UI_THEME_LABEL: Record<UiTheme, string> = {
-  classic: "העיצוב הקיים",
-  v2: "העיצוב החדש",
-  v3: "בהירות מודרנית (v3)",
+  v3: "העיצוב החדש (ברירת המחדל)",
+  v2: "עיצוב ביניים",
+  classic: "העיצוב הקודם",
 };
 
 export const UI_THEME_DESCRIPTION: Record<UiTheme, string> = {
-  classic: "המראה שהמערכת עבדה איתו עד היום - סגול-כחול, כרטיסים מעוגלים עם צל.",
-  v2: "מראה מעודכן ורגוע יותר: כחול עמוק, רקע אפור-כחלחל, גבול דק במקום צל, וסימון ברור של האזור שבו נמצאים.",
   v3: "כחול עמוק לכותרות, טורקיז לפעולות וזהב להדגשה. טקסט גדול וקריא יותר, סכומים ותאריכים אחידים, וצבע מובחן לכל אזור.",
+  v2: "כחול עמוק, רקע אפור-כחלחל, גבול דק במקום צל, וסימון ברור של האזור שבו נמצאים.",
+  classic: "המראה שהמערכת עבדה איתו עד נובמבר 2026 - סגול-כחול, כרטיסים מעוגלים עם צל.",
 };
 
 export const UI_THEMES = Object.keys(UI_THEME_LABEL) as UiTheme[];
@@ -27,10 +33,10 @@ function isUiTheme(value: string | null): value is UiTheme {
 export function readStoredUiTheme(): UiTheme {
   try {
     const stored = localStorage.getItem(UI_THEME_STORAGE_KEY);
-    return isUiTheme(stored) ? stored : "classic";
+    return isUiTheme(stored) ? stored : DEFAULT_UI_THEME;
   } catch {
     // גלישה פרטית / אחסון חסום - נופלים לברירת המחדל במקום להפיל את האפליקציה.
-    return "classic";
+    return DEFAULT_UI_THEME;
   }
 }
 

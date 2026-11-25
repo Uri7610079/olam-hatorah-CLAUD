@@ -4,11 +4,11 @@
 // רק סקריפטים מקבצים של האתר עצמו, וחוסמת כל סקריפט שכתוב בתוך הדף.
 (function () {
   try {
-    var t = localStorage.getItem("olam-ui-theme");
-    // חייב להכיר כל ערכה שמוגדרת ב-uiTheme.ts - ערכה שלא מופיעה כאן חוזרת
-    // ל"קיים" בכל רענון.
-    document.documentElement.setAttribute("data-ui", t === "v2" || t === "v3" ? t : "classic");
+    var t = localStorage.getItem("olam-ui-theme-2");
+    // ברירת המחדל לכולם היא v3. חייב להכיר כל ערכה שמוגדרת ב-uiTheme.ts - ערכה שלא
+    // מופיעה כאן חוזרת לברירת המחדל בכל רענון.
+    document.documentElement.setAttribute("data-ui", t === "v2" || t === "classic" ? t : "v3");
   } catch (e) {
-    document.documentElement.setAttribute("data-ui", "classic");
+    document.documentElement.setAttribute("data-ui", "v3");
   }
 })();
