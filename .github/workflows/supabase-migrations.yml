@@ -2,6 +2,9 @@
 #           lists what would run. Changes nothing.
 # apply     on demand only, only when `confirm` equals the project ref.
 # baseline  on demand only: records versions as applied without running SQL.
+# check     on demand only, owner only: runs one committed SELECT file from
+#           supabase/checks in a READ ONLY transaction. Stops if the database
+#           does not block writes there. Never runs on push.
 #
 # Secret: SUPABASE_ACCESS_TOKEN only. The pinned CLI links with the token and
 # logs in to the database with a temporary role - no database password.
@@ -20,9 +23,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "plan = show only | apply = run on the live database | baseline = mark versions as applied"
+        description: "plan = show only | apply = run on the live database | baseline = mark versions as applied | check = read-only query"
         type: choice
-        options: [plan, apply, baseline]
+        options: [plan, apply, baseline, check]
         default: plan
       confirm:
         description: "apply/baseline: type the project ref to confirm"
@@ -30,6 +33,10 @@ on:
         default: ""
       versions:
         description: "baseline only: versions to mark as applied, separated by spaces"
+        required: false
+        default: ""
+      check_file:
+        description: "check only: file name in supabase/checks, without .sql"
         required: false
         default: ""
 
@@ -51,6 +58,7 @@ jobs:
       MODE: ${{ github.event_name == 'push' && 'plan' || inputs.mode }}
       CONFIRM: ${{ inputs.confirm }}
       VERSIONS: ${{ inputs.versions }}
+      CHECK_FILE: ${{ inputs.check_file }}
     steps:
       - uses: actions/checkout@v4
 
@@ -66,12 +74,18 @@ jobs:
             exit 1
           fi
           if [ "$MODE" != "plan" ] && [ "$CONFIRM" != "$PROJECT_REF" ]; then
-            echo "::error::Mode '$MODE' changes the live project. Type the project ref in 'confirm'."
+            echo "::error::Mode '$MODE' touches the live project. Type the project ref in 'confirm'."
             exit 1
           fi
           if [ "$MODE" = "baseline" ] && ! printf '%s' "$VERSIONS" | grep -Eq '^[0-9]+( [0-9]+)*$'; then
             echo "::error::'versions' must be numeric versions separated by single spaces."
             exit 1
+          fi
+          if [ "$MODE" = "check" ]; then
+            if ! printf '%s' "$CHECK_FILE" | grep -Eq '^[a-z0-9_]+$' || [ ! -f "supabase/checks/$CHECK_FILE.sql" ]; then
+              echo "::error::'check_file' must name a file in supabase/checks."
+              exit 1
+            fi
           fi
 
       - uses: supabase/setup-cli@v1
@@ -103,3 +117,26 @@ jobs:
       - name: Nothing left to apply
         if: env.MODE == 'apply'
         run: supabase db push --dry-run
+
+      - name: Read-only check
+        if: env.MODE == 'check'
+        run: |
+          set -euo pipefail
+          api="https://api.supabase.com/v1/projects/$PROJECT_REF/database/query"
+          run_sql() {
+            jq -Rs '{query: .}' "$1" | curl -sS -o "$2" -w '%{http_code}' -X POST "$api" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data-binary @-
+          }
+          # Probe: a write that matches no row must be refused as read-only.
+          printf 'set transaction read only;\nupdate automation_settings set key = key where false;\n' > probe.sql
+          code=$(run_sql probe.sql probe.json)
+          if ! grep -q 'read-only transaction' probe.json; then
+            echo "::error::Writes are not blocked (HTTP $code). The check was not run."
+            cat probe.json
+            exit 1
+          fi
+          echo "Writes are blocked."
+          { printf 'set transaction read only;\n'; cat "supabase/checks/$CHECK_FILE.sql"; } > check.sql
+          code=$(run_sql check.sql check.json)
+          jq . check.json || cat check.json
+          case "$code" in 2*) ;; *) echo "::error::Check failed (HTTP $code)."; exit 1 ;; esac
